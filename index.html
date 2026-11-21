@@ -78,14 +78,15 @@
   .ghead.closed .chev{transform:rotate(-90deg)}
   .branch{font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:1px 7px;flex:none}
   .count{font-size:11px;color:var(--dim);flex:none}
-  .row{display:flex;gap:10px;align-items:flex-start;padding:11px 10px;border-radius:14px}
+  .row{display:flex;gap:10px;align-items:center;padding:9px 10px;border-radius:14px}
   .row:active{background:var(--bubble)}
   .row .body{flex:1;min-width:0}
   .row .t{display:flex;align-items:center;gap:7px}
   .row .title{font-size:15px;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
   .row .time{font-size:12px;color:var(--dim);flex:none}
-  .row .prev{font-size:13px;color:var(--dim);margin-top:3px;display:-webkit-box;-webkit-line-clamp:2;
-    -webkit-box-orient:vertical;overflow:hidden;line-height:1.45}
+  .row .dot{margin-top:0}
+  /* 文件夹里没有可显示的会话时（都被置顶/归档）给一句说明，别让分组像丢了 */
+  .ghint{font-size:12px;color:var(--dim);padding:2px 10px 10px}
   .dot{width:7px;height:7px;border-radius:50%;background:var(--dim);opacity:.45;flex:none;margin-top:7px}
   .dot.run{background:var(--ok);opacity:1;box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 18%,transparent)}
 
@@ -455,7 +456,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v85';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v87';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -2365,8 +2366,7 @@ function renderList(wrap, opts = {}) {
           el('div', { class:'body' },
             el('div', { class:'t' },
               el('span', { class:'title', text: s.title || '(无标题)' }),
-              el('span', { class:'time', text: fmtTime(s.updatedAt) })),
-            el('div', { class:'preview prev', text: s.cwd || '' })),
+              el('span', { class:'time', text: fmtTime(s.updatedAt) }))),
           el('button', { class:'rowmore', text:'↩', title:'取消归档', onclick: (e) => {
             e.stopPropagation(); unarchiveSession(s);
           }}));
@@ -2407,8 +2407,6 @@ function renderList(wrap, opts = {}) {
           el('span', { class:'title', text: s.title || '(无标题)' }),
           isUnread(s) ? el('span', { class:'unread', title:'有未查看的新回复' }) : null,
           el('span', { class:'time', text: fmtTime(s.updatedAt) })),
-        s.lastMessage ? el('div', { class:'preview prev', text:
-          `${s.lastMessage.role === 'user' ? '我' : '助手'}：${plain(s.lastMessage.text)}` }) : null,
       ),
       more);
     // 长按（或桌面右键）出菜单：重命名 / 置顶
@@ -2444,14 +2442,28 @@ function renderList(wrap, opts = {}) {
   }
 
   // 按工作区分组；不属于任何工作区的按 cwd 兜底。置顶的已在上面统一展示。
+  // 工作区先全部建组：即使会话都被置顶或归档，文件夹也不会凭空消失。
   const groups = new Map();
+  const pinnedCount = new Map();
+  for (const w of state.workspaces) {
+    groups.set(`w:${w.workspaceId}`, { key: `w:${w.workspaceId}`, name: w.title || w.path, path: w.path, git: w.git, items: [] });
+  }
   for (const s of state.sessions) {
     if (s.pinned) continue;
     const w = workspaceOf(s.sessionId);
     const key = w ? `w:${w.workspaceId}` : `c:${s.cwd || '(未登记)'}`;
-    const name = w ? (w.title || w.path) : (s.cwd ? s.cwd.split(/[\\/]/).pop() : '(未登记目录)');
-    if (!groups.has(key)) groups.set(key, { key, name, path: w ? w.path : s.cwd, git: w && w.git, items: [] });
+    if (!groups.has(key)) {
+      const name = w ? (w.title || w.path) : (s.cwd ? s.cwd.split(/[\\/]/).pop() : '(未登记目录)');
+      groups.set(key, { key, name, path: w ? w.path : s.cwd, git: w && w.git, items: [] });
+    }
     groups.get(key).items.push(s);
+  }
+  // 置顶会话也算回所属文件夹的总数（它们显示在顶部，但文件夹计数不应变小）
+  for (const s of pinnedItems) {
+    const w = workspaceOf(s.sessionId);
+    if (!w) continue;
+    const key = `w:${w.workspaceId}`;
+    pinnedCount.set(key, (pinnedCount.get(key) || 0) + 1);
   }
   const order = [...state.workspaces.map(w => `w:${w.workspaceId}`), ...groups.keys()];
   const keys = [...new Set(order)].filter(k => groups.has(k));
@@ -2470,7 +2482,8 @@ function renderList(wrap, opts = {}) {
       el('span', { text:'📁' }),
       el('span', { class:'gname', text: g.name || '(未命名)' }),
       g.git && g.git.branch ? el('span', { class:'branch', text: g.git.branch }) : null,
-      el('span', { class:'count', style:'margin-left:auto', text: String(g.items.length) }),
+      el('span', { class:'count', style:'margin-left:auto',
+        text: String(g.items.length + (pinnedCount.get(k) || 0)) }),
     );
     // 长按分组头 → 工作区菜单（重命名 / 删除 / 在此新建）
     let glp = null;
@@ -2483,6 +2496,10 @@ function renderList(wrap, opts = {}) {
       const sorted = g.items.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
       const expanded = state.expandedGroups.has(k);
       const visible = expanded ? sorted : sorted.slice(0, PREVIEW_COUNT);
+      if (!sorted.length) {
+        const pc = pinnedCount.get(k) || 0;
+        box.append(el('div', { class:'ghint', text: pc ? `${pc} 条会话都在顶部「置顶」里` : '这个文件夹还没有会话' }));
+      }
       for (const s of visible) box.append(sessionRow(s));
       if (sorted.length > PREVIEW_COUNT) {
         box.append(el('button', { class:'showmore', onclick: () => {
