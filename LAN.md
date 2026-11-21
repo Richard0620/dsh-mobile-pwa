@@ -267,4 +267,38 @@ Wi-Fi / 路由器都不用再动。不填也行：会先试宿主 `name + .local
 | 网络禁多播 / 开了客户端隔离（酒店、企业、访客 Wi-Fi 常见） | `.local` 查不到，IP 也拨不通 → 自动回中转。这类网络本身就做不了直连 |
 | 安卓 Chrome | 不解析 `.local`（iOS Safari/WKWebView 原生支持）。安卓要靠 IP 候选，或用原生壳 |
 
+## 10. 回家验收（5 分钟，不需要证书）
 
+```powershell
+cd D:\Vibe\PWA\pwa-c
+.\start-lan.ps1          # 默认 http:8090；带 -Https 才用证书走 8443
+```
+
+它会打印两个地址，**优先用名字那个**（换路由器、IP 变了它也不变）：
+
+```
+手机上打开      http://192.168.72.22:8090/
+换网不变的名字  http://laptop-oc45injj.local:8090/
+```
+
+手机 Safari 打开 → 输 6 位配对码（DSH 桌面端 设置 → 移动端）→ 连接。
+
+看这四件事（和走中转比）：
+
+| 项目 | 期望 |
+|---|---|
+| 首屏 | 1 秒内出列表 |
+| 点发送 → 首字出现 | 明显变快 |
+| 长回复流式 + 滚动 | 不卡、不跳、不用手动刷新 |
+| 翻历史 | 秒出，不白屏 |
+
+打不开的话，八成是防火墙——以管理员身份跑一次：
+
+```powershell
+New-NetFirewallRule -DisplayName "DSH LAN 8090" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8090 -Profile Private,Public
+```
+
+> 服务不会自启：电脑重启后要重跑 `.\start-lan.ps1`。
+
+验完再决定要不要上「自动切换」——那一步需要先 `.\lan-cert.ps1` 重签（把名字签进去），
+手机装一次根证书。
