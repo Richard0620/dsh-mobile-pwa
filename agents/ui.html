@@ -94,15 +94,16 @@
 <script>
 const $ = (s) => document.querySelector(s);
 let token = localStorage.getItem('bridge_token') || '';
+const BASE = location.pathname.replace(/\/+$/, '');   // '' when served at /, '/agents' behind Caddy
 const q = new URLSearchParams(location.search);
-if (q.get('token')) { token = q.get('token'); localStorage.setItem('bridge_token', token); history.replaceState(null, '', '/'); }
+if (q.get('token')) { token = q.get('token'); localStorage.setItem('bridge_token', token); history.replaceState(null, '', location.pathname); }
 let pane = null;
 let timer = null;
 let lastText = '';
 
 function api(path, opt = {}) {
   const o = { ...opt, headers: { ...(opt.headers || {}), Authorization: 'Bearer ' + token } };
-  return fetch(path, o).then(async (r) => {
+  return fetch(BASE + path, o).then(async (r) => {
     if (r.status === 401) { showGate(true); throw new Error('401 unauthorized'); }
     if (!r.ok) throw new Error((await r.text()).slice(0, 300) || ('HTTP ' + r.status));
     return r;
