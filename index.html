@@ -308,6 +308,16 @@
     color:rgba(255,255,255,.62);font-size:12px;pointer-events:none}
   .md .imgph{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--dim);
     border:1px dashed var(--line);border-radius:8px;padding:2px 8px;margin:2px 0}
+  /* 视频/文件附件：上传后正文里只有一条路径，气泡里渲染成文件卡 */
+  .filecard{display:flex;align-items:center;gap:8px;margin-top:7px;padding:7px 9px;
+    border:1px solid var(--line);border-radius:10px;background:var(--card);max-width:100%}
+  .filecard .fico2{width:26px;height:26px;border-radius:8px;background:var(--bubble);
+    display:grid;place-items:center;font-size:14px;flex:none}
+  .filecard .fbody{min-width:0;display:flex;flex-direction:column;align-items:flex-start}
+  .filecard b{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap;max-width:230px;text-align:left}
+  .filecard small{font-size:10.5px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap;max-width:230px}
   .md .tbl{margin:10px 0;overflow-x:auto;-webkit-overflow-scrolling:touch}
   .md table{border-collapse:collapse;font-size:13px;width:100%;table-layout:auto}
   .md th,.md td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;
@@ -2577,6 +2587,35 @@ async function uploadFile(file, onProgress) {
   return { uploadId, path: fin.path, name: fin.name || file.name };
 }
 
+// 视频附件：/session/send 只收 text / image 块，视频只能「上传 + 把路径写进正文」。
+// 拿不到可播放的文件流，所以不做内嵌播放，但至少要在气泡里标清楚它是视频文件，
+// 别让人以为那是一张裂图（以前缩略图拿 <img> 显示 video 的 objectURL，就是裂的）。
+const VIDEO_EXT = /\.(mp4|m4v|mov|webm|mkv|avi|3gp)$/i;
+const isVideoName = (name) => VIDEO_EXT.test(String(name || ''));
+const isVideoFile = (a) => /^video\//i.test((a && a.mediaType) || '') || isVideoName(a && a.name);
+// 从消息正文里拆出「已上传视频/文件」那几行，渲染成文件卡片
+function splitAttachmentNotes(text) {
+  const kept = [];
+  const files = [];
+  for (const line of String(text || '').split('\n')) {
+    const m = /^(?:🎬\s*已上传视频|📎\s*已上传文件)[：:]\s*(.+)$/.exec(line.trim());
+    if (m && m[1]) { files.push(m[1].trim()); continue; }
+    kept.push(line);
+  }
+  return { text: kept.join('\n').replace(/\n{3,}/g, '\n\n').trim(), files };
+}
+function openFileCard(path, isVideo) {
+  const name = String(path).split(/[\\/]/).pop();
+  const dir = String(path).replace(/[\\/][^\\/]+$/, '');
+  openSheet([
+    { label:'复制路径', icon:'⧉', run: async () => {
+      try { await navigator.clipboard.writeText(path); toast('已复制路径'); }
+      catch { toast('复制失败，长按消息复制'); }
+    } },
+    { label:'打开所在目录', icon:'📂', run: () => openFileDrawer(dir) },
+  ], `${isVideo ? '🎬 视频文件' : '📎 文件'} · ${name}（作为路径发送）`);
+}
+
 // 附件图（消息里 type:'image' 的块）：POST /session/attachment 取 base64
 const attCache = new Map();
 async function hydrateAttachments(rootEl) {
@@ -2968,7 +3007,13 @@ function renderSession(wrap) {
         if (a.previewUrl) openImageFull(a.previewUrl);
       }});
       if (a.previewUrl) chip.append(el('img', { src: a.previewUrl, alt: a.name || '' }));
-      else chip.append(el('span', { class:'attdoc', text:'📎' }));
+      else {
+        const vid = isVideoFile(a);
+        chip.append(el('span', { class:'attdoc', text: vid ? '🎬' : '📎' }));
+        chip.title = vid
+          ? `${a.name || '视频'}：会作为文件路径发送，App 内不能播放`
+          : (a.name || '');
+      }
       if (a.uploading) {
         chip.append(el('div', { class:'attprog', style:`width:${Math.round((a.progress||0)*100)}%` }));
         chip.append(el('div', { class:'attpct', text:Math.round((a.progress||0)*100) + '%' }));
@@ -3016,7 +3061,7 @@ function renderSession(wrap) {
     const notes = [];
     for (const a of atts) {
       if (a.uploadId) blocks.push({ type:'image', mediaType: a.mediaType, uploadId: a.uploadId });
-      else if (a.path) notes.push(`📎 已上传文件：${a.path}`);
+      else if (a.path) notes.push(`${isVideoFile(a) ? '🎬 已上传视频' : '📎 已上传文件'}：${a.path}`);
     }
     const fullText = [text, ...notes].filter(Boolean).join('\n');
     if (fullText) blocks.unshift({ type:'text', text: fullText });
@@ -3069,10 +3114,15 @@ function renderSession(wrap) {
     fileInput.value = '';
     for (const f of files) {
       const mediaType = f.type || 'image/jpeg';
+      const isImg = /^image\//i.test(mediaType);
       state.pending.push({
         file: f, mediaType, name: f.name,
-        previewUrl: URL.createObjectURL(f), progress: 0, uploading: false,
+        // 视频（以及其它非图片）不建 objectURL：<img> 显示 video 的 URL 只会裂图
+        previewUrl: isImg ? URL.createObjectURL(f) : null, progress: 0, uploading: false,
       });
+      if (isVideoFile({ mediaType, name: f.name })) {
+        toast('视频会作为文件路径发送，App 内不能播放');
+      }
     }
     renderAttach();
   });
@@ -3337,9 +3387,19 @@ function renderMessage(m) {
 
   if (m.role === 'user') {
     const bubble = el('div', { class:'bubble', style: m.pending ? 'opacity:.55' : '' });
-    if (body) bubble.append(document.createTextNode(body));
+    // 附件（视频/文件）在正文里只有一行路径：拆出来渲染成文件卡，别让它看起来像一段乱码
+    const notes = splitAttachmentNotes(body);
+    if (notes.text) bubble.append(document.createTextNode(notes.text));
     if (gallery) bubble.append(gallery);
-    if (!body && !images.length) bubble.append(document.createTextNode('(空消息)'));
+    for (const p of notes.files) {
+      const vid = isVideoName(p);
+      bubble.append(el('div', { class:'filecard', onclick: () => openFileCard(p, vid) },
+        el('span', { class:'fico2', text: vid ? '🎬' : '📎' }),
+        el('div', { class:'fbody' },
+          el('b', { text: String(p).split(/[\\/]/).pop() || p }),
+          el('small', { text: vid ? '视频文件 · 作为路径发送，App 内不能播放' : '文件 · 作为路径发送' }))));
+    }
+    if (!notes.text && !notes.files.length && !images.length) bubble.append(document.createTextNode('(空消息)'));
     return el('div', { class:'mholder' },
       attachMsgActions(el('div', { class:'msg user' }, bubble), body, m.time),
       msgActions(m, true));
