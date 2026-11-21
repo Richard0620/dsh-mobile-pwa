@@ -86,7 +86,12 @@ const server = http.createServer(async (req, res) => {
       const id = url.searchParams.get("id");
       if (!id) return send(res, 400, JSON.stringify({ error: "id required" }));
       const lines = url.searchParams.get("lines") || "160";
-      const out = await run(["pane", "read", id, "--lines", lines, "--source", "recent"]);
+      let out;
+      try {
+        out = await run(["pane", "read", id, "--lines", lines, "--source", "recent-unwrapped"]);
+      } catch {
+        out = await run(["pane", "read", id, "--lines", lines, "--source", "recent"]);
+      }
       return send(res, 200, out, "text/plain; charset=utf-8");
     }
     if (req.method === "POST" && url.pathname === "/send") {
