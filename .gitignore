@@ -21,3 +21,6 @@ certs/
 # 编辑器
 .vscode/
 .idea/
+
+# 临时 GitHub token（建库/推送用，用完即删）
+_token.txt
