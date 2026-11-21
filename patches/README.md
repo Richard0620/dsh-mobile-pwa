@@ -8,7 +8,7 @@
 `lib/mobile/push-notify.js`，三处：
 
 1. 在 `function sendFrame(` 之前插入 `webPushTarget()` / `mirrorToWebPush(payload)` 两个函数
-2. `sendFrame` 开头加一句 `try { mirrorToWebPush(payload); } catch {}`
+2. `sendFrame` 开头镜像审批 / 提问帧（完成 / 失败帧由 `notifyTurnEnded` 单独镜像，避免一帧发两次）
 3. 镜像帧带 `badge`：`badgeNumber()` 按与 App 相同的公式算
    「未读会话数 + 待处理会话数」——
    未读取自 `~/.dsh/read-receipts.json` 的 `lastTurn` / `readAt`（与 `/sessions` 同一份事实），
@@ -16,7 +16,7 @@
    的 `global.archivedSessionIds`）不计入。读不到就**不带** `badge`，让 SW 保留旧数字，
    绝不发一个 App 打开后会被覆盖掉的假数字。
 
-所有提醒（审批 / 提问 / 完成）都会经过 `sendFrame`，所以这一处覆盖三类事件。
+三类提醒都会镜像：审批 / 提问走 `sendFrame`，完成 / 失败在 `notifyTurnEnded` 里发，两处都带 `badge`。
 
 ## 生效条件
 
@@ -35,6 +35,6 @@
 
 ## 插件升级后
 
-1. 把本目录的 `push-notify.js` 与新版对比，重新插入上面两处
+1. 把本目录的 `push-notify.js` 与新版对比，重新插入上面几处
 2. 或者直接 `cp patches/push-notify.js "$DSH_PROFILE_DIR/node_modules/dsh-mobile-plugin/lib/mobile/"`
 3. 重启 DSH 生效
