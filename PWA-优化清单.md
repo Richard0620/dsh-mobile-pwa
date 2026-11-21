@@ -49,6 +49,7 @@
 
 - **已完成**：镜像到 Web Push 的帧带 `badge`，由宿主按「未读会话数 + 待处理会话数」计算；客户端的 `unreadCount()` 改成同一口径（`pendingInteraction` + 本地卡按会话去重），App 打开时不再跳变。读不到台账就**不带 badge**，不发假数字。
 - 宿主补丁在 `patches/push-notify.js`，已装到 `~/.dsh/profiles/desktop/node_modules/dsh-mobile-plugin/lib/mobile/push-notify.js`（原文件有 `.bak` 备份）。
+- **2026-11-21 01:00**：插件升级到 **0.5.90** 时把补丁覆盖掉了；已重新安装（0.5.90 原文件备份 `.bak.<ts>`），`node patches/check.mjs` 通过。**仍需重启 DSH** 才加载。
 - **待做**：重启 DSH 后看 `journalctl -u dsh-push -f` 是否出现带 badge 的 `[notify]` 帧。
 - **验收**：杀掉 App → 触发一轮完成 / 审批 → 看主屏图标数字；打开 App 时数字不跳变（= 未读会话 + 待处理会话）。
 
@@ -248,7 +249,7 @@ DSH 插件 sendFrame() ──► ~/.dsh/webpush.json ──► https://dsh.easym
 ```
 
 - **已通**：VPS 服务、VAPID、订阅（`subs=1`）、SW 的 `push`/`notificationclick`、角标。
-- **补丁已装、未生效**：`patches/push-notify.js` 已覆盖 `~/.dsh/profiles/desktop/node_modules/dsh-mobile-plugin/lib/mobile/push-notify.js`（备份 `.bak.1795245255`），**需要重启 DSH** 才加载新模块。
+- **补丁已装、未生效**：`patches/push-notify.js` 已覆盖 `~/.dsh/profiles/desktop/node_modules/dsh-mobile-plugin/lib/mobile/push-notify.js`（插件 0.5.90 原文件备份 `.bak.<ts>`），`patches/check.mjs` 通过，**需要重启 DSH** 才加载新模块。
 - **验证**：重启后 `journalctl -u dsh-push -f` 应出现带 `badge` 的 `[notify]` 帧；没重启时推送只是不带 badge（不会发错数字），不要据此判断代码失败。
 - **完成类推送**只在"你不在看"时发（60 秒心跳窗口）；审批/提问无条件发。
 
