@@ -13,7 +13,7 @@ $swv = (Select-String -Path (Join-Path $root 'sw.js') -Pattern "dsh-mobile-v(\d+
 $commit = (git rev-parse --short HEAD)
 Write-Host "部署 APP $appv / $swv / commit $commit"
 
-$key = 'D:\Vibe\CRM\.tools\id_rsa_relay'
+$key = 'D:\Vibe\.ssh\keys\id_rsa_relay'
 $opt = @('-i', $key, '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'UserKnownHostsFile=NUL')
 
 scp @opt (Join-Path $root 'index.html') root@38.189.61.57:/srv/dsh-mobile/ | Out-Null
