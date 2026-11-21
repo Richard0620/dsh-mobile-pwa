@@ -3,251 +3,325 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Agents · local bridge</title>
+<meta name="theme-color" content="#0e1014">
+<title>Agents · DSH</title>
 <style>
-  :root { color-scheme: dark; --bg:#0b1020; --panel:#121933; --line:#243056; --ink:#e6edf7; --muted:#8fa0c0; --accent:#38bdf8; --ok:#34d399; --warn:#fbbf24; --bad:#f87171; }
-  * { box-sizing: border-box; }
-  html,body { height:100%; margin:0; background:var(--bg); color:var(--ink); font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif; }
-  body { display:flex; flex-direction:column; overflow:hidden; }
-  header { display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--line); background:#0e1530; flex:0 0 auto; }
-  header .dot { width:8px; height:8px; border-radius:50%; background:var(--bad); flex:0 0 auto; }
-  header .dot.on { background:var(--ok); }
-  header .title { font-weight:600; letter-spacing:.2px; }
-  header .muted { color:var(--muted); font-size:12px; }
-  header .spacer { flex:1; }
-  header button, .btn { background:#1b2648; color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:5px 10px; font:inherit; cursor:pointer; }
-  header button:hover, .btn:hover { border-color:var(--accent); }
-  main { flex:1; display:flex; min-height:0; }
-  nav { width:210px; flex:0 0 auto; border-right:1px solid var(--line); overflow:auto; padding:8px; background:#0d1428; }
-  nav h3 { margin:8px 6px 4px; font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
-  .pane-item { display:block; width:100%; text-align:left; margin:2px 0; padding:7px 8px; border-radius:8px; border:1px solid transparent; background:transparent; color:var(--ink); cursor:pointer; }
-  .pane-item:hover { background:#141d3a; }
-  .pane-item.sel { background:#16224a; border-color:var(--accent); }
-  .pane-item .id { font-family:ui-monospace,Consolas,monospace; font-size:12px; }
-  .pane-item .cwd { display:block; color:var(--muted); font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .st { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--muted); margin-right:5px; }
-  .st.working { background:var(--warn); } .st.idle, .st.done { background:var(--ok); } .st.blocked { background:var(--bad); }
-  section.view { flex:1; display:flex; flex-direction:column; min-width:0; }
-  .bar { display:flex; gap:8px; align-items:center; padding:6px 10px; border-bottom:1px solid var(--line); color:var(--muted); font-size:12px; flex:0 0 auto; }
-  .bar code { color:var(--ink); background:#0a1126; padding:2px 6px; border-radius:6px; }
-  #out { flex:1; margin:0; padding:10px 12px; overflow:auto; white-space:pre-wrap; word-break:break-word; font:12.5px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace; color:#d6e2f5; background:#0a0f22; }
-  .keys { display:flex; gap:6px; flex-wrap:wrap; padding:6px 10px 0; flex:0 0 auto; }
-  .keys button { padding:4px 9px; font-size:12px; }
-  .bar .mini { padding:3px 9px; font-size:12px; border-radius:7px; background:#16224a; border-color:#2b3a6b; }
-  .composer { display:flex; gap:8px; padding:8px 10px calc(10px + env(safe-area-inset-bottom)); flex:0 0 auto; }
-  .composer input[type=text] { flex:1; min-width:0; padding:9px 10px; border-radius:9px; border:1px solid var(--line); background:#0a1126; color:var(--ink); font:inherit; }
-  .composer input[type=text]:focus { outline:none; border-color:var(--accent); }
-  .composer label { display:flex; align-items:center; gap:4px; color:var(--muted); font-size:12px; }
-  .composer button { padding:9px 14px; border-radius:9px; background:var(--accent); border-color:var(--accent); color:#04121e; font-weight:600; }
-  .toast { position:fixed; left:50%; bottom:70px; transform:translateX(-50%); background:#1b2648; border:1px solid var(--line); padding:8px 12px; border-radius:9px; font-size:12px; opacity:0; pointer-events:none; transition:opacity .2s; }
-  .toast.show { opacity:1; }
-  .gate { position:fixed; inset:0; background:#0b1020ee; display:flex; align-items:center; justify-content:center; padding:20px; z-index:9; }
-  .gate[hidden] { display:none; }
-  .gate div { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px; width:min(360px,100%); }
-  .gate h2 { margin:0 0 8px; font-size:16px; }
-  .gate p { margin:0 0 12px; color:var(--muted); font-size:12px; }
-  .gate input { width:100%; padding:9px 10px; border-radius:9px; border:1px solid var(--line); background:#0a1126; color:var(--ink); font:inherit; }
-  .gate button { width:100%; margin-top:10px; padding:10px; border-radius:9px; background:var(--accent); border:0; color:#04121e; font-weight:600; }
-  @media (max-width:720px) { nav { width:150px; } }
+  /* All styles are scoped under .agp so this page can later be inlined into the PWA
+     without leaking anything into index.html. Colors reuse the PWA tokens. */
+  .agp{
+    --bg:var(--agp-bg,#f7f7f8); --card:var(--agp-card,#ffffff); --fg:var(--agp-fg,#111318);
+    --dim:var(--agp-dim,#8a8f98); --line:var(--agp-line,#e9e9ee); --accent:var(--agp-accent,#2f6bff);
+    --ok:#2ea043; --warn:#b58100; --bad:#e5484d; --term:#f1f2f5; --term-fg:#20242c;
+    position:fixed; inset:0; display:flex; flex-direction:column;
+    background:var(--bg); color:var(--fg);
+    font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+    -webkit-tap-highlight-color:transparent;
+  }
+  @media (prefers-color-scheme: dark){
+    .agp{ --bg:#0e1014; --card:#171a20; --fg:#e8eaee; --dim:#8d94a0; --line:#242933;
+          --accent:#4f8cff; --ok:#3fb950; --warn:#d29922; --bad:#f85149;
+          --term:#0b0e13; --term-fg:#d7deea; }
+  }
+  .agp *{box-sizing:border-box}
+  .agp button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  .agp .hdr{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--card);flex:0 0 auto}
+  .agp .dot{width:9px;height:9px;border-radius:50%;background:var(--bad);flex:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--bad) 18%,transparent)}
+  .agp .dot.on{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 16%,transparent)}
+  .agp .title{font-weight:650;font-size:16px;letter-spacing:.2px}
+  .agp .sub{font-size:12px;color:var(--dim)}
+  .agp .grow{flex:1}
+  .agp .chip{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border:1px solid var(--line);border-radius:999px;font-size:12px;color:var(--dim);background:var(--bg)}
+  .agp .chip.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 35%,var(--line))}
+  .agp .iconbtn{width:34px;height:34px;display:grid;place-items:center;border-radius:9px;color:var(--dim)}
+  .agp .iconbtn:active{background:var(--bg)}
+  .agp .body{flex:1;display:flex;min-height:0}
+  .agp .nav{width:236px;flex:none;border-right:1px solid var(--line);background:var(--card);padding:8px;overflow:auto}
+  .agp .grp{font-size:11px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase;margin:10px 8px 4px}
+  .agp .row{display:flex;align-items:center;gap:9px;width:100%;padding:9px 9px;border-radius:11px;text-align:left;margin:2px 0}
+  .agp .row:hover{background:var(--bg)}
+  .agp .row.sel{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+  .agp .row .st{width:8px;height:8px;border-radius:50%;background:var(--dim);flex:none}
+  .agp .row .st.working{background:var(--warn)}
+  .agp .row .st.idle,.agp .row .st.done{background:var(--ok)}
+  .agp .row .st.blocked{background:var(--bad)}
+  .agp .row .meta{min-width:0;flex:1}
+  .agp .row .nm{display:block;font-size:14px;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .agp .row .path{display:block;font-size:11.5px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .agp .row .tag{font-size:10.5px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:1px 7px;flex:none}
+  .agp .main{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
+  .agp .mobar{display:none;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--card);align-items:center}
+  .agp .mobar select{flex:1;min-width:0;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font:inherit}
+  .agp .termwrap{flex:1;min-height:0;padding:10px 12px 4px;display:flex}
+  .agp .term{flex:1;margin:0;padding:12px 13px;border-radius:14px;border:1px solid var(--line);background:var(--term);color:var(--term-fg);
+    overflow:auto;white-space:pre-wrap;word-break:break-word;font:12.5px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;tab-size:4}
+  .agp .blockedbar{display:none;margin:0 12px;padding:10px 12px;border-radius:14px;border:1px solid color-mix(in srgb,var(--bad) 35%,var(--line));
+    background:color-mix(in srgb,var(--bad) 8%,var(--card));flex:0 0 auto}
+  .agp .blockedbar.on{display:block}
+  .agp .blockedbar .bt{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
+  .agp .blockedbar .bt b{color:var(--bad)}
+  .agp .blockedbar .ex{margin:6px 0 9px;color:var(--dim);font:11.5px/1.5 ui-monospace,Consolas,monospace;max-height:76px;overflow:hidden;white-space:pre-wrap}
+  .agp .blockedbar .acts{display:flex;gap:8px;flex-wrap:wrap}
+  .agp .kbtn{min-width:44px;height:38px;padding:0 12px;border-radius:11px;border:1px solid var(--line);background:var(--card);font-size:13.5px}
+  .agp .kbtn:active{background:var(--bg)}
+  .agp .kbtn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  .agp .keys{display:flex;gap:7px;padding:9px 12px 0;overflow-x:auto;flex:0 0 auto;scrollbar-width:none}
+  .agp .keys::-webkit-scrollbar{display:none}
+  .agp .keys .kbtn{flex:none;height:36px;min-width:42px;font-size:13px;color:var(--dim)}
+  .agp .composer{display:flex;gap:8px;padding:9px 12px calc(11px + env(safe-area-inset-bottom));flex:0 0 auto;background:var(--bg)}
+  .agp .composer input{flex:1;min-width:0;height:44px;padding:0 13px;border-radius:13px;border:1px solid var(--line);background:var(--card);color:var(--fg);font:inherit;font-size:15px}
+  .agp .composer input:focus{outline:none;border-color:var(--accent)}
+  .agp .composer .send{width:64px;height:44px;border-radius:13px;background:var(--accent);color:#fff;font-weight:600;font-size:14px}
+  .agp .gate{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:22px;background:color-mix(in srgb,var(--bg) 92%,transparent);z-index:20}
+  .agp .gate[hidden]{display:none}
+  .agp .card{width:min(360px,100%);background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}
+  .agp .card h2{margin:0 0 6px;font-size:16px}
+  .agp .card p{margin:0 0 12px;font-size:12.5px;color:var(--dim)}
+  .agp .card input{width:100%;height:42px;padding:0 12px;border-radius:11px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font:inherit}
+  .agp .card .go{width:100%;height:42px;margin-top:10px;border-radius:11px;background:var(--accent);color:#fff;font-weight:600}
+  .agp .toast{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);padding:9px 13px;border-radius:11px;background:var(--fg);color:var(--bg);font-size:12.5px;opacity:0;pointer-events:none;transition:opacity .18s;z-index:30;max-width:86%}
+  .agp .toast.on{opacity:1}
+  .agp .empty{padding:10px;color:var(--dim);font-size:12.5px}
+  @media (max-width:699px){
+    .agp .nav{display:none}
+    .agp .mobar{display:flex}
+    .agp .termwrap{padding:8px 10px 2px}
+    .agp .blockedbar{margin:0 10px}
+    .agp .keys{padding:8px 10px 0}
+    .agp .composer{padding:8px 10px calc(10px + env(safe-area-inset-bottom))}
+  }
 </style>
 </head>
 <body>
-<header>
-  <span class="dot" id="dot"></span>
-  <span class="title">Agents</span>
-  <span class="muted">local bridge · herdr</span>
-  <span class="spacer"></span>
-  <span class="muted" id="conn">connecting…</span>
-  <button id="btnToken" title="改 token">token</button>
-</header>
-<main>
-  <nav>
-    <h3>panes</h3>
-    <div id="panes"></div>
-    <h3>agents</h3>
-    <div id="agents"></div>
-  </nav>
-  <section class="view">
-    <div class="bar"><code id="paneId">—</code><span id="agentState"></span><button id="startClaude" class="mini">＋ claude</button><span class="spacer" style="flex:1"></span><span id="hint"></span></div>
-    <pre id="out">…</pre>
-    <div class="keys">
-      <button data-key="enter">Enter</button>
-      <button data-key="esc">Esc</button>
-      <button data-key="tab">Tab</button>
-      <button data-key="up">↑</button>
-      <button data-key="down">↓</button>
-      <button data-key="ctrl-c">Ctrl-C</button>
-      <button data-key="1">1</button>
-      <button data-key="2">2</button>
-      <button data-key="3">3</button>
-      <button data-key="y">y</button>
-      <button data-key="n">n</button>
+<div class="agp" id="agp">
+  <header class="hdr">
+    <span class="dot" id="dot"></span>
+    <div>
+      <div class="title">终端</div>
+      <div class="sub" id="conn">connecting…</div>
     </div>
-    <div class="composer">
-      <input id="txt" type="text" placeholder="输入命令 / 消息，Enter 发送" autocomplete="off" autocapitalize="off" spellcheck="false">
-      <label><input id="enter" type="checkbox" checked>Enter</label>
-      <button id="send">发送</button>
-    </div>
-  </section>
-</main>
-<div class="toast" id="toast"></div>
-<div class="gate" id="gate" hidden>
-  <div>
-    <h2>Bridge token</h2>
-    <p>这个页面直接连 127.0.0.1:18888，需要本地桥接的 Bearer token。</p>
-    <input id="token" type="password" placeholder="Bearer token" autocomplete="off">
-    <button id="saveToken">保存并连接</button>
+    <span class="grow"></span>
+    <button class="chip" id="startBtn">＋ claude</button>
+    <button class="iconbtn" id="tokenBtn" title="token">⚙</button>
+  </header>
+
+  <div class="body">
+    <aside class="nav">
+      <div class="grp">Panes</div>
+      <div id="paneList"></div>
+      <div class="grp">Agents</div>
+      <div id="agentList"></div>
+    </aside>
+
+    <main class="main">
+      <div class="mobar">
+        <select id="sel" aria-label="选择 pane 或 agent"></select>
+      </div>
+      <div class="termwrap"><pre class="term" id="out">…</pre></div>
+      <div class="blockedbar" id="blockedBar">
+        <div class="bt"><b>●</b> agent 在等你 <span class="grow"></span><span class="sub" id="blockedWho"></span></div>
+        <div class="ex" id="blockedEx"></div>
+        <div class="acts" id="blockedActs"></div>
+      </div>
+      <div class="keys">
+        <button class="kbtn" data-key="enter">Enter</button>
+        <button class="kbtn" data-key="esc">Esc</button>
+        <button class="kbtn" data-key="tab">Tab</button>
+        <button class="kbtn" data-key="up">↑</button>
+        <button class="kbtn" data-key="down">↓</button>
+        <button class="kbtn" data-key="ctrl-c">Ctrl-C</button>
+        <button class="kbtn" data-key="1">1</button>
+        <button class="kbtn" data-key="2">2</button>
+        <button class="kbtn" data-key="3">3</button>
+        <button class="kbtn" data-key="y">y</button>
+        <button class="kbtn" data-key="n">n</button>
+      </div>
+      <div class="composer">
+        <input id="txt" type="text" placeholder="输入命令，Enter 发送" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button class="send" id="send">发送</button>
+      </div>
+    </main>
   </div>
+
+  <div class="gate" id="gate" hidden>
+    <div class="card">
+      <h2>连接 Agent 桥接</h2>
+      <p>需要本地 bridge 的 Bearer token。粘一次，之后存在本机。</p>
+      <input id="token" type="password" placeholder="Bearer token" autocomplete="off">
+      <button class="go" id="saveToken">保存并连接</button>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
 </div>
+
 <script>
-const $ = (s) => document.querySelector(s);
-let token = localStorage.getItem('bridge_token') || '';
-const BASE = location.pathname.replace(/\/+$/, '');   // '' when served at /, '/agents' behind Caddy
-const q = new URLSearchParams(location.search);
-if (q.get('token')) { token = q.get('token'); localStorage.setItem('bridge_token', token); history.replaceState(null, '', location.pathname); }
-let pane = null;
-let timer = null;
-let lastText = '';
+(function () {
+  const $ = (s) => document.querySelector(s);
+  const BASE = location.pathname.replace(/\/+$/, '');   // '' at /, '/agents' behind Caddy
+  let token = localStorage.getItem('bridge_token') || '';
+  const q = new URLSearchParams(location.search);
+  if (q.get('token')) { token = q.get('token'); localStorage.setItem('bridge_token', token); history.replaceState(null, '', location.pathname); }
 
-function api(path, opt = {}) {
-  const o = { ...opt, headers: { ...(opt.headers || {}), Authorization: 'Bearer ' + token } };
-  return fetch(BASE + path, o).then(async (r) => {
-    if (r.status === 401) { showGate(true); throw new Error('401 unauthorized'); }
-    if (!r.ok) throw new Error((await r.text()).slice(0, 300) || ('HTTP ' + r.status));
-    return r;
-  });
-}
+  let pane = null;
+  let snap = null;
+  let lastText = '';
+  let busy = false;
 
-function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 1800); }
-function showGate(v) { $('#gate').hidden = !v; }
-function setConn(ok, text) { $('#dot').classList.toggle('on', !!ok); $('#conn').textContent = text; }
+  function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 1900); }
+  function gate(v) { $('#gate').hidden = !v; }
+  function conn(ok, text) { $('#dot').classList.toggle('on', !!ok); $('#conn').textContent = text; }
 
-async function refreshPanes() {
-  const r = await api('/snapshot');
-  const j = await r.json();
-  const snap = j.result && j.result.snapshot;
-  if (!snap) throw new Error('bad snapshot');
-  const box = $('#panes');
-  box.innerHTML = '';
-  (snap.panes || []).forEach((p) => {
-    const b = document.createElement('button');
-    b.className = 'pane-item' + (p.pane_id === pane ? ' sel' : '');
-    const st = document.createElement('span');
-    st.className = 'st ' + (p.agent_status || '');
-    b.appendChild(st);
-    const id = document.createElement('span');
-    id.className = 'id';
-    id.textContent = p.pane_id;
-    b.appendChild(id);
-    const cwd = document.createElement('span');
-    cwd.className = 'cwd';
-    cwd.textContent = (p.cwd || '').replace(/^.*[\\\/]/, '') || p.cwd || '';
-    b.appendChild(cwd);
-    b.onclick = () => { pane = p.pane_id; lastText = ''; refreshPanes().catch(() => {}); tick(); };
-    box.appendChild(b);
-  });
-  if (!pane && snap.panes && snap.panes.length) pane = snap.panes[0].pane_id;
-  const me = (snap.panes || []).find((p) => p.pane_id === pane);
-  $('#paneId').textContent = pane || '—';
-  $('#agentState').textContent = me ? ('agent: ' + (me.agent_status || 'unknown')) : '';
-  $('#agentState').className = me ? ('st ' + (me.agent_status || '')) : '';
-
-  const ag = $('#agents');
-  ag.innerHTML = '';
-  const agents = snap.agents || [];
-  if (!agents.length) {
-    const p = document.createElement('div');
-    p.className = 'cwd';
-    p.style.padding = '4px 8px';
-    p.textContent = '没有运行中的 agent';
-    ag.appendChild(p);
+  function api(path, opt = {}) {
+    const o = { ...opt, headers: { ...(opt.headers || {}), Authorization: 'Bearer ' + token } };
+    return fetch(BASE + path, o).then(async (r) => {
+      if (r.status === 401) { gate(true); throw new Error('token 无效'); }
+      if (!r.ok) throw new Error((await r.text()).slice(0, 240) || ('HTTP ' + r.status));
+      return r;
+    });
   }
-  agents.forEach((a) => {
-    const b = document.createElement('button');
-    b.className = 'pane-item';
-    const st = document.createElement('span');
-    st.className = 'st ' + (a.status || '');
-    b.appendChild(st);
-    const nm = document.createElement('span');
-    nm.className = 'id';
-    nm.textContent = a.name || a.agent || a.id || 'agent';
-    b.appendChild(nm);
-    const sub = document.createElement('span');
-    sub.className = 'cwd';
-    sub.textContent = a.status || (a.pane_id || '');
-    b.appendChild(sub);
-    b.onclick = () => {
-      if (a.pane_id) { pane = a.pane_id; lastText = ''; refreshPanes().catch(() => {}); tick(); }
-    };
-    ag.appendChild(b);
-  });
-}
 
-async function tick() {
-  if (!pane) return;
-  try {
-    const r = await api('/pane?id=' + encodeURIComponent(pane) + '&lines=200');
-    const t = await r.text();
-    const out = $('#out');
-    const nearBottom = out.scrollHeight - out.scrollTop - out.clientHeight < 60;
-    out.textContent = t;
-    if (nearBottom || t !== lastText) out.scrollTop = out.scrollHeight;
-    lastText = t;
-    setConn(true, 'ok');
-  } catch (e) {
-    setConn(false, e.message);
+  function agents() { return (snap && snap.agents) || []; }
+  function panes() { return (snap && snap.panes) || []; }
+  function currentAgent() { return agents().find((a) => a.pane_id === pane); }
+
+  async function load() {
+    const r = await api('/snapshot');
+    const j = await r.json();
+    snap = (j.result && j.result.snapshot) || null;
+    if (!snap) throw new Error('snapshot 解析失败');
+    if (!pane && panes().length) pane = panes()[0].pane_id;
+    renderNav();
+    const me = panes().find((p) => p.pane_id === pane);
+    $('#startBtn').style.display = currentAgent() ? 'none' : '';
+    $('#blockedWho').textContent = pane || '';
+    renderBlocked(me);
   }
-}
 
-async function send() {
-  const el = $('#txt');
-  const text = el.value;
-  if (!text || !pane) return;
-  el.value = '';
-  try {
-    await api('/send', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane, text, enter: $('#enter').checked }) });
+  function renderNav() {
+    const pl = $('#paneList'); pl.innerHTML = '';
+    panes().forEach((p) => {
+      const b = document.createElement('button');
+      b.className = 'row' + (p.pane_id === pane ? ' sel' : '');
+      b.innerHTML = '<span class="st ' + (p.agent_status || '') + '"></span>';
+      const m = document.createElement('span'); m.className = 'meta';
+      const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = p.pane_id;
+      const pa = document.createElement('span'); pa.className = 'path'; pa.textContent = p.cwd || '';
+      m.append(nm, pa); b.appendChild(m);
+      b.onclick = () => select(p.pane_id);
+      pl.appendChild(b);
+    });
+    if (!panes().length) pl.innerHTML = '<div class="empty">没有 pane</div>';
+
+    const al = $('#agentList'); al.innerHTML = '';
+    agents().forEach((a) => {
+      const b = document.createElement('button');
+      b.className = 'row' + (a.pane_id === pane ? ' sel' : '');
+      b.innerHTML = '<span class="st ' + (a.agent_status || '') + '"></span>';
+      const m = document.createElement('span'); m.className = 'meta';
+      const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = a.name || a.agent;
+      const pa = document.createElement('span'); pa.className = 'path'; pa.textContent = (a.agent_status || 'unknown') + ' · ' + (a.pane_id || '');
+      m.append(nm, pa); b.appendChild(m);
+      b.onclick = () => select(a.pane_id);
+      al.appendChild(b);
+    });
+    if (!agents().length) al.innerHTML = '<div class="empty">没有运行中的 agent</div>';
+
+    const sel = $('#sel'); sel.innerHTML = '';
+    panes().forEach((p) => {
+      const a = agents().find((x) => x.pane_id === p.pane_id);
+      const o = document.createElement('option');
+      o.value = p.pane_id;
+      o.textContent = (a ? '● ' + (a.name || a.agent) + ' · ' + (a.agent_status || '') : '▢ ' + p.pane_id);
+      sel.appendChild(o);
+    });
+    if (pane) sel.value = pane;
+  }
+
+  function select(id) { if (!id) return; pane = id; lastText = ''; load().catch(() => {}); tick(); }
+
+  function renderBlocked(me) {
+    const a = currentAgent();
+    const bar = $('#blockedBar');
+    const blocked = a && a.agent_status === 'blocked';
+    bar.classList.toggle('on', !!blocked);
+    if (!blocked) return;
+    $('#blockedWho').textContent = (a.name || a.agent) + ' · ' + pane;
+    const lines = lastText.trim().split('\n').slice(-8).join('\n');
+    $('#blockedEx').textContent = lines;
+    const acts = $('#blockedActs');
+    if (!acts.childElementCount) {
+      [['1', '1'], ['2', '2'], ['3', '3'], ['y', 'y'], ['n', 'n'], ['enter', 'Enter'], ['esc', 'Esc']].forEach(([k, label]) => {
+        const b = document.createElement('button');
+        b.className = 'kbtn' + (k === 'enter' ? ' primary' : '');
+        b.textContent = label;
+        b.onclick = () => key(k);
+        acts.appendChild(b);
+      });
+    }
+  }
+
+  async function tick() {
+    if (!pane || busy) return;
+    try {
+      const r = await api('/pane?id=' + encodeURIComponent(pane) + '&lines=220');
+      const t = await r.text();
+      const out = $('#out');
+      const near = out.scrollHeight - out.scrollTop - out.clientHeight < 48;
+      out.textContent = t;
+      if (near || t !== lastText) out.scrollTop = out.scrollHeight;
+      lastText = t;
+      conn(true, '已连接 · ' + pane);
+      renderBlocked();
+    } catch (e) { conn(false, e.message); }
+  }
+
+  async function send() {
+    const el = $('#txt'); const text = el.value;
+    if (!text || !pane) return;
+    el.value = '';
+    try {
+      await api('/send', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane, text, enter: true }) });
+      await tick();
+    } catch (e) { toast(e.message); el.value = text; }
+  }
+
+  async function key(k) {
+    if (!pane) return;
+    try { await api('/keys', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane, keys: [k] }) }); await tick(); }
+    catch (e) { toast(e.message); }
+  }
+
+  async function startClaude() {
+    if (!pane) return;
+    try {
+      await api('/agent/start', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane }) });
+      toast('claude 已启动');
+    } catch (e) {
+      if (/agent_not_ready/.test(e.message || '')) toast('claude 正在启动，等待输入');
+      else toast(e.message);
+    }
+    await load().catch(() => {});
     await tick();
-  } catch (e) { toast(e.message); }
-}
-
-async function key(k) {
-  if (!pane) return;
-  try { await api('/keys', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane, keys: [k] }) }); await tick(); }
-  catch (e) { toast(e.message); }
-}
-
-$('#send').onclick = send;
-$('#startClaude').onclick = async () => {
-  if (!pane) return;
-  try {
-    await api('/agent/start', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane }) });
-    toast('claude 已启动');
-    await refreshPanes();
-    await tick();
-  } catch (e) {
-    if (/agent_not_ready/.test(e.message || '')) {
-      toast('claude 已启动，正在等待输入');
-      refreshPanes().catch(() => {});
-      tick();
-    } else { toast(e.message); }
   }
-};
-$('#txt').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
-document.querySelectorAll('.keys button').forEach((b) => { b.onclick = () => key(b.dataset.key); });
-$('#btnToken').onclick = () => showGate(true);
-$('#saveToken').onclick = () => { token = $('#token').value.trim(); localStorage.setItem('bridge_token', token); showGate(false); start(); };
 
-function start() {
-  if (!token) { showGate(true); return; }
-  showGate(false);
-  refreshPanes().catch((e) => setConn(false, e.message));
-  tick();
-  if (timer) clearInterval(timer);
-  timer = setInterval(() => { tick(); }, 1500);
-  setInterval(() => { refreshPanes().catch(() => {}); }, 3000);
-}
+  $('#send').onclick = send;
+  $('#txt').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
+  document.querySelectorAll('.keys .kbtn').forEach((b) => { b.onclick = () => key(b.dataset.key); });
+  $('#startBtn').onclick = startClaude;
+  $('#tokenBtn').onclick = () => gate(true);
+  $('#saveToken').onclick = () => { token = $('#token').value.trim(); localStorage.setItem('bridge_token', token); gate(false); boot(); };
+  $('#sel').onchange = (e) => select(e.target.value);
 
-start();
+  function boot() {
+    if (!token) { gate(true); return; }
+    gate(false);
+    load().catch((e) => conn(false, e.message));
+    tick();
+    setInterval(tick, 1500);
+    setInterval(() => load().catch(() => {}), 4000);
+  }
+
+  boot();
+})();
 </script>
 </body>
 </html>
