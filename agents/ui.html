@@ -33,7 +33,8 @@
   #out { flex:1; margin:0; padding:10px 12px; overflow:auto; white-space:pre-wrap; word-break:break-word; font:12.5px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace; color:#d6e2f5; background:#0a0f22; }
   .keys { display:flex; gap:6px; flex-wrap:wrap; padding:6px 10px 0; flex:0 0 auto; }
   .keys button { padding:4px 9px; font-size:12px; }
-  .composer { display:flex; gap:8px; padding:8px 10px 10px; flex:0 0 auto; }
+  .bar .mini { padding:3px 9px; font-size:12px; border-radius:7px; background:#16224a; border-color:#2b3a6b; }
+  .composer { display:flex; gap:8px; padding:8px 10px calc(10px + env(safe-area-inset-bottom)); flex:0 0 auto; }
   .composer input[type=text] { flex:1; min-width:0; padding:9px 10px; border-radius:9px; border:1px solid var(--line); background:#0a1126; color:var(--ink); font:inherit; }
   .composer input[type=text]:focus { outline:none; border-color:var(--accent); }
   .composer label { display:flex; align-items:center; gap:4px; color:var(--muted); font-size:12px; }
@@ -63,9 +64,11 @@
   <nav>
     <h3>panes</h3>
     <div id="panes"></div>
+    <h3>agents</h3>
+    <div id="agents"></div>
   </nav>
   <section class="view">
-    <div class="bar"><code id="paneId">—</code><span id="agentState"></span><span class="spacer" style="flex:1"></span><span id="hint"></span></div>
+    <div class="bar"><code id="paneId">—</code><span id="agentState"></span><button id="startClaude" class="mini">＋ claude</button><span class="spacer" style="flex:1"></span><span id="hint"></span></div>
     <pre id="out">…</pre>
     <div class="keys">
       <button data-key="enter">Enter</button>
@@ -74,6 +77,11 @@
       <button data-key="up">↑</button>
       <button data-key="down">↓</button>
       <button data-key="ctrl-c">Ctrl-C</button>
+      <button data-key="1">1</button>
+      <button data-key="2">2</button>
+      <button data-key="3">3</button>
+      <button data-key="y">y</button>
+      <button data-key="n">n</button>
     </div>
     <div class="composer">
       <input id="txt" type="text" placeholder="输入命令 / 消息，Enter 发送" autocomplete="off" autocapitalize="off" spellcheck="false">
@@ -143,6 +151,36 @@ async function refreshPanes() {
   $('#paneId').textContent = pane || '—';
   $('#agentState').textContent = me ? ('agent: ' + (me.agent_status || 'unknown')) : '';
   $('#agentState').className = me ? ('st ' + (me.agent_status || '')) : '';
+
+  const ag = $('#agents');
+  ag.innerHTML = '';
+  const agents = snap.agents || [];
+  if (!agents.length) {
+    const p = document.createElement('div');
+    p.className = 'cwd';
+    p.style.padding = '4px 8px';
+    p.textContent = '没有运行中的 agent';
+    ag.appendChild(p);
+  }
+  agents.forEach((a) => {
+    const b = document.createElement('button');
+    b.className = 'pane-item';
+    const st = document.createElement('span');
+    st.className = 'st ' + (a.status || '');
+    b.appendChild(st);
+    const nm = document.createElement('span');
+    nm.className = 'id';
+    nm.textContent = a.name || a.agent || a.id || 'agent';
+    b.appendChild(nm);
+    const sub = document.createElement('span');
+    sub.className = 'cwd';
+    sub.textContent = a.status || (a.pane_id || '');
+    b.appendChild(sub);
+    b.onclick = () => {
+      if (a.pane_id) { pane = a.pane_id; lastText = ''; refreshPanes().catch(() => {}); tick(); }
+    };
+    ag.appendChild(b);
+  });
 }
 
 async function tick() {
@@ -179,6 +217,15 @@ async function key(k) {
 }
 
 $('#send').onclick = send;
+$('#startClaude').onclick = async () => {
+  if (!pane) return;
+  try {
+    await api('/agent/start', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane }) });
+    toast('claude 已启动');
+    await refreshPanes();
+    await tick();
+  } catch (e) { toast(e.message); }
+};
 $('#txt').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
 document.querySelectorAll('.keys button').forEach((b) => { b.onclick = () => key(b.dataset.key); });
 $('#btnToken').onclick = () => showGate(true);

@@ -115,6 +115,14 @@ const server = http.createServer(async (req, res) => {
       await run(args);
       return send(res, 200, JSON.stringify({ ok: true }));
     }
+    if (req.method === "POST" && url.pathname === "/agent/start") {
+      const body = JSON.parse((await readBody(req)) || "{}");
+      if (!body.pane) return send(res, 400, JSON.stringify({ error: "pane required" }));
+      const name = body.name || "claude";
+      const kind = body.kind || "claude";
+      await run(["agent", "start", name, "--kind", kind, "--pane", body.pane]);
+      return send(res, 200, JSON.stringify({ ok: true, name, kind }));
+    }
     return send(res, 404, JSON.stringify({ error: "not found" }));
   } catch (e) {
     return send(res, 500, JSON.stringify({ error: String((e && e.message) || e) }));
