@@ -167,9 +167,10 @@
       <div class="title">终端</div>
       <div class="sub" id="conn">connecting…</div>
     </div>
-    <span class="ver">v11</span>
+    <span class="ver">v12</span>
     <span class="grow"></span>
     <div class="seg" id="seg"><button id="vChat">对话</button><button id="vTerm">终端</button></div>
+    <button class="chip" id="resetBtn" style="display:none">新会话</button>
     <button class="chip" id="startBtn">＋ claude</button>
     <button class="iconbtn" id="tokenBtn" title="token">⚙</button>
   </header>
@@ -287,6 +288,7 @@
     if (viewMode === 'chat') {
       $('#txt').placeholder = dshActive() ? '发消息给 DSH，Enter 发送' : (currentAgent() ? '发消息给 agent，Enter 发送' : '先选择启动方式');
     }
+    $('#resetBtn').style.display = dshActive() ? '' : 'none';
     $('#blockedWho').textContent = pane || '';
     renderBlocked(me);
   }
@@ -520,7 +522,7 @@
     $('#chat').style.display = isChat ? 'flex' : 'none';
     $('#vChat').classList.toggle('on', isChat);
     $('#vTerm').classList.toggle('on', !isChat);
-    $('#txt').placeholder = isChat ? (dshActive() ? '发消息给 DSH，Enter 发送' : '发消息给 agent，Enter 发送') : '输入命令，Enter 发送';
+    $('#txt').placeholder = isChat ? (dshActive() ? '发消息给 DSH，Enter 发送' : (currentAgent() ? '发消息给 agent，Enter 发送' : '先选择启动方式')) : '输入命令，Enter 发送';
     if (isChat) chatTick();
   }
 
@@ -577,6 +579,16 @@
   $('#txt').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
   document.querySelectorAll('.keys .kbtn').forEach((b) => { b.onclick = () => key(b.dataset.key); });
   $('#startBtn').onclick = startClaude;
+  $('#resetBtn').onclick = async () => {
+    if (!pane) return;
+    try {
+      await api('/dsh/reset', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane }) });
+      chatSig = '';
+      await load();
+      renderView();
+      toast('已开新会话');
+    } catch (e) { toast(e.message); }
+  };
   $('#tokenBtn').onclick = () => gate(true);
   $('#saveToken').onclick = () => { token = $('#token').value.trim(); localStorage.setItem('bridge_token', token); gate(false); boot(); };
   $('#sel').onchange = (e) => select(e.target.value);

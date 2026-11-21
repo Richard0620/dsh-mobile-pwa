@@ -355,8 +355,14 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/dsh/reset") {
       const body = JSON.parse((await readBody(req)) || "{}");
       if (!body.pane) return send(res, 400, JSON.stringify({ error: "pane required" }));
-      delete dshStore[body.pane];
-      saveDshStore();
+      const e = dshStore[body.pane];
+      if (e) {
+        e.sessionId = "";
+        e.messages = [];
+        e.busy = false;
+        e.error = "";
+        saveDshStore();
+      }
       return send(res, 200, JSON.stringify({ ok: true }));
     }
     return send(res, 404, JSON.stringify({ error: "not found" }));
