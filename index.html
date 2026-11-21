@@ -440,7 +440,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v76';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v77';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1060,13 +1060,25 @@ function workspaceOf(sessionId) {
 
 // 新建会话：先选工作区（AI-HUB 的新会话页也是这个模型），再让宿主建
 function openNewSessionSheet() {
-  const items = state.workspaces.map(w => ({
+  // 最上面给「新建工作区…」：列表里没有的新目录，选完目录先采纳成工作区，
+  // 再直接在这个工作区里建会话——不用先退回列表加工作区、再点一次新建会话。
+  const items = [{ label: '新建工作区…', icon: '＋', run: newSessionInNewWorkspace }];
+  items.push(...state.workspaces.map(w => ({
     label: w.title || w.path,
     icon: '📁',
     run: () => createSession(w.workspaceId),
-  }));
+  })));
   items.push({ label: '默认工作区', icon: '＋', run: () => createSession(null) });
   openSheet(items, '新建会话 · 选择工作区');
+}
+
+async function newSessionInNewWorkspace() {
+  await openWorkspacePicker(state.sessionCwd || '', async (path) => {
+    const ws = await createWorkspaceAt(path);
+    if (!ws || !ws.workspaceId) return false;   // createWorkspaceAt 已经提示过原因
+    await createSession(ws.workspaceId);
+    return true;
+  });
 }
 
 async function createSession(workspaceId) {
@@ -1171,9 +1183,17 @@ function openWorkspaceMenu(g) {
 // 新建工作区 = 在电脑的目录树里「点进去选」，不是让手机键盘敲一条绝对路径。
 // 起始目录优先当前会话所在目录（最常加的往往就是它旁边），否则由宿主回主目录。
 async function newWorkspace() {
+  await openWorkspacePicker(state.sessionCwd || '');
+}
+
+// 选目录的公共入口：onPick 不给就是普通「加为工作区」；给了就让调用方接手后续
+// （例如在选中的目录里开新会话）。onPick 返回 false 时选择器不关，方便重选。
+async function openWorkspacePicker(start, onPick) {
   let roots = [];
   try { roots = await loadRoots(); } catch {}
-  await openFileDrawer(state.sessionCwd || '', { pick: true, roots });
+  await openFileDrawer(start || state.sessionCwd || '', {
+    pick: true, roots, onPick: typeof onPick === 'function' ? onPick : null,
+  });
 }
 
 // 盘符/挂载卷清单：宿主主目录永远在 C 盘（macOS 在 /Users/…），没有这一层就跨不到别的盘。
@@ -1187,17 +1207,20 @@ async function loadRoots() {
   return state.roots;
 }
 
+// 把目录采纳成工作区；成功（含「已经在列表里」）返回工作区项，失败返回 null。
 async function createWorkspaceAt(path) {
   const t = String(path || '').trim();
   // 盘符根 "D:\" 去掉尾部分隔符会变成没有意义的 "D:"，单独保住。
   const target = /^[A-Za-z]:[\\/]$/.test(t) ? t : t.replace(/[\\/]+$/, '');
-  if (!target) { toast('路径是空的'); return false; }
+  if (!target) { toast('路径是空的'); return null; }
   try {
     const r = await api('/api/mobile/v1/workspace/create', { method:'POST', body: { path: target } });
+    let ws = r.workspace || null;
     await refreshAll(true);
+    if (!ws) ws = (state.workspaces || []).find(w => samePath(w.path, target)) || null;
     toast(r.created ? '已添加工作区：' + target : '这个目录已经在列表里了');
-    return true;
-  } catch (e) { toast('添加失败：' + (e.message || e)); return false; }
+    return ws;
+  } catch (e) { toast('添加失败：' + (e.message || e)); return null; }
 }
 
 // 连接信息：延迟 + 中转健康
@@ -1473,7 +1496,9 @@ async function openFileDrawer(path, opts = {}) {
       const manual = async () => {
         const typed = prompt('电脑上的绝对路径（例如 D:\\Vibe\\项目）', st.path || '');
         if (typed === null || !typed.trim()) return;
-        if (await createWorkspaceAt(typed)) closeRPanel();
+        const p = typed.trim();
+        if (typeof opts.onPick === 'function') { if (await opts.onPick(p) !== false) closeRPanel(); return; }
+        if (await createWorkspaceAt(p)) closeRPanel();
       };
       foot.append(
         el('button', { class:'drbtn', style:'color:#fff;background:var(--accent);border-color:var(--accent);'
