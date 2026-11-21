@@ -1575,7 +1575,8 @@ function openDrawer() {
   renderList(listBox, { noHeader: true, noPull: true });
 
   const foot = el('div', { class:'drfoot' },
-    el('button', { class:'drbtn', onclick: () => { closeDrawer(); openAbout(); } }, '⚙ 设置'),
+    el('button', { class:'drbtn', onclick: () => { closeDrawer(); openAbout(); } },
+    el('button', { class:'drbtn', onclick: () => { closeDrawer(); openPushSettings(); } }, '🔔 通知'), '⚙ 设置'),
     el('button', { class:'drbtn', onclick: () => { closeDrawer(); openStats(); } }, '📊 统计'),
     el('button', { class:'drbtn', onclick: () => { closeDrawer(); openFileDrawer(state.sessionCwd || ''); } }, '📂 文件'),
     el('button', { class:'drbtn', onclick: () => { closeDrawer(); reloadApp(); } }, '↻ 重载'),
@@ -1933,6 +1934,7 @@ function renderList(wrap, opts = {}) {
     { label:'连接信息', icon:'⏱', run: openConnInfo },
     { label:'统计', icon:'📊', run: openStats },
     { label:'关于', icon:'ⓘ', run: openAbout },
+    { label:'通知提醒', icon:'🔔', run: openPushSettings },
     { label:'重新加载', icon:'↻', run: reloadApp },
     { label:'恢复链接', icon:'🔗', run: openRecovery },
     { label:'退出登录', icon:'⏏', run: () => { localStorage.clear(); state.token=''; state.view='list'; render(); } },
