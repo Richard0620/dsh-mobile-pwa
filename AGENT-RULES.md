@@ -15,6 +15,7 @@ git 只解决"事后能找回"，不解决"同时写"。真正的隔离靠 **wor
 |---|---|---|
 | `D:\Vibe\PWA\pwa` | `master` | **主 agent 会话**（负责最终合并与部署） |
 | `D:\Vibe\PWA\pwa-b` | `feature/parallel` | **另一个会话**（在此目录工作） |
+| `D:\Vibe\PWA\pwa-c` | `feature/lan` | **局域网直连工作线**（服务脚本 + 证书，见 `LAN.md`） |
 
 另一个会话开工前先 `cd D:\Vibe\PWA\pwa-b`，不要再去改 `pwa/` 下的文件。
 
@@ -79,3 +80,14 @@ ssh root@38.189.61.57 "cat /srv/dsh-mobile/VERSION"
 - 不要两边同时 `scp` 到 `/srv/dsh-mobile`
 - 不要在 `pwa-b` 里再 `git init`（它是同一个仓库的 worktree）
 - 不要把 `node_modules`、`icon-src.png` 提交进去（已在 `.gitignore`）
+
+## 编辑 .ps1 文件的编码坑
+
+`lan-cert.ps1` 里有中文，**必须存成 UTF-8 with BOM**：Windows PowerShell 5.1 把无 BOM 的
+UTF-8 当 ANSI 读，中文字节会把下一行语法一起带坏（实测 11 个 parse error）。用工具改完
+时编码常被写成无 BOM，改完请确认：
+
+```powershell
+$b=[System.IO.File]::ReadAllBytes('lan-cert.ps1'); $b[0] -eq 239   # 必须是 True
+$e=$null; [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path .\lan-cert.ps1),[ref]$null,[ref]$e); $e.Count  # 必须是 0
+```
