@@ -2375,7 +2375,9 @@ function renderList(wrap, opts = {}) {
     const again = document.querySelector('.searchrow input');
     if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
   });
-  main.append(el('div', { class:'searchrow' }, searchInput));
+  // 归档页不显示搜索框：本地搜索的数据源是 state.sessions（不含归档），
+  // 摆在那里输入也搜不到东西（以前就是个死控件）
+  if (state.tab !== 'archived') main.append(el('div', { class:'searchrow' }, searchInput));
 
   if (state.tab === 'archived') {
     const items = state.archived;    if (items === null) {
