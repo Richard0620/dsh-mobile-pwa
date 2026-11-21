@@ -482,7 +482,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v107';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v109';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -2390,12 +2390,33 @@ function appendTermGroup(main) {
           el('div', { class: 't' },
             el('span', { class: 'title', text: it.label }),
             it.status === 'blocked' ? el('span', { class: 'unread', title: '\u7B49\u4F60' }) : null,
-            el('span', { class: 'time', text: it.status })))));
+            el('span', { class: 'time', text: it.status }))),
+        el('button', { class: 'rowmore', text: '\u00D7', title: '\u5173\u95ED\u7EC8\u7AEF', onclick: (ev) => { ev.stopPropagation(); askCloseTerminal(it); } })));
     }
   }
   main.append(box);
 }
-function openTerminal(paneId) {
+function askCloseTerminal(it) {
+  openSheet([
+    { label: '\u5173\u95ED\u7EC8\u7AEF\uFF08' + it.label + '\uFF09', icon: '\u00D7', run: () => closeTerminal(it) },
+    { label: '\u53D6\u6D88', icon: '\u21A9', run: () => {} },
+  ], '\u5173\u95ED\u7EC8\u7AEF');
+}
+async function closeTerminal(it) {
+  try {
+    const tk = termToken();
+    const r = await fetch('/agents/tab/close', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + tk },
+      body: JSON.stringify({ tabId: it.tabId }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    toast('\u7EC8\u7AEF\u5DF2\u5173\u95ED');
+    termAgents.at = 0;
+    loadTermAgents();
+  } catch (e) { toast('\u5173\u95ED\u5931\u8D25\uFF1A' + (e.message || e)); }
+}function openTerminal(paneId) {
   const mask = el('div', { class: 'termoverlay' });
   const bar = el('div', { class: 'termbar' },
     el('button', { class: 'ico', text: '\u2039', onclick: () => mask.remove() }),

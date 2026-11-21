@@ -251,7 +251,12 @@ const server = http.createServer(async (req, res) => {
       try { mtime = statSync(file).mtimeMs; } catch {}
       return send(res, 200, JSON.stringify({ sessionId: sid, file, mtime, messages }));
     }
-    return send(res, 404, JSON.stringify({ error: "not found" }));
+    if (req.method === "POST" && url.pathname === "/tab/close") {
+      const body = JSON.parse((await readBody(req)) || "{}");
+      if (!body.tabId) return send(res, 400, JSON.stringify({ error: "tabId required" }));
+      await run(["tab", "close", body.tabId]);
+      return send(res, 200, JSON.stringify({ ok: true }));
+    }    return send(res, 404, JSON.stringify({ error: "not found" }));
   } catch (e) {
     return send(res, 500, JSON.stringify({ error: String((e && e.message) || e) }));
   }
