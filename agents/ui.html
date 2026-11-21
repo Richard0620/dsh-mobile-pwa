@@ -11,7 +11,7 @@
   .agp{
     --bg:var(--agp-bg,#f7f7f8); --card:var(--agp-card,#ffffff); --fg:var(--agp-fg,#111318);
     --dim:var(--agp-dim,#8a8f98); --line:var(--agp-line,#e9e9ee); --accent:var(--agp-accent,#2f6bff);
-    --ok:#2ea043; --warn:#b58100; --bad:#e5484d; --term:#f1f2f5; --term-fg:#20242c;
+    --ok:#2ea043; --warn:#b58100; --bad:#e5484d; --term:#f1f2f5; --term-fg:#20242c; --bubble:#e8e9ee;
     position:fixed; inset:0; display:flex; flex-direction:column;
     background:var(--bg); color:var(--fg);
     font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
@@ -20,7 +20,7 @@
   @media (prefers-color-scheme: dark){
     .agp{ --bg:#0e1014; --card:#171a20; --fg:#e8eaee; --dim:#8d94a0; --line:#242933;
           --accent:#4f8cff; --ok:#3fb950; --warn:#d29922; --bad:#f85149;
-          --term:#0b0e13; --term-fg:#d7deea; }
+          --term:#0b0e13; --term-fg:#d7deea; --bubble:#232833; }
   }
   .agp *{box-sizing:border-box}
   .agp button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
@@ -167,7 +167,7 @@
       <div class="title">终端</div>
       <div class="sub" id="conn">connecting…</div>
     </div>
-    <span class="ver">v9</span>
+    <span class="ver">v11</span>
     <span class="grow"></span>
     <div class="seg" id="seg"><button id="vChat">对话</button><button id="vTerm">终端</button></div>
     <button class="chip" id="startBtn">＋ claude</button>
@@ -240,17 +240,21 @@
   let busy = false;
   let viewMode = localStorage.getItem('agents.view') || 'chat';
   let chatSig = '';
+  let dshState = null;   // {exists, busy, messages, sessionId, ...} for the current pane
 
   function E(tag, props = {}, text = '') {
     const n = document.createElement(tag);
     for (const k of Object.keys(props)) {
       if (k === 'class') n.className = props[k];
+      else if (k === 'style') n.style.cssText = props[k];
       else n[k] = props[k];
     }
     if (text) n.textContent = text;
     return n;
   }
   function chatAgent() { return agents().find((a) => a.pane_id === pane); }
+  function dshActive() { return !!(dshState && dshState.exists); }
+  function dshMsgs() { return (dshState && dshState.messages) || []; }
 
   function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 1900); }
   function gate(v) { $('#gate').hidden = !v; }
@@ -278,10 +282,21 @@
     if (!pane && panes().length) pane = panes()[0].pane_id;
     renderNav();
     const me = panes().find((p) => p.pane_id === pane);
-    if (!currentAgent() && viewMode === 'chat') { viewMode = 'term'; localStorage.setItem('agents.view', 'term'); renderView(); }
-    $('#startBtn').style.display = currentAgent() ? 'none' : '';
+    await loadDsh();
+    $('#startBtn').style.display = currentAgent() || dshActive() ? 'none' : '';
+    if (viewMode === 'chat') {
+      $('#txt').placeholder = dshActive() ? '发消息给 DSH，Enter 发送' : (currentAgent() ? '发消息给 agent，Enter 发送' : '先选择启动方式');
+    }
     $('#blockedWho').textContent = pane || '';
     renderBlocked(me);
+  }
+
+  async function loadDsh() {
+    if (!pane) { dshState = null; return; }
+    try {
+      const r = await api('/dsh/state?pane=' + encodeURIComponent(pane));
+      dshState = await r.json();
+    } catch { dshState = null; }
   }
 
   function renderNav() {
@@ -424,11 +439,14 @@
   }
   async function chatTick() {
     if (!pane || viewMode !== 'chat') return;
+    await loadDsh();
     const a = chatAgent();
     const box = $('#chat');
+    if (dshActive()) { renderDsh(); conn(true, 'DSH · ' + pane); return; }
     if (!a) {
-      box.replaceChildren(E('div', { class: 'chatempty' }, '这个 pane 还没有 agent，点右上 ＋ claude'));
-      chatSig = '';
+      renderLauncher();
+      chatSig = 'launcher';
+      conn(true, '已连接 · ' + pane);
       return;
     }
     try {
@@ -445,13 +463,64 @@
     }
   }
 
+  function renderDsh() {
+    const msgs = dshMsgs();
+    const last = msgs[msgs.length - 1] || {};
+    const sig = 'dsh:' + msgs.length + ':' + (dshState.busy ? '1' : '0') + ':' + String(last.text || '').length;
+    if (sig === chatSig) return;
+    chatSig = sig;
+    renderChat(msgs);
+    if (dshState.busy) {
+      const box = $('#chat');
+      const row = E('div', { class: 'msg assistant' });
+      row.appendChild(E('div', { class: 'chatempty', style: 'align-self:flex-start;padding:8px 2px' }, 'DSH 正在思考…'));
+      box.appendChild(row);
+      box.scrollTop = box.scrollHeight;
+    }
+  }
+
+  function renderLauncher() {
+    const box = $('#chat');
+    box.replaceChildren();
+    const wrap = E('div', { class: 'chatempty' });
+    wrap.style.cssText = 'display:flex;flex-direction:column;gap:10px;width:100%;max-width:420px;align-self:center;padding:26px 8px;text-align:left';
+    wrap.appendChild(E('div', { style: 'font-size:15px;font-weight:650' }, '这个终端还没有启动对话'));
+    wrap.appendChild(E('div', { style: 'font-size:12.5px;color:var(--dim);margin-top:-4px' }, '选一个开始，之后直接用自然语言聊天'));
+    const mk = (label, primary) => {
+      const b = E('button', {}, label);
+      b.style.cssText = 'padding:13px;border-radius:13px;border:1px solid var(--line);background:var(--card);font-size:15px;font-weight:600;color:var(--fg)';
+      if (primary) { b.style.background = 'var(--accent)'; b.style.borderColor = 'var(--accent)'; b.style.color = '#fff'; }
+      return b;
+    };
+    const b1 = mk('启动 DSH（自然语言）', true);
+    b1.onclick = () => startDsh();
+    const b2 = mk('启动 claude');
+    b2.onclick = () => startClaude();
+    wrap.appendChild(b1);
+    wrap.appendChild(b2);
+    wrap.appendChild(E('div', { style: 'font-size:11.5px;color:var(--dim);line-height:1.5' }, 'DSH 每轮约 10–20 秒；claude 需要已在宿主机登录'));
+    box.appendChild(wrap);
+  }
+
+  async function startDsh() {
+    if (!pane) return;
+    try {
+      await api('/dsh/start', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane }) });
+      toast('DSH 已就绪，直接说话');
+      viewMode = 'chat';
+      localStorage.setItem('agents.view', 'chat');
+      await load();
+      renderView();
+    } catch (e) { toast('启动失败：' + e.message); }
+  }
+
   function renderView() {
     const isChat = viewMode === 'chat';
     $('#termwrap').style.display = isChat ? 'none' : 'flex';
     $('#chat').style.display = isChat ? 'flex' : 'none';
     $('#vChat').classList.toggle('on', isChat);
     $('#vTerm').classList.toggle('on', !isChat);
-    $('#txt').placeholder = isChat ? '发消息给 agent，Enter 发送' : '输入命令，Enter 发送';
+    $('#txt').placeholder = isChat ? (dshActive() ? '发消息给 DSH，Enter 发送' : '发消息给 agent，Enter 发送') : '输入命令，Enter 发送';
     if (isChat) chatTick();
   }
 
@@ -460,6 +529,13 @@
     if (!text || !pane) return;
     el.value = '';
     if (viewMode === 'chat') {
+      if (dshActive()) {
+        try {
+          await api('/dsh/send', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane, text }) });
+          await chatTick();
+        } catch (e) { toast(e.message); el.value = text; }
+        return;
+      }
       const a = chatAgent();
       if (!a) { toast('这个 pane 还没有 agent'); el.value = text; return; }
       try {
@@ -513,6 +589,7 @@
     tick();
     setInterval(tick, 1500);
     setInterval(() => { if (viewMode === 'chat') chatTick(); }, 2000);
+    setInterval(() => { if (viewMode === 'chat' && dshActive()) chatTick(); }, 1500);
     setInterval(() => load().catch(() => {}), 4000);
   }
 

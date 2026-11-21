@@ -2,8 +2,8 @@
 // Phase-2 lab: read panes + send input, plus a small built-in UI.
 // Binds 127.0.0.1 only. Bearer token (header or ?token=) except / and /health.
 import http from "node:http";
-import { execFile } from "node:child_process";
-import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
+import { execFile, spawn } from "node:child_process";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, basename } from "node:path";
 import { homedir } from "node:os";
@@ -29,6 +29,49 @@ function run(args, timeout = 20000) {
 }
 
 const CLAUDE_ROOT = join(process.env.USERPROFILE || homedir(), ".claude", "projects");
+
+// ---- DSH chat: one persisted headless session per pane, driven by this bridge ----
+const DSH_CHAT_FILE = join(process.env.LOCALAPPDATA || "", "agents-bridge", "dsh-chat.json");
+const DSH_BIN = join(process.env.APPDATA || "", "npm", "node_modules", "@deepseek-ai", "dsh", "lib", "bin.js");
+let dshStore = {};
+try { dshStore = JSON.parse(readFileSync(DSH_CHAT_FILE, "utf8")) || {}; } catch { dshStore = {}; }
+function saveDshStore() {
+  try {
+    mkdirSync(dirname(DSH_CHAT_FILE), { recursive: true });
+    writeFileSync(DSH_CHAT_FILE, JSON.stringify(dshStore));
+  } catch {}
+}
+function dshTurn(entry, text) {
+  return new Promise((resolve) => {
+    const args = [DSH_BIN, "--profile", "headless", "--json"];
+    if (entry.sessionId) args.push("--session-id", entry.sessionId);
+    args.push(text);
+    let child;
+    try {
+      child = spawn(process.execPath, args, { cwd: entry.cwd || process.cwd(), windowsHide: true });
+    } catch (e) {
+      return resolve({ text: "", sid: "", err: String(e), code: -1 });
+    }
+    let out = "";
+    let err = "";
+    child.stdout.on("data", (d) => { out += d.toString("utf8"); });
+    child.stderr.on("data", (d) => { err += d.toString("utf8"); });
+    child.on("error", (e) => resolve({ text: "", sid: "", err: String(e), code: -1 }));
+    child.on("close", (code) => {
+      let sid = "";
+      let final = null;
+      for (const line of out.split(/\r?\n/)) {
+        if (!line.trim()) continue;
+        try {
+          const o = JSON.parse(line);
+          if (o.type === "session" && o.sessionId) sid = o.sessionId;
+          if (o.type === "final") final = o;
+        } catch {}
+      }
+      resolve({ text: (final && final.text) || "", sid, err, code });
+    });
+  });
+}
 
 function encodeProjectDir(cwd) {
   return String(cwd || "").replace(/[\\/:]/g, "-");
@@ -257,7 +300,66 @@ const server = http.createServer(async (req, res) => {
       if (!body.tabId) return send(res, 400, JSON.stringify({ error: "tabId required" }));
       await run(["tab", "close", body.tabId]);
       return send(res, 200, JSON.stringify({ ok: true }));
-    }    return send(res, 404, JSON.stringify({ error: "not found" }));
+    }
+    if (req.method === "GET" && url.pathname === "/dsh/state") {
+      const pane = url.searchParams.get("pane") || "";
+      const e = dshStore[pane];
+      if (!e) return send(res, 200, JSON.stringify({ exists: false }));
+      return send(res, 200, JSON.stringify({ exists: true, pane, sessionId: e.sessionId || "", cwd: e.cwd || "", busy: !!e.busy, error: e.error || "", messages: (e.messages || []).slice(-200) }));
+    }
+    if (req.method === "POST" && url.pathname === "/dsh/start") {
+      const body = JSON.parse((await readBody(req)) || "{}");
+      if (!body.pane) return send(res, 400, JSON.stringify({ error: "pane required" }));
+      let e = dshStore[body.pane];
+      if (!e) {
+        let cwd = body.cwd || "";
+        if (!cwd) {
+          const snap = JSON.parse(await run(["api", "snapshot"])).result.snapshot;
+          const p = (snap.panes || []).find((x) => x.pane_id === body.pane);
+          cwd = (p && p.cwd) || process.cwd();
+        }
+        e = { cwd, sessionId: "", messages: [], busy: false, error: "", startedAt: Date.now() };
+        dshStore[body.pane] = e;
+        saveDshStore();
+      }
+      return send(res, 200, JSON.stringify({ ok: true, exists: true, pane: body.pane, sessionId: e.sessionId || "", cwd: e.cwd || "", busy: !!e.busy, messages: (e.messages || []).slice(-200) }));
+    }
+    if (req.method === "POST" && url.pathname === "/dsh/send") {
+      const body = JSON.parse((await readBody(req)) || "{}");
+      if (!body.pane || typeof body.text !== "string" || !body.text.trim()) {
+        return send(res, 400, JSON.stringify({ error: "pane and text required" }));
+      }
+      const e = dshStore[body.pane];
+      if (!e) return send(res, 404, JSON.stringify({ error: "dsh not started in this pane" }));
+      if (e.busy) return send(res, 409, JSON.stringify({ error: "busy" }));
+      e.busy = true;
+      e.error = "";
+      e.messages.push({ role: "user", text: body.text, time: new Date().toISOString() });
+      saveDshStore();
+      const entry = e;
+      (async () => {
+        const r = await dshTurn(entry, body.text);
+        if (r.sid) entry.sessionId = r.sid;
+        if (r.text) {
+          entry.messages.push({ role: "assistant", text: r.text, time: new Date().toISOString() });
+        } else {
+          const msg = (r.err || "").trim() || ("exit " + r.code);
+          entry.error = msg.slice(0, 4000);
+          entry.messages.push({ role: "assistant", text: "\u26A0\uFE0F " + msg, time: new Date().toISOString() });
+        }
+        entry.busy = false;
+        saveDshStore();
+      })();
+      return send(res, 200, JSON.stringify({ ok: true, busy: true }));
+    }
+    if (req.method === "POST" && url.pathname === "/dsh/reset") {
+      const body = JSON.parse((await readBody(req)) || "{}");
+      if (!body.pane) return send(res, 400, JSON.stringify({ error: "pane required" }));
+      delete dshStore[body.pane];
+      saveDshStore();
+      return send(res, 200, JSON.stringify({ ok: true }));
+    }
+    return send(res, 404, JSON.stringify({ error: "not found" }));
   } catch (e) {
     return send(res, 500, JSON.stringify({ error: String((e && e.message) || e) }));
   }
