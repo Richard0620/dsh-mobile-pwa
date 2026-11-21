@@ -156,15 +156,18 @@ const server = http.createServer(async (req, res) => {
       tag: b.tag || undefined,
       kind: b.kind || undefined,
     };
-    // 「已完成 / 失败」这类：你刚还在 App 里（60 秒内有心跳）就别打扰
-    if (payload.kind && /^(completed|failed|done|turn-end)$/.test(String(payload.kind))) {
-      const quietMs = Number(process.env.DONE_QUIET_MS || 60000);
-      const anyAlways = Object.values(prefs).some((p) => p && p.alwaysDone);
+    // 门控：审批与完成永远响；其他类型（提问等）你在 App 里就静默
+    {
+      const quietMs = Number(process.env.QUIET_MS || 60000);
+      const kind = String(payload.kind || '');
+      const alwaysRing = /^(approval|completed|failed|done|turn-end)$/.test(kind);
       const last = Object.values(active).reduce((a, b) => Math.max(a, Number(b) || 0), 0);
-      if (!anyAlways && last && Date.now() - last < quietMs) {
-        return json(res, 200, { ok: true, skipped: 'active', sent: 0, dropped: 0, failed: 0 });
+      const inApp = last && Date.now() - last < quietMs;
+      if (inApp && !alwaysRing) {
+        return json(res, 200, { ok: true, skipped: 'in-app', sent: 0, dropped: 0, failed: 0 });
       }
     }
+    console.log('[notify]', payload.kind || '-', JSON.stringify(payload.title || ''), 'badge=' + (payload.badge === undefined ? '-' : payload.badge));
     const results = await broadcast(payload);
     return json(res, 200, { ok: true, ...results });
   }

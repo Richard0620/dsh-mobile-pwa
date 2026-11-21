@@ -199,6 +199,7 @@ const server = http.createServer(async (req, res) => {
       const cwd = body.cwd;
       if (!cwd) return send(res, 400, JSON.stringify({ error: "cwd required" }));
       const label = body.label || basename(cwd) || "term";
+      const startAgent = body.startAgent === true;
       const before = JSON.parse(await run(["api", "snapshot"])).result.snapshot;
       const beforeTabs = new Set((before.tabs || []).map((t) => t.tab_id));
       await run(["tab", "create", "--cwd", cwd, "--label", label, "--no-focus"]);
@@ -208,7 +209,7 @@ const server = http.createServer(async (req, res) => {
       const pane = (after.panes || []).find((p) => p.tab_id === tab.tab_id);
       let started = false;
       let startErr = "";
-      if (pane) {
+      if (pane && startAgent) {
         let name = "claude-" + (tab.number || "x");
         try {
           await run(["agent", "start", name, "--kind", "claude", "--pane", pane.pane_id]);
