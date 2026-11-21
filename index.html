@@ -456,7 +456,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v88';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v89';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -2415,7 +2415,8 @@ function renderList(wrap, opts = {}) {
   }
 
   // 单行会话：列表分组与全局置顶共用（长按 / 桌面右键出会话菜单）
-  function sessionRow(s) {
+  // opts.hidePin：顶部「置顶」分组里不再重复画 📌（看分组头就知道）
+  function sessionRow(s, opts = {}) {
     const more = el('button', { class:'rowmore', text:'⋯', onclick: (e) => {
       e.stopPropagation();
       openSessionMenu(s);
@@ -2424,7 +2425,7 @@ function renderList(wrap, opts = {}) {
       el('span', { class: s.running ? 'dot run' : 'dot' }),
       el('div', { class:'body' },
         el('div', { class:'t' },
-          s.pinned ? el('span', { class:'pinmark', text:'📌' }) : null,
+          s.pinned && !opts.hidePin ? el('span', { class:'pinmark', text:'📌' }) : null,
           el('span', { class:'title', text: s.title || '(无标题)' }),
           isUnread(s) ? el('span', { class:'unread', title:'有未查看的新回复' }) : null,
           el('span', { class:'time', text: fmtTime(s.updatedAt) })),
@@ -2458,19 +2459,18 @@ function renderList(wrap, opts = {}) {
       el('span', { class:'count', style:'margin-left:auto', text: String(pinnedItems.length) }),
     );
     const pinBox = el('div', { class:'group' }, pinHead);
-    if (!pinClosed) for (const s of pinnedItems) pinBox.append(sessionRow(s));
+    if (!pinClosed) for (const s of pinnedItems) pinBox.append(sessionRow(s, { hidePin: true }));
     main.append(pinBox);
   }
 
-  // 按工作区分组；不属于任何工作区的按 cwd 兜底。置顶的已在上面统一展示。
-  // 工作区先全部建组：即使会话都被置顶或归档，文件夹也不会凭空消失。
+  // 按工作区分组；不属于任何工作区的按 cwd 兜底。置顶会话在顶部聚合一份，
+  // 同时仍保留在所属文件夹里——文件夹是找会话的主路径，不能因为置顶就消失。
+  // 工作区先全部建组：即使一个会话都没有，文件夹也不会凭空消失。
   const groups = new Map();
-  const pinnedCount = new Map();
   for (const w of state.workspaces) {
     groups.set(`w:${w.workspaceId}`, { key: `w:${w.workspaceId}`, name: w.title || w.path, path: w.path, git: w.git, items: [] });
   }
   for (const s of state.sessions) {
-    if (s.pinned) continue;
     const w = workspaceOf(s.sessionId);
     const key = w ? `w:${w.workspaceId}` : `c:${s.cwd || '(未登记)'}`;
     if (!groups.has(key)) {
@@ -2478,13 +2478,6 @@ function renderList(wrap, opts = {}) {
       groups.set(key, { key, name, path: w ? w.path : s.cwd, git: w && w.git, items: [] });
     }
     groups.get(key).items.push(s);
-  }
-  // 置顶会话也算回所属文件夹的总数（它们显示在顶部，但文件夹计数不应变小）
-  for (const s of pinnedItems) {
-    const w = workspaceOf(s.sessionId);
-    if (!w) continue;
-    const key = `w:${w.workspaceId}`;
-    pinnedCount.set(key, (pinnedCount.get(key) || 0) + 1);
   }
   const order = [...state.workspaces.map(w => `w:${w.workspaceId}`), ...groups.keys()];
   const keys = [...new Set(order)].filter(k => groups.has(k));
@@ -2503,8 +2496,7 @@ function renderList(wrap, opts = {}) {
       el('span', { text:'📁' }),
       el('span', { class:'gname', text: g.name || '(未命名)' }),
       g.git && g.git.branch ? el('span', { class:'branch', text: g.git.branch }) : null,
-      el('span', { class:'count', style:'margin-left:auto',
-        text: String(g.items.length + (pinnedCount.get(k) || 0)) }),
+      el('span', { class:'count', style:'margin-left:auto', text: String(g.items.length) }),
     );
     // 长按分组头 → 工作区菜单（重命名 / 删除 / 在此新建）
     let glp = null;
@@ -2514,13 +2506,12 @@ function renderList(wrap, opts = {}) {
     head.addEventListener('contextmenu', (e) => { e.preventDefault(); openWorkspaceMenu(g); });
     const box = el('div', { class:'group' }, head);
     if (!closed) {
-      const sorted = g.items.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      // 文件夹里置顶的排前面（与全局置顶区一致），其余按更新时间
+      const sorted = g.items.slice().sort((a, b) =>
+        ((b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)) || ((b.updatedAt || 0) - (a.updatedAt || 0)));
       const expanded = state.expandedGroups.has(k);
       const visible = expanded ? sorted : sorted.slice(0, PREVIEW_COUNT);
-      if (!sorted.length) {
-        const pc = pinnedCount.get(k) || 0;
-        box.append(el('div', { class:'ghint', text: pc ? `${pc} 条会话都在顶部「置顶」里` : '这个文件夹还没有会话' }));
-      }
+      if (!sorted.length) box.append(el('div', { class:'ghint', text:'这个文件夹还没有会话' }));
       for (const s of visible) box.append(sessionRow(s));
       if (sorted.length > PREVIEW_COUNT) {
         box.append(el('button', { class:'showmore', onclick: () => {
