@@ -105,6 +105,42 @@
     .agp .keys{padding:8px 10px 0}
     .agp .composer{padding:8px 10px calc(10px + env(safe-area-inset-bottom))}
   }
+  /* chat bubbles, ported from the PWA */
+  .agp .msg{display:flex;flex-direction:column;margin:0 0 2px}
+  .agp .msg.user{align-items:flex-end}
+  .agp .msg.assistant{align-items:flex-start}
+  .agp .msg .bubble{max-width:88%;padding:9px 13px;border-radius:16px;font-size:15px;line-height:1.62;
+    white-space:pre-wrap;word-break:break-word;background:var(--card);border:1px solid var(--line)}
+  .agp .msg.user .bubble{background:var(--accent);border-color:var(--accent);color:#fff;border-bottom-right-radius:5px}
+  .agp .msg.assistant .bubble{border-bottom-left-radius:5px}
+  .agp .msg .bubble.md{white-space:normal}
+  .agp .mtime{font-size:10.5px;color:var(--dim);margin:3px 6px 10px}
+  .agp .md{font-size:15px;line-height:1.62;word-break:break-word}
+  .agp .md > :first-child{margin-top:0}
+  .agp .md > :last-child{margin-bottom:0}
+  .agp .md h1,.agp .md h2,.agp .md h3{margin:16px 0 8px;line-height:1.35;font-weight:650}
+  .agp .md h1{font-size:20px}.agp .md h2{font-size:18px}.agp .md h3{font-size:16px}
+  .agp .md p{margin:9px 0}
+  .agp .md ul,.agp .md ol{margin:8px 0;padding-left:22px}
+  .agp .md li{margin:3px 0}
+  .agp .md code{font:.9em/1.4 ui-monospace,SFMono-Regular,Consolas,monospace;
+    background:color-mix(in srgb,var(--fg) 7%,transparent);padding:1.5px 5px;border-radius:5px}
+  .agp .md pre.code{position:relative;background:#1b1f27;color:#e6e9ef;padding:12px 14px;border-radius:12px;overflow-x:auto;margin:10px 0}
+  .agp .md pre.code code{background:none;padding:0;color:inherit;font-size:12.5px;line-height:1.55}
+  .agp .md pre.code .k{color:#c792ea}
+  .agp .md pre.code .s{color:#c3e88d}
+  .agp .md pre.code .c{color:#6b7394;font-style:italic}
+  .agp .md pre.code .n{color:#f78c6c}
+  .agp .md blockquote{margin:10px 0;padding:2px 12px;border-left:3px solid var(--line);color:var(--dim)}
+  .agp .md hr{border:none;border-top:1px solid var(--line);margin:14px 0}
+  .agp .md a{color:var(--accent);text-decoration:none}
+  .agp .md .tbl{margin:10px 0;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .agp .md table{border-collapse:collapse;font-size:13px;width:100%;table-layout:auto}
+  .agp .md th,.agp .md td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;
+    white-space:normal;word-break:break-word;overflow-wrap:anywhere;vertical-align:top;line-height:1.45}
+  .agp .md th{color:var(--dim);font-weight:600;font-size:12.5px}
+  .agp .msg .bubble.tool{background:var(--bg);border:1px dashed var(--line);color:var(--dim);
+    font:11.5px/1.45 ui-monospace,Consolas,monospace;border-radius:10px;max-width:94%;white-space:pre-wrap}
 </style>
 </head>
 <body>
@@ -115,7 +151,7 @@
       <div class="title">终端</div>
       <div class="sub" id="conn">connecting…</div>
     </div>
-    <span class="ver">v4</span>
+    <span class="ver">v5</span>
     <span class="grow"></span>
     <div class="seg" id="seg"><button id="vChat">对话</button><button id="vTerm">终端</button></div>
     <button class="chip" id="startBtn">＋ claude</button>
@@ -309,23 +345,40 @@
     } catch (e) { conn(false, e.message); }
   }
 
+  function fmtClock(t) {
+    if (!t) return '';
+    const d = new Date(t);
+    if (isNaN(d.getTime())) return '';
+    const p = (n) => String(n).padStart(2, '0');
+    return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
   function renderChat(msgs) {
     const box = $('#chat');
-    const near = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+    const near = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
     box.replaceChildren();
-    if (!msgs.length) box.append(E('div', { class: 'chatempty' }, '还没有对话，在下面发一条消息开始'));
+    if (!msgs.length) box.append(E('div', { class: 'chatempty' }, '杩樻病鏈夊璇濓紝鍦ㄤ笅闈㈠彂涓€鏉℃秷鎭紑濮?));
     for (const m of msgs) {
-      if (m.role === 'user') box.append(E('div', { class: 'bubble user' }, m.text));
-      else if (m.role === 'assistant') {
-        if (m.text) box.append(E('div', { class: 'bubble assistant' }, m.text));
-        for (const t of (m.tools || [])) box.append(E('div', { class: 'bubble tool' }, '\u2699 ' + t.name + '\n' + t.input));
+      if (m.role === 'user') {
+        const row = E('div', { class: 'msg user' });
+        row.appendChild(E('div', { class: 'bubble' }, m.text));
+        row.appendChild(E('div', { class: 'mtime' }, fmtClock(m.time)));
+        box.appendChild(row);
+      } else if (m.role === 'assistant') {
+        const row = E('div', { class: 'msg assistant' });
+        if (m.text) {
+          const b = E('div', { class: 'bubble md' });
+          b.innerHTML = mdToHtml(m.text);
+          row.appendChild(b);
+        }
+        for (const t of (m.tools || [])) row.appendChild(E('div', { class: 'bubble tool' }, '\u2699 ' + t.name + '\n' + t.input));
+        row.appendChild(E('div', { class: 'mtime' }, fmtClock(m.time)));
+        box.appendChild(row);
       } else if (m.role === 'tool') {
-        box.append(E('div', { class: 'bubble tool' }, m.text));
+        box.appendChild(E('div', { class: 'bubble tool' }, m.text));
       }
     }
     if (near) box.scrollTop = box.scrollHeight;
   }
-
   async function chatTick() {
     if (!pane || viewMode !== 'chat') return;
     const a = chatAgent();
@@ -420,6 +473,108 @@
     setInterval(() => load().catch(() => {}), 4000);
   }
 
+  // --- minimal markdown renderer, same rules as the PWA ---
+  function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+  function inlineMd(s) {
+    return esc(s)
+      .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+      .replace(/~~([^~\n]+)~~/g, '<del>$1</del>')
+      .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+  }
+  const KW = new Set(('const let var function return if else for while class import export from new await async try catch '
+    + 'throw switch case break continue default typeof instanceof in of this null undefined true false def elif lambda '
+    + 'pass with as None True False echo then fi do done esac local cd sudo rm cp mv grep cat curl git npm pnpm node').split(' '));
+  const HL_LANGS = { js:'js', javascript:'js', mjs:'js', cjs:'js', jsx:'js', ts:'js', typescript:'js', tsx:'js',
+    json:'json', py:'py', python:'py', sh:'sh', bash:'sh', zsh:'sh', shell:'sh', console:'sh' };
+  const hlFamily = (lang) => {
+    const key = String(lang || '').trim().toLowerCase().replace(/^\./, '').split(/[\s,;]/)[0];
+    return HL_LANGS[key] || '';
+  };
+  const HL_STR = '"(?:\\\\.|[^"\\\\])*"|\'(?:\\\\.|[^\'\\\\])*\'|`(?:\\\\.|[^`\\\\])*`';
+  const HL_TRIPLE = '"""[\\s\\S]*?"""|\'\'\'[\\s\\S]*?\'\'\'';
+  const HL_NUM = '\\b\\d+(?:\\.\\d+)?\\b';
+  const HL_WORD = '[A-Za-z_$][\\w$-]*';
+  function hl(code, lang) {
+    const family = hlFamily(lang);
+    if (family === '') return esc(code);
+    let src;
+    if (family === 'py') src = '(' + HL_TRIPLE + '|' + HL_STR + ')|(#[^\\n]*)|(' + HL_NUM + ')|(' + HL_WORD + ')';
+    else if (family === 'sh') src = '(' + HL_STR + ')|(#[^\\n]*)|(' + HL_NUM + ')|(' + HL_WORD + ')';
+    else if (family === 'json') src = '(' + HL_STR + ')|(' + HL_NUM + ')|(' + HL_WORD + ')';
+    else src = '(' + HL_STR + ')|(//[^\\n]*|/\\*[\\s\\S]*?\\*/)|(' + HL_NUM + ')|(' + HL_WORD + ')';
+    const re = new RegExp(src, 'g');
+    const numGroup = family === 'json' ? 2 : 3;
+    const commentGroup = family === 'json' ? 0 : 2;
+    const wordGroup = family === 'json' ? 3 : 4;
+    const out = [];
+    let last = 0, m;
+    while ((m = re.exec(code))) {
+      if (m.index > last) out.push(esc(code.slice(last, m.index)));
+      if (m[1]) out.push('<span class="s">' + esc(m[1]) + '</span>');
+      else if (commentGroup && m[commentGroup]) out.push('<span class="c">' + esc(m[commentGroup]) + '</span>');
+      else if (m[numGroup]) out.push('<span class="n">' + esc(m[numGroup]) + '</span>');
+      else {
+        const word = m[wordGroup] || '';
+        out.push(KW.has(word) ? '<span class="k">' + esc(word) + '</span>' : esc(word));
+      }
+      last = re.lastIndex;
+    }
+    out.push(esc(code.slice(last)));
+    return out.join('');
+  }
+  function mdToHtml(src) {
+    const lines = String(src || '').replace(/\r/g, '').split('\n');
+    const out = [];
+    let i = 0;
+    const isList = (l) => /^\s*([-*+]|\d+[.)])\s+/.test(l);
+    while (i < lines.length) {
+      const line = lines[i];
+      if (/^\s*```/.test(line)) {
+        const lang = line.trim().slice(3).trim();
+        const buf = []; i++;
+        while (i < lines.length && !/^\s*```/.test(lines[i])) buf.push(lines[i++]);
+        i++;
+        out.push('<pre class="code"' + (lang ? ' data-lang="' + esc(lang) + '"' : '') + '><code>' + hl(buf.join('\n'), lang) + '</code></pre>');
+        continue;
+      }
+      if (/\|/.test(line) && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i + 1])) {
+        const cells = (r) => r.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+        const head = cells(line);
+        i += 2;
+        const rows = [];
+        while (i < lines.length && lines[i].includes('|') && lines[i].trim() !== '') { rows.push(cells(lines[i])); i++; }
+        out.push('<div class="tbl"><table><thead><tr>' + head.map((h) => '<th>' + inlineMd(h) + '</th>').join('') +
+          '</tr></thead><tbody>' + rows.map((r) => '<tr>' + r.map((c) => '<td>' + inlineMd(c) + '</td>').join('') + '</tr>').join('') +
+          '</tbody></table></div>');
+        continue;
+      }
+      const h = /^(#{1,6})\s+(.*)$/.exec(line);
+      if (h) { const n = Math.min(4, h[1].length); out.push('<h' + n + '>' + inlineMd(h[2]) + '</h' + n + '>'); i++; continue; }
+      if (/^\s*([-*_])\1{2,}\s*$/.test(line)) { out.push('<hr>'); i++; continue; }
+      if (/^\s*>\s?/.test(line)) {
+        const buf = [];
+        while (i < lines.length && /^\s*>\s?/.test(lines[i])) buf.push(lines[i++].replace(/^\s*>\s?/, ''));
+        out.push('<blockquote>' + inlineMd(buf.join('\n')).replace(/\n/g, '<br>') + '</blockquote>');
+        continue;
+      }
+      if (isList(line)) {
+        const ordered = /^\s*\d+[.)]\s+/.test(line);
+        const items = [];
+        while (i < lines.length && isList(lines[i])) items.push(lines[i++].replace(/^\s*([-*+]|\d+[.)])\s+/, ''));
+        const tag = ordered ? 'ol' : 'ul';
+        out.push('<' + tag + '>' + items.map((t) => '<li>' + inlineMd(t) + '</li>').join('') + '</' + tag + '>');
+        continue;
+      }
+      if (line.trim() === '') { i++; continue; }
+      const buf = [line]; i++;
+      while (i < lines.length && lines[i].trim() !== '' && !/^\s*```/.test(lines[i]) && !/^#{1,6}\s/.test(lines[i])
+        && !isList(lines[i]) && !/^\s*>\s?/.test(lines[i]) && !lines[i].includes('|')) buf.push(lines[i++]);
+      out.push('<p>' + inlineMd(buf.join('\n')).replace(/\n/g, '<br>') + '</p>');
+    }
+    return out.join('');
+  }
   boot();
 })();
 </script>
