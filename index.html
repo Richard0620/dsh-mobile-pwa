@@ -353,6 +353,9 @@
 
   /* ---------- 审批 / 提问 ---------- */
   .card{border:1px solid var(--line);background:var(--card);border-radius:16px;padding:13px;margin:14px 0}
+  /* 审批/提问卡提交后先收起再移除，避免对话流高度瞬间掉一截导致跳动 */
+  .card.closing{box-sizing:border-box;overflow:hidden;will-change:height;
+    transition:height .18s ease, opacity .18s ease, margin .18s ease, padding .18s ease, border-width .18s ease}
   .card .ct{font-size:13px;font-weight:650;color:var(--warn);margin-bottom:6px}
   .card .cfact{font-size:14px;margin:4px 0}
   .card .cmeta{font-size:12px;color:var(--dim);margin-top:4px}
@@ -465,7 +468,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v95';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v97';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -3640,6 +3643,34 @@ function renderMessage(m) {
 }
 
 // ---------------------------------------------------------------- 审批 / 提问卡
+// 提交后先让卡片收起到 0 高度，再从 state 移除并重绘。
+// 直接删会让 cardsWrap 高度瞬间少一截，对话流跟着跳；收起过程中若本来在底部就持续贴底。
+function dismissCard(c) {
+  return new Promise((resolve) => {
+    const node = c && c._node;
+    if (!node || !node.isConnected) { resolve(); return; }
+    const b = ui.body;
+    if (b && b.scrollHeight - b.scrollTop - b.clientHeight < 120) ui.atBottom = true;
+    const pin = () => { if (ui.body && ui.body.isConnected && ui.atBottom) ui.body.scrollTop = ui.body.scrollHeight; };
+    const h = node.getBoundingClientRect().height;
+    node.classList.add('closing');
+    node.style.height = h + 'px';
+    void node.offsetHeight;
+    requestAnimationFrame(() => {
+      node.style.height = '0px';
+      node.style.opacity = '0';
+      node.style.marginTop = '0px';
+      node.style.marginBottom = '0px';
+      node.style.paddingTop = '0px';
+      node.style.paddingBottom = '0px';
+      node.style.borderWidth = '0px';
+    });
+    pin();
+    const timer = setInterval(pin, 30);
+    setTimeout(() => { clearInterval(timer); resolve(); }, 200);
+  });
+}
+
 function renderCard(c) {
   // 帧有两种形状：顶层字段（approval/requested）与全部包在 data 里（approval/asked），统一摊平
   const d = (c.data && c.data.data) ? { ...c.data, ...c.data.data } : (c.data || {});
@@ -3706,6 +3737,7 @@ function renderCard(c) {
         rpcId: d.rpcId, sessionId: d.sessionId || state.sessionId,
         answer: { answers: [...picks].map(([id, set]) => ({ id, selected: [...set] })) },
       }});
+      await dismissCard(c);
       state.cards = state.cards.filter(x => x !== c); paint();
       // 角标把「挂着的卡」算进待处理数：答完要立刻重算，并拉一次 fresh 列表
       // 让 pendingInteraction 同步掉（/sessions 有 30 秒缓存）
@@ -3724,6 +3756,7 @@ async function respondApproval(d, outcome, c) {
       approvalId: d.approvalId || d.id || (c && c.data && (c.data.approvalId || (c.data.data && c.data.data.id))),
       outcome,
     }});
+    await dismissCard(c);
     state.cards = state.cards.filter(x => x !== c); paint();
     // 同提问卡：答完立刻重算角标，并 fresh 一次让 pendingInteraction 跟上
     syncBadge();
