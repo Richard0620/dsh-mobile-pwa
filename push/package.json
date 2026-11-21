@@ -1,0 +1,10 @@
+{
+  "name": "dsh-push",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "DSH Mobile 的 Web Push 服务（VAPID 签名 + 订阅存储 + 发送）",
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
+}

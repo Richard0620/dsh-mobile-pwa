@@ -1,0 +1,60 @@
+# ============================================================================
+# 美西 VPS（38.189.61.57）上的 Caddy —— DSH Mobile PWA + 自建中转
+#
+# 为什么是 8443 不是 443：这台机器 443 归 sing-box（VLESS Reality），不能动。
+#
+# 必须反代给中转的四类路径：
+#   /api/*    移动 API + SSE
+#   /tunnel   宿主插件的 WSS 隧道（漏了它，握手会拿到 200 而不是 101）
+#   /healthz  健康检查
+#   /status   节点状态
+# ============================================================================
+
+{
+	email admin@easymana.online
+}
+
+dsh.easymana.online:8443 {
+	# ---- 移动 API / SSE ----
+	handle /api/* {
+		reverse_proxy 127.0.0.1:18788 {
+			flush_interval -1
+			transport http {
+				read_timeout  24h
+				write_timeout 24h
+			}
+		}
+	}
+
+	# ---- 宿主隧道（WebSocket 升级）----
+	handle /tunnel {
+		reverse_proxy 127.0.0.1:18788 {
+			flush_interval -1
+			transport http {
+				read_timeout  24h
+				write_timeout 24h
+			}
+		}
+	}
+
+	handle /healthz {
+		reverse_proxy 127.0.0.1:18788
+	}
+
+	handle /status {
+		reverse_proxy 127.0.0.1:18788
+	}
+
+	# ---- 静态 PWA ----
+	handle {
+		root * /srv/dsh-mobile
+		try_files {path} /index.html
+		file_server
+
+		header {
+			-Server
+			X-Content-Type-Options nosniff
+			Referrer-Policy no-referrer
+		}
+	}
+}

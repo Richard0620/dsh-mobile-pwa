@@ -1,0 +1,98 @@
+# ============================================================================
+# DSH Mobile —— Caddy 配置
+#
+# 三条硬约束，别改：
+#  1. SSE 必须关缓冲：`flush_interval -1`，否则流式字会憋住（插件往流里塞 padding
+#     就是为了防这个，但反代配错照样白费）。
+#  2. 读写超时必须是小时级：SSE 是长连接，默认 60s 会被掐；插件靠 15s 心跳保活。
+#  3. 不要开 `encode` 压 /api/*：gzip 会把 event-stream 攒起来，等于又把流憋住。
+#
+# 用法：把下面 dsh.example.com 换成你的域名/主机名，`caddy run --config Caddyfile`
+# ============================================================================
+
+{
+	# 邮件只用于 Let's Encrypt 到期通知；用 Tailscale 证书时可以整段删掉
+	email you@example.com
+}
+
+# ----------------------------------------------------------------------------
+# 形态 A：Caddy 直接跑在宿主机上（最简单，零隧道）
+#   https://dsh.example.com  →  静态 PWA + 反代 127.0.0.1:18787
+# ----------------------------------------------------------------------------
+dsh.example.com {
+	# ---- 移动 API ----
+	handle /api/* {
+		reverse_proxy 127.0.0.1:18787 {
+			flush_interval -1
+
+			transport http {
+				# SSE 长连接：给足读/写超时（Caddy 默认会掐）
+				read_timeout  24h
+				write_timeout 24h
+			}
+
+			# 上游是本机插件，透传真实客户端信息没用还容易误伤它的来源判定，
+			# 保持默认（Caddy 不加 X-Forwarded-* 以外的头）即可。
+		}
+	}
+
+	# ---- 静态前端 ----
+	handle {
+		root * /srv/dsh-mobile
+
+		# SPA 兜底：/session/xxx 这类前端路由直接回 index.html
+		try_files {path} /index.html
+		file_server
+
+		header {
+			-Server
+			X-Content-Type-Options nosniff
+			Referrer-Policy no-referrer
+			# 前端只连自己的源，不需要给任何第三方开口子
+			Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		}
+	}
+
+	# ---- 配对入口：默认**不**对外 ----
+	#
+	# /__lan_pair 只要拿到 6 位码就能签出一枚一年有效的设备凭据。把它挂到公网，
+	# 等于把「配对新设备」这件事暴露成可爆破的（插件内部有令牌桶闸门，但不该只靠它）。
+	#
+	# 建议：第一次配对在**局域网或 Tailscale 内**完成（凭据能用一年），之后再走公网。
+	# 确实需要公网配对时，才打开下面这段，并考虑加 basic_auth 或 IP 白名单：
+	#
+	# handle /__lan_pair {
+	# 	@allowed remote_ip 100.64.0.0/10 192.168.0.0/16 127.0.0.1
+	# 	handle @allowed {
+	# 		reverse_proxy 127.0.0.1:18787
+	# 	}
+	# 	respond 403
+	# }
+}
+
+# ----------------------------------------------------------------------------
+# 形态 B：静态在云、回源走隧道（韩国云 / 美国云都行）
+#
+# 宿主机上跑：  ssh -N -R 18787:127.0.0.1:18787 user@你的云
+# 或者在宿主机上装 Tailscale，云上直接用 100.x.x.x 回源。
+# 云上这份 Caddy 只需要把上游地址换掉：
+#
+# dsh.example.com {
+# 	handle /api/* {
+# 		reverse_proxy 127.0.0.1:18787 {
+# 			flush_interval -1
+# 			transport http {
+# 				read_timeout  24h
+# 				write_timeout 24h
+# 			}
+# 		}
+# 	}
+# 	handle {
+# 		root * /srv/dsh-mobile
+# 		try_files {path} /index.html
+# 		file_server
+# 	}
+# }
+#
+# 注意：云上这层**只是通道**，不要加缓存、不要解 E2EE、不要记会话内容。
+# ----------------------------------------------------------------------------
