@@ -5,7 +5,7 @@ import http from "node:http";
 import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, basename } from "node:path";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HERDR = process.env.HERDR_BIN || join(process.env.LOCALAPPDATA || "", "Programs", "herdr", "herdr.exe");
@@ -123,10 +123,55 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/agent/start") {
       const body = JSON.parse((await readBody(req)) || "{}");
       if (!body.pane) return send(res, 400, JSON.stringify({ error: "pane required" }));
-      const name = body.name || "claude";
+      const snap = JSON.parse(await run(["api", "snapshot"])).result.snapshot;
+      const p = (snap.panes || []).find((x) => x.pane_id === body.pane) || {};
+      const t = (snap.tabs || []).find((x) => x.tab_id === p.tab_id) || {};
       const kind = body.kind || "claude";
-      await run(["agent", "start", name, "--kind", kind, "--pane", body.pane]);
+      let name = body.name || (kind + "-" + (t.number || "x"));
+      try {
+        await run(["agent", "start", name, "--kind", kind, "--pane", body.pane]);
+      } catch (e) {
+        if (!/agent_name_taken/.test(String((e && e.message) || e))) throw e;
+        name = name + "-" + Date.now().toString(36).slice(-4);
+        await run(["agent", "start", name, "--kind", kind, "--pane", body.pane]);
+      }
       return send(res, 200, JSON.stringify({ ok: true, name, kind }));
+    }
+    if (req.method === "POST" && url.pathname === "/tab/create") {
+      const body = JSON.parse((await readBody(req)) || "{}");
+      const cwd = body.cwd;
+      if (!cwd) return send(res, 400, JSON.stringify({ error: "cwd required" }));
+      const label = body.label || basename(cwd) || "term";
+      const before = JSON.parse(await run(["api", "snapshot"])).result.snapshot;
+      const beforeTabs = new Set((before.tabs || []).map((t) => t.tab_id));
+      await run(["tab", "create", "--cwd", cwd, "--label", label, "--no-focus"]);
+      const after = JSON.parse(await run(["api", "snapshot"])).result.snapshot;
+      const tab = (after.tabs || []).find((t) => !beforeTabs.has(t.tab_id));
+      if (!tab) return send(res, 500, JSON.stringify({ error: "tab created but not found in snapshot" }));
+      const pane = (after.panes || []).find((p) => p.tab_id === tab.tab_id);
+      let started = false;
+      let startErr = "";
+      if (pane) {
+        let name = "claude-" + (tab.number || "x");
+        try {
+          await run(["agent", "start", name, "--kind", "claude", "--pane", pane.pane_id]);
+          started = true;
+        } catch (e) {
+          const msg = String((e && e.message) || e);
+          if (/agent_not_ready/.test(msg)) {
+            started = true;
+          } else if (/agent_name_taken/.test(msg)) {
+            try {
+              name = name + "-" + Date.now().toString(36).slice(-4);
+              await run(["agent", "start", name, "--kind", "claude", "--pane", pane.pane_id]);
+              started = true;
+            } catch (e2) { startErr = String((e2 && e2.message) || e2); }
+          } else {
+            startErr = msg;
+          }
+        }
+      }
+      return send(res, 200, JSON.stringify({ ok: true, tabId: tab.tab_id, paneId: pane ? pane.pane_id : "", started, startErr }));
     }
     return send(res, 404, JSON.stringify({ error: "not found" }));
   } catch (e) {

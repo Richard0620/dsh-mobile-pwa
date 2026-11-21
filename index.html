@@ -440,7 +440,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v75';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v76';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1479,6 +1479,7 @@ async function openFileDrawer(path, opts = {}) {
         el('button', { class:'drbtn', style:'color:#fff;background:var(--accent);border-color:var(--accent);'
             + 'font-size:13px;padding:8px 14px', onclick: async () => {
           if (!st.path) { toast('还没进到目录里'); return; }
+          if (typeof opts.onPick === 'function') { const keep = await opts.onPick(st.path); if (keep !== false) closeRPanel(); return; }
           if (await createWorkspaceAt(st.path)) closeRPanel();
         } }, '✓ 用这个文件夹'),
         el('button', { class:'drbtn', onclick: mkdir }, '📁 新建文件夹'),
@@ -2080,6 +2081,26 @@ function loadTermAgents() {
     })
     .catch(() => { termAgents.loading = false; termAgents.at = Date.now(); });
 }
+async function newTerminal() {
+  let roots = [];
+  try { roots = await loadRoots(); } catch (e) {}
+  await openFileDrawer(state.sessionCwd || '', { pick: true, roots, onPick: async (p) => {
+    try {
+      const tk = termToken();
+      const r = await fetch('/agents/tab/create', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + tk },
+        body: JSON.stringify({ cwd: p }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+      toast('\u5DF2\u521B\u5EFA\u7EC8\u7AEF');
+      termAgents.at = 0;
+      loadTermAgents();
+    } catch (e) { toast('\u521B\u5EFA\u5931\u8D25\uFF1A' + (e.message || e)); }
+    return true;
+  }});
+}
 function appendTermGroup(main) {
   if (!termToken()) return;
   const closed = localStorage.getItem('term.collapsed') === '1';
@@ -2092,6 +2113,7 @@ function appendTermGroup(main) {
     el('span', { text: '\u2318' }),
     el('span', { class: 'gname', text: '\u7EC8\u7AEF' }),
     el('span', { class: 'count', style: 'margin-left:auto', text: String(items.length) }),
+    el('button', { class: 'ico', text: '\uFF0B', title: '\u65B0\u5EFA\u7EC8\u7AEF', onclick: (ev) => { ev.stopPropagation(); newTerminal(); } }),
   );
   const box = el('div', { class: 'group' }, head);
   if (!closed) {
