@@ -428,7 +428,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v70';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v71';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1959,6 +1959,7 @@ function renderList(wrap, opts = {}) {
     { label:'文件', icon:'📂', run: () => openFileDrawer(state.sessionCwd || '') },
     { label:'连接信息', icon:'⏱', run: openConnInfo },
     { label:'统计', icon:'📊', run: openStats },
+    { label:'终端', icon:'⌘', run: () => { location.href = '/agents/'; } },
     { label:'关于', icon:'ⓘ', run: openAbout },
     { label:'通知提醒', icon:'🔔', run: openPushSettings },
     { label:'重新加载', icon:'↻', run: reloadApp },
