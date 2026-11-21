@@ -456,7 +456,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v89';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v91';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -990,13 +990,21 @@ function render() {
     else if (state.view === 'git') renderGit(wrap);
     else renderSession(wrap);
     root.append(wrap);
-    // 抽屉开着时同步刷新抽屉里的列表（搜索框、tab 都在抽屉内）
-    const drBox = document.querySelector('.drawer-mask .drlist');
-    if (drBox) { drBox.replaceChildren(); renderList(drBox, { noHeader: true, noPull: true }); }
+    paintOpenDrawer();
   } catch (e) {
     console.error('[render]', e);
     showFatal(e);
   }
+}
+
+// 抽屉开着时同步重绘里面的列表（搜索框、tab 都在抽屉内）。
+// 置顶/重命名/归档等操作在会话页里发生时不会走 render()，refreshAll 里也要调一次，
+// 否则抽屉里还是旧数据，得关掉重开才看到。
+function paintOpenDrawer() {
+  const drBox = document.querySelector('.drawer-mask .drlist');
+  if (!drBox) return;
+  drBox.replaceChildren();
+  renderList(drBox, { noHeader: true, noPull: true });
 }
 
 // 键盘适配：iOS 上键盘不改变 layout viewport，只改 visualViewport。
@@ -1023,6 +1031,9 @@ function installViewportSync() {
   const apply = () => {
     const ih = window.innerHeight;
     if (ih > maxH) { maxH = ih; window.__maxH = maxH; }
+    // 改高度前先判断「是不是在看最新消息」——高度一变这个差值就不准了
+    const wasNear = ui && ui.body && ui.body.isConnected
+      ? ui.body.scrollHeight - ui.body.scrollTop - ui.body.clientHeight < 90 : false;
     const vvh = Math.round(vv ? vv.height : ih);
     de.style.setProperty('--vvh', vvh + 'px');
 
@@ -1036,15 +1047,18 @@ function installViewportSync() {
     if (window.scrollY !== 0 || (vv && vv.offsetTop !== 0)) {
       try { window.scrollTo(0, 0); } catch {}
     }
-    // 键盘弹起后可视区变矮：如果原本就在看最新消息，就把列表重新贴到底部，
-    // 否则最新那条会被键盘挡住（用户看到的"内容没被顶起"）
-    if (kb && ui && ui.body && ui.body.isConnected) {
-      const b = ui.body;
-      const near = b.scrollHeight - b.scrollTop - b.clientHeight < 220;
-      if (near) {
-        requestAnimationFrame(() => { try { b.scrollTop = b.scrollHeight; } catch {} });
-        setTimeout(() => { try { b.scrollTop = b.scrollHeight; } catch {} }, 260);
-      }
+    // 键盘弹起 / 窗口缩放后可视区变矮：原本在看最新消息就重贴底部。
+    // content-visibility 的高度估算滞后，rAF 之后再补 260ms / 700ms；
+    // 用户中途自己上翻（scroll 里把 atBottom 置 false）就停止。
+    if (wasNear) ui.atBottom = true;
+    if (ui && ui.body && ui.body.isConnected && ui.atBottom) {
+      const pin = () => {
+        if (!ui || !ui.body || !ui.body.isConnected || !ui.atBottom) return;
+        try { ui.body.scrollTop = ui.body.scrollHeight; } catch {}
+      };
+      requestAnimationFrame(pin);
+      setTimeout(pin, 260);
+      setTimeout(pin, 700);
     }
     if (state.debug && ui.strip) ui.strip.textContent = debugText();
   };
@@ -2531,7 +2545,8 @@ function renderList(wrap, opts = {}) {
 // ---------------------------------------------------------------- 会话详情
 // 会话页的「增量渲染」骨架：header / 列表 / 卡片 / composer 各建一次，
 // 之后只动列表和卡片，输入框不会因为来帧而重建（否则会丢焦点、丢输入）。
-let ui = { sessionId:null, body:null, listWrap:null, cardsWrap:null, ta:null, sendBtn:null, strip:null, dot:null, sig:'' };
+let ui = { sessionId:null, body:null, listWrap:null, cardsWrap:null, ta:null, sendBtn:null, strip:null, dot:null, sig:'',
+  atBottom: true };
 
 // 大图查看器：双指缩放（1–5x）、放大后单指拖动、双击切换、桌面滚轮缩放。
 // 关键点：
@@ -2742,6 +2757,7 @@ function paintSession({ scroll = 'auto' } = {}) {
   if (!ui.body || !ui.body.isConnected) return;
   state.lastPaint = Date.now();
   const atBottom = ui.body.scrollHeight - ui.body.scrollTop - ui.body.clientHeight < 90;
+  ui.atBottom = atBottom;
   // 长会话只渲染最近 N 条，避免几百条 DOM 一起卡（点"显示更早"再加）
   const limit = state.msgLimit || 120;
   const hidden = Math.max(0, state.messages.length - limit);
@@ -2869,6 +2885,7 @@ function paintSession({ scroll = 'auto' } = {}) {
     ui.typingNode = null;
   }
   if (scroll === 'bottom' || atBottom) {
+    ui.atBottom = true;
     requestAnimationFrame(() => {
       ui.body.scrollTop = ui.body.scrollHeight;
       // content-visibility 的节点先用估高参与布局，滚到底后会校正一次高度；
@@ -2995,9 +3012,18 @@ function renderSession(wrap) {
     } catch {}
   };
 
-  // 聚焦输入框时把列表带到底部（键盘弹起后不用手动滑）
+  // 聚焦输入框：只在「本来就在底部」时继续贴底，并覆盖键盘弹起后的几次重排；
+  // 正在翻历史时不要强行把人拉回底部。
   ta.addEventListener('focus', () => {
-    setTimeout(() => { if (ui.body) ui.body.scrollTop = ui.body.scrollHeight; }, 320);
+    const b = ui.body;
+    if (!b) return;
+    if (b.scrollHeight - b.scrollTop - b.clientHeight > 120) { ui.atBottom = false; return; }
+    ui.atBottom = true;
+    const pin = () => {
+      if (!ui || !ui.body || !ui.atBottom) return;
+      try { ui.body.scrollTop = ui.body.scrollHeight; } catch {}
+    };
+    [0, 120, 320, 700, 1000].forEach(ms => setTimeout(pin, ms));
   });
   // 输入 `/` 弹指令面板，输入 `@` 弹文件引用
   const slashBox = el('div', { class:'slash' });
@@ -3251,6 +3277,7 @@ function renderSession(wrap) {
 
   // 回到底部 + 新消息提示
   const jump = el('button', { class:'jump', text:'↓ 回到底部', onclick: () => {
+    ui.atBottom = true;
     body.scrollTop = body.scrollHeight; state.unseen = 0; updateJump();
   }});
   function updateJump() {
@@ -3259,8 +3286,11 @@ function renderSession(wrap) {
     jump.textContent = state.unseen > 0 ? `↓ ${state.unseen} 条新消息` : '↓ 回到底部';
   }
   body.addEventListener('scroll', () => {
-    const far = body.scrollHeight - body.scrollTop - body.clientHeight > 240;
+    const distance = body.scrollHeight - body.scrollTop - body.clientHeight;
+    const far = distance > 240;
     if (!far) state.unseen = 0;
+    // 记录「用户是不是在看最新消息」：键盘弹起、窗口缩放、贴底校正都靠它判断
+    if (ui && ui.body === body) ui.atBottom = distance < 90;
     updateJump();
   }, { passive: true });
 
@@ -3276,7 +3306,7 @@ function renderSession(wrap) {
   }
 
   ui = { sessionId: state.sessionId, body, listWrap, cardsWrap, ta, sendBtn, stopBtn, strip, dot, modelEl: modelRow,
-    jump, updateJump, loadStats: loadSessionStats, keys: [], nodes: [], cardsKey: '', prevCount: undefined };
+    jump, updateJump, loadStats: loadSessionStats, keys: [], nodes: [], cardsKey: '', prevCount: undefined, atBottom: true };
   paintSession({ scroll:'bottom' });
   // 进会话直接定位到底部 + 聚焦输入框（iOS 上焦点可能被系统拦，忽略即可）
   requestAnimationFrame(() => { body.scrollTop = body.scrollHeight; });
@@ -3702,6 +3732,7 @@ async function refreshAll(force=false) {
     }
     syncBadge();
     if (state.view === 'list') render();
+    else if (force) paintOpenDrawer();
   } catch (e) {
     if (['device-revoked','device-expired','unauthorized'].includes(e.code)) {
       state.token = ''; localStorage.clear(); render();
