@@ -68,6 +68,21 @@ function readBody(req, limit = 64 * 1024) {
     req.on('error', reject);
   });
 }
+/** 订阅类请求必须带有效的 DSH 设备凭据：向中转的移动 API 验证一次。
+ *  否则任何人只要知道这个地址，就能把自己的浏览器订阅进来、收到你的会话标题与审批内容。 */
+async function validDevice(req) {
+  const auth = String(req.headers.authorization || '');
+  const inst = String(req.headers['x-dsh-instance'] || '');
+  if (!auth.startsWith('Bearer ') || !inst) return false;
+  try {
+    const r = await fetch('http://127.0.0.1:18788/api/mobile/v1/sessions', {
+      headers: { authorization: auth, 'x-dsh-instance': inst },
+      signal: AbortSignal.timeout(4000),
+    });
+    return r.ok;
+  } catch { return false; }
+}
+
 const json = (res, code, obj) => {
   const body = JSON.stringify(obj);
   res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
@@ -110,6 +125,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && p === '/push/subscribe') {
+    if (!(await validDevice(req))) return json(res, 401, { ok: false, error: 'device-credential-required' });
     let b;
     try { b = await readBody(req); } catch (e) { return json(res, 400, { ok: false, error: e.message }); }
     const sub = b.subscription;
@@ -124,6 +140,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && p === '/push/unsubscribe') {
+    if (!(await validDevice(req))) return json(res, 401, { ok: false, error: 'device-credential-required' });
     let b;
     try { b = await readBody(req); } catch (e) { return json(res, 400, { ok: false, error: e.message }); }
     const before = subs.length;
@@ -156,15 +173,17 @@ const server = http.createServer(async (req, res) => {
       tag: b.tag || undefined,
       kind: b.kind || undefined,
     };
-    // 门控：审批与完成永远响；其他类型（提问等）你在 App 里就静默
+    // 门控：默认**全部类型都推**（用户要求：提问也要在 App 内响）。
+    // 若将来某类要"只在离开 App 后推"，把它列进 GATED_KINDS 环境变量即可（逗号分隔）。
     {
-      const quietMs = Number(process.env.QUIET_MS || 60000);
+      const gated = String(process.env.GATED_KINDS || '').split(',').map(s => s.trim()).filter(Boolean);
       const kind = String(payload.kind || '');
-      const alwaysRing = /^(approval|completed|failed|done|turn-end)$/.test(kind);
-      const last = Object.values(active).reduce((a, b) => Math.max(a, Number(b) || 0), 0);
-      const inApp = last && Date.now() - last < quietMs;
-      if (inApp && !alwaysRing) {
-        return json(res, 200, { ok: true, skipped: 'in-app', sent: 0, dropped: 0, failed: 0 });
+      if (gated.includes(kind)) {
+        const quietMs = Number(process.env.QUIET_MS || 60000);
+        const last = Object.values(active).reduce((a, b) => Math.max(a, Number(b) || 0), 0);
+        if (last && Date.now() - last < quietMs) {
+          return json(res, 200, { ok: true, skipped: 'in-app', sent: 0, dropped: 0, failed: 0 });
+        }
       }
     }
     console.log('[notify]', payload.kind || '-', JSON.stringify(payload.title || ''), 'badge=' + (payload.badge === undefined ? '-' : payload.badge));

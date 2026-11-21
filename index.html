@@ -504,7 +504,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v121';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v123';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -2235,7 +2235,7 @@ async function enablePush() {
       applicationServerKey: b64urlToU8(vapid.publicKey),
     });
     await api('/push/subscribe', {
-      method: 'POST', auth: false,
+      method: 'POST',
       body: { deviceId: pushDeviceId(), subscription: sub.toJSON(), ua: navigator.userAgent.slice(0, 120) },
     });
     toast('通知已开启');
@@ -2249,7 +2249,7 @@ async function disablePush() {
     const reg = await getReg();
     const sub = await reg.pushManager.getSubscription();
     if (sub) {
-      await api('/push/unsubscribe', { method:'POST', auth:false, body: { endpoint: sub.endpoint } }).catch(() => {});
+      await api('/push/unsubscribe', { method:'POST', body: { endpoint: sub.endpoint } }).catch(() => {});
       await sub.unsubscribe().catch(() => {});
     }
     toast('通知已关闭');
