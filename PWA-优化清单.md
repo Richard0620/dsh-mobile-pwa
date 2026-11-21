@@ -256,7 +256,25 @@ DSH 插件 sendFrame() ──► ~/.dsh/webpush.json ──► https://dsh.easym
 
 ---
 
-## 7. 验收方式（每次改动）
+## 7. 安全审查（2026-11-21）
+
+### 已处理
+
+- **配对入口收紧**：`pairingPolicy` 已设为 `deny`（`~/.dsh/relay.json` 已确认），并已轮换配对码/票据。现有设备凭据不受影响；要配新设备时临时改回 `code`，配完立刻关。
+  - 背景：公网 `POST /api/mobile/v1/pair` 实测可达，且当前 PWA 走老格式 `{code,device}`，默认策略 `code` 会接受 6 位码。限速是全局 60 → 10 → 2 次/分钟，但码不轮换；按 2 次/分钟，约 **347 天可枚举完 100 万码**，持续攻击一年内可保证命中。关闭配对是当前最有效的缓解。
+- **agents bridge token 轮换**：已换成 32 位随机 token（`%LOCALAPPDATA%\agents-bridge\token.txt`），bridge 已重启；匿名 `GET /agents/panes` 现在返回 401。
+  - ⚠️ 轮换时 PowerShell 5.1 不支持 `RandomNumberGenerator.GetBytes`，曾把 token 写空并重启，导致 18888 在约 **02:05–02:09（约 4 分钟）** 处于无鉴权状态；随后立即用正确方法生成新 token 并重启修复。Caddy 未开访问日志，无法完全排除这几分钟有人访问 `/agents/*`；如担心可检查 herdr/agent 历史。
+  - 之前用过 `?token=` 的页面需要重新在 Agents 的 ⚙ 里粘贴新 token（PWA 终端用的也是同一个 bridge token）。
+
+### 待处理（按优先级）
+
+- **P0** `/push/subscribe` 无鉴权，且 `broadcast()` 向所有订阅广播：任何公网客户端都能订阅自己的 endpoint，收走之后所有通知的标题/正文/sessionId。需把订阅绑定到设备凭据，或做推送内容 E2EE。
+- **P1** 部署的 Caddy 缺 HSTS / CSP / X-Frame-Options / Permissions-Policy；先加 HSTS、Frame、Permissions，CSP 需要试。
+- **P1** 配对码 TTL / 连续失败自动轮换（插件补丁），以及新设备配对提醒；这样即使临时打开配对，也不用靠人记得关。
+- **P2** E2EE 评估；设备凭据一年有效且全权限；恢复链接 `#token=` 的转发/截图风险。
+- **P2** `/agents/` 接受 `?token=`，容易进浏览器历史和反代日志；建议去掉 query token 或改一次性码。
+
+## 8. 验收方式（每次改动）
 
 ```powershell
 cd D:\Vibe\PWA\pwa
