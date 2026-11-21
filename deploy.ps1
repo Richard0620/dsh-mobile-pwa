@@ -1,4 +1,4 @@
-#!/usr/bin/env pwsh
+﻿#!/usr/bin/env pwsh
 # 部署 index.html + sw.js 到 VPS，并写 /srv/dsh-mobile/VERSION 版本戳
 # 用法：在 pwa/ 目录执行 ./deploy.ps1
 $ErrorActionPreference = 'Stop'
