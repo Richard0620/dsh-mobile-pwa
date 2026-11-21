@@ -250,8 +250,9 @@ DSH 插件 sendFrame() ──► ~/.dsh/webpush.json ──► https://dsh.easym
 
 - **已通**：VPS 服务、VAPID、订阅（`subs=1`）、SW 的 `push`/`notificationclick`、角标。
 - **补丁已装、未生效**：`patches/push-notify.js` 已覆盖 `~/.dsh/profiles/desktop/node_modules/dsh-mobile-plugin/lib/mobile/push-notify.js`（插件 0.5.90 原文件备份 `.bak.<ts>`），`patches/check.mjs` 通过，**需要重启 DSH** 才加载新模块。
+- **2026-11-21 01:10**：`push/server.mjs` 已更新到 VPS `/opt/dsh-push/server.mjs`（原文件备份 `.bak.<ts>`），`dsh-push` 已重启并 active；「完成通知总是推送」的 per-device 偏好已生效。
 - **验证**：重启后 `journalctl -u dsh-push -f` 应出现带 `badge` 的 `[notify]` 帧；没重启时推送只是不带 badge（不会发错数字），不要据此判断代码失败。
-- **完成类推送**只在"你不在看"时发（60 秒心跳窗口）；审批/提问无条件发。
+- **完成类推送**默认只在"你不在看"时发（60 秒心跳窗口）；在「设置 → 通知提醒」里开启「完成时总是推送」后跳过这个窗口（按设备偏好，服务端已支持）。
 
 ---
 
