@@ -285,6 +285,7 @@
   .sres .st{font-size:14.5px;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .sres .ss{font-size:12.5px;color:var(--dim);margin-top:3px;display:-webkit-box;-webkit-line-clamp:2;
     -webkit-box-orient:vertical;overflow:hidden}
+  .sres .smeta{font-size:10.5px;color:var(--dim);margin-top:3px;opacity:.8}
   .md blockquote{margin:10px 0;padding:2px 12px;border-left:3px solid var(--line);color:var(--dim)}
   .md hr{border:none;border-top:1px solid var(--line);margin:14px 0}
   .md a{color:var(--accent);text-decoration:none}
@@ -2273,6 +2274,57 @@ function openTerminal(paneId) {
   mask.append(bar, frame);
   document.body.append(mask);
 }
+// 本地搜索：标题 / 最近一条 / **已缓存的消息正文**。
+// 服务端 session/search 在这个部署里是关的（openAt "never"），所以正文只能搜本机
+// dsh.cache.msgs 里那点（每个会话最近 120 条、最多留 10 个会话）。命中后给一段上下文剪辑。
+function cachedMessageHits(sessionId, q) {
+  const c = readMsgCache(sessionId);
+  if (!c || !Array.isArray(c.messages)) return [];
+  const hits = [];
+  for (const m of c.messages) {
+    const text = String((m && m.text) || '');
+    if (!text) continue;
+    const idx = text.toLowerCase().indexOf(q);
+    if (idx < 0) continue;
+    hits.push({ role: m.role, text, idx });
+  }
+  return hits;
+}
+function snippetAround(text, idx, q) {
+  const start = Math.max(0, idx - 30);
+  const end = Math.min(text.length, idx + q.length + 46);
+  return (start > 0 ? '…' : '') + text.slice(start, end).replace(/\s+/g, ' ') + (end < text.length ? '…' : '');
+}
+function buildSearchResults(q) {
+  const out = [];
+  for (const s of state.sessions) {
+    const titleHit = String(s.title || '').toLowerCase().includes(q);
+    const prevRaw = String((s.lastMessage && s.lastMessage.text) || '');
+    const prevPlain = plain(prevRaw);
+    const prevIdx = prevPlain.toLowerCase().indexOf(q);
+    const hits = cachedMessageHits(s.sessionId, q);
+    if (!titleHit && prevIdx < 0 && !hits.length) continue;
+    const first = hits[0];
+    let snippet = '', meta = '';
+    if (first) {
+      snippet = `${first.role === 'user' ? '我' : '助手'}：${snippetAround(first.text, first.idx, q)}`;
+      meta = hits.length > 1 ? `缓存消息命中 ${hits.length} 条` : '缓存消息命中';
+    } else if (prevIdx >= 0) {
+      snippet = snippetAround(prevPlain, prevIdx, q);
+      meta = '最近一条命中';
+    } else {
+      snippet = plain(prevRaw);
+      meta = '标题命中';
+    }
+    out.push({ s, snippet, meta, hits: hits.length, titleHit });
+  }
+  // 标题命中的排前面，其次正文命中条数多的，最后按更新时间
+  out.sort((a, b) => (Number(b.titleHit) - Number(a.titleHit))
+    || (b.hits - a.hits)
+    || ((b.s.updatedAt || 0) - (a.s.updatedAt || 0)));
+  return out.slice(0, 40);
+}
+
 function renderList(wrap, opts = {}) {
   if (Date.now() - termAgents.at > 15000) loadTermAgents();
   const menu = el('button', { class:'ico', text:'☰', 'data-bell':'', onclick: () => openSheet([
@@ -2302,17 +2354,14 @@ function renderList(wrap, opts = {}) {
   );
   main.append(tabs);
 
-  // 搜索：服务端内容检索在这个部署里是关闭的（openAt "never"），所以退成本地按标题/预览过滤
-  const searchInput = el('input', { type:'search', placeholder:'搜索会话（标题 / 最近一条）…' });
+  // 搜索：服务端内容检索在这个部署里是关闭的（openAt "never"），
+  // 所以本地过滤标题 / 最近一条，并把范围扩到已缓存的消息正文（见 buildSearchResults）
+  const searchInput = el('input', { type:'search', placeholder:'搜索会话（标题 / 预览 / 已缓存消息）…' });
   searchInput.value = state.searchQ || '';
   searchInput.addEventListener('input', () => {
     const q = searchInput.value.trim().toLowerCase();
     state.searchQ = searchInput.value;
-    state.searchItems = q ? state.sessions.filter(s => {
-      const t = String(s.title || '').toLowerCase();
-      const p = String((s.lastMessage && s.lastMessage.text) || '').toLowerCase();
-      return t.includes(q) || p.includes(q);
-    }) : null;
+    state.searchItems = q ? buildSearchResults(q) : null;
     render();
     const again = document.querySelector('.searchrow input');
     if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
@@ -2345,10 +2394,11 @@ function renderList(wrap, opts = {}) {
 
   if (state.searchItems) {
     if (!state.searchItems.length) main.append(el('div', { class:'empty', text:'没有匹配的会话' }));
-    for (const s of state.searchItems) {
-      main.append(el('div', { class:'sres', onclick: () => openSession(s) },
-        el('div', { class:'st', text: s.title || '(无标题)' }),
-        el('div', { class:'ss', text: plain((s.lastMessage && s.lastMessage.text) || '') })));
+    for (const r of state.searchItems) {
+      main.append(el('div', { class:'sres', onclick: () => openSession(r.s) },
+        el('div', { class:'st', text: r.s.title || '(无标题)' }),
+        r.snippet ? el('div', { class:'ss', text: r.snippet }) : null,
+        el('div', { class:'smeta', text: r.meta })));
     }
     wrap.append(main);
     return;
