@@ -472,6 +472,26 @@ const fmtMsgTime = (ts) => {
   return d.getFullYear() === now.getFullYear() ? `${md} ${hm}` : `${d.getFullYear()}/${md} ${hm}`;
 };
 
+// 时间分隔改成「按天」：长会话里每 10 分钟一条太密，一天一条就够。
+// 精确时间放到 title 上（桌面悬停），手机点一下分隔条用 toast 显示。
+const dayKeyOf = (ts) => {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+};
+const fmtDayLabel = (ts) => {
+  const d = new Date(ts);
+  const now = new Date();
+  if (dayKeyOf(ts) === dayKeyOf(now.getTime())) return '今天';
+  if (dayKeyOf(ts) === dayKeyOf(now.getTime() - 86400000)) return '昨天';
+  const md = `${d.getMonth() + 1}月${d.getDate()}日`;
+  return d.getFullYear() === now.getFullYear() ? md : `${d.getFullYear()}年${md}`;
+};
+const fmtExactTime = (ts) => {
+  const d = new Date(ts);
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+
 let msgCacheSig = '';
 function saveMsgCache(sid, messages, lastSeq) {
   if (!sid || !messages || !messages.length) return;
@@ -2474,7 +2494,7 @@ function paintSession({ scroll = 'auto' } = {}) {
   if (ui.updateJump) ui.updateJump();
   // ---- 增量渲染：只改动变化的那几条，避免整列表重建导致抖动 / 图片重新取回 ----
   const items = [];
-  let lastT = 0;
+  let lastDay = '';
   for (const it of feed) {
     if (it.kind === 'tools') {
       const k = toolGroupKey(it.tools);
@@ -2482,11 +2502,11 @@ function paintSession({ scroll = 'auto' } = {}) {
       continue;
     }
     const ts = it.m && it.m.time;
-    if (ts && (!lastT || ts - lastT > 10 * 60 * 1000)) {
-      const label = fmtMsgTime(ts);
-      items.push({ type:'sep', key:`S:${label}`, text: label });
+    const day = ts ? dayKeyOf(ts) : '';
+    if (day && day !== lastDay) {
+      items.push({ type:'sep', key:`S:${day}`, text: fmtDayLabel(ts), ts });
+      lastDay = day;
     }
-    if (ts) lastT = ts;
     const txt = (it.m && it.m.text) || '';
     const nb = (it.m && it.m.blocks && it.m.blocks.length) || 0;
     items.push({ type:'msg', key:`M:${it.m.id}:${txt.length}:${nb}`, m: it.m });
@@ -2503,9 +2523,11 @@ function paintSession({ scroll = 'auto' } = {}) {
   ui.nodes.length = keep;
   for (let i = keep; i < items.length; i++) {
     const it = items[i];
-    const node = it.type === 'sep' ? el('div', { class:'sep', text: it.text })
+    const node = it.type === 'sep' ? el('div', { class:'sep', text: it.text, title: it.ts ? fmtExactTime(it.ts) : '' })
       : it.type === 'tools' ? renderTools(it.tools)
       : renderMessage(it.m);
+    // 手机上没地方悬停：点一下分隔条把精确时间 toast 出来
+    if (it.type === 'sep' && it.ts) node.addEventListener('click', () => toast(fmtExactTime(it.ts)));
     // 有"深度求索中"或排队条时插在它们前面，保证顺序是 消息 → 排队 → 运行中
     const anchor = (ui.qBox && ui.qBox.isConnected) ? ui.qBox
       : (ui.typingNode && ui.typingNode.isConnected) ? ui.typingNode : null;
