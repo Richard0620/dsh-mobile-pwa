@@ -1,4 +1,4 @@
-# 多会话协作规则（两个 agent 同时开发时必读）
+# 多会话协作规则（多个 agent 同时开发时必读）
 
 ## 背景
 
@@ -9,15 +9,25 @@
 
 git 只解决"事后能找回"，不解决"同时写"。真正的隔离靠 **worktree**（两个目录，一份对象库）。
 
+## 待办与进度（唯一台账）
+
+所有优化点、优先级、完成状态统一记在仓库根的 **`PWA-优化清单.md`**：
+
+- 开工前先读，确认哪些已完成、哪些在谁手里
+- 完成一项 / 发版后立刻更新对应条目的状态和版本，并更新第 1 节「进度快照」
+- 不要把进度只写在聊天里，也不要另建清单；多会话 + 子代理都认这一页
+
 ## 目录约定
 
 | 目录 | 分支 | 谁用 |
 |---|---|---|
 | `D:\Vibe\PWA\pwa` | `master` | **主 agent 会话**（负责最终合并与部署） |
 | `D:\Vibe\PWA\pwa-b` | `feature/parallel` | **另一个会话**（在此目录工作） |
-| `D:\Vibe\PWA\pwa-c` | `feature/lan` | **局域网直连工作线**（服务脚本 + 证书，见 `LAN.md`） |
+| `D:\Vibe\PWA\pwa-c` | `feature/lan` | 局域网直连 / 证书方向（服务脚本 + `LAN.md`，见 `pwa-c\LAN.md`） |
+| `D:\Vibe\PWA\pwa-d` | 临时功能分支 | 按需 `git switch -C <branch> master`，用完可回收 |
 
-另一个会话开工前先 `cd D:\Vibe\PWA\pwa-b`，不要再去改 `pwa/` 下的文件。
+任何会话开工前先 `cd` 到自己的工作区，不要再去改 `pwa/` 下的文件（主会话除外）。
+子代理也遵守同一条：在分配的 worktree 里改，完成回主会话合并。
 
 ## 每轮改动的标准动作
 
@@ -81,9 +91,99 @@ ssh root@38.189.61.57 "cat /srv/dsh-mobile/VERSION"
 - 不要在 `pwa-b` 里再 `git init`（它是同一个仓库的 worktree）
 - 不要把 `node_modules`、`icon-src.png` 提交进去（已在 `.gitignore`）
 
-## 编辑 .ps1 文件的编码坑
+## 事故复盘：整文件覆盖 sw.js（2026-11-20 深夜）
 
-`lan-cert.ps1` 里有中文，**必须存成 UTF-8 with BOM**：Windows PowerShell 5.1 把无 BOM 的
+主会话为了加"通知点击跳转"，用新内容**整文件重写**了 `sw.js`，把并行会话刚加的
+`/agents/` 路由豁免覆盖掉了；同时版本号按记忆写成 v72（真实是 v87），线上版本戳因此是错的。
+
+**为什么 git 没拦住**：两边都在 `master` 上直接改同一个文件，提交时不会冲突——
+后提交的版本直接包含"被覆盖后的内容"，看起来是一次正常提交。
+
+### 新增硬规则
+
+1. **改版本号必须读当前值再 +1**：
+   ```powershell
+   $cur = [regex]::Match((Get-Content index.html -Raw -Encoding UTF8), "const APP_VERSION = '(v\d+)'").Groups[1].Value
+   ```
+   禁止按记忆写数字。
+2. **禁止整文件重写** `sw.js` / `index.html`。要改就做定点替换，改完 `git diff` 看一遍。
+3. **部署前先 `git log -1`**：如果最新提交不是你自己的，说明对方刚动过，先看清楚再动。
+4. **动 `sw.js` 时特别小心**：它里面的路由豁免列表（`/api/` `/push/` `/agents/` `/__lan_pair`）
+   是两边各自加过的，覆盖会让某些请求开始被 SW 拦截缓存。
+5. 冲突检测靠人：提交前 `git diff --stat` 只应该出现你打算改的文件。
+## 版本号单双号约定（2026-11-21 起生效）
+
+两个人同时往同一个 `/srv/dsh-mobile` 部署会互相覆盖，用单双号把"谁发的"区分开：
+
+| 会话 | 分支 | 用号 |
+|---|---|---|
+| 主会话 | `master` | **奇数** v101 / v103 / v105 … |
+| 并行会话 | `feature/parallel` | **偶数** v102 / v104 / v106 … |
+
+**取号方法**（不要按记忆写数字）：
+
+```powershell
+$cur = [regex]::Match((Get-Content index.html -Raw -Encoding UTF8), "const APP_VERSION = '(v\d+)'").Groups[1].Value
+$n = [int]($cur.TrimStart('v')) + 1
+# 主会话：偶数就再 +1
+if ($n % 2 -eq 0) { $n++ }
+# 并行会话：奇数就再 +1
+# if ($n % 2 -eq 1) { $n++ }
+```
+
+`sw.js` 的 `CACHE` 跟随为 `dsh-mobile-v{APP_VERSION+1}`；部署后立刻写 `/srv/dsh-mobile/VERSION`。
+
+**看到线上版本号是偶数 = 并行会话刚发的，奇数 = 主会话发的。**
+## 禁止 `git add -A`（2026-11-21 补充）
+
+多个会话共用 `pwa/` 这个工作树时，`git add -A` 会把**别人正在改的文件**一起卷进你的提交。
+
+已经发生过：主会话提交"版本号约定"时，顺手把并行会话未提交的 `agents/bridge.mjs`（80 行）带进了自己的 commit。
+
+**规则**：
+
+```powershell
+git add index.html sw.js AGENT-RULES.md     # 只写你改过的文件
+```
+
+提交前 `git status --porcelain`，确认列出来的都是你打算改的。
+## 合并 / 部署 / 版本记录（硬规则，2026-11-21 起）
+
+### 1. 各在各的分支改
+
+| 会话 | 目录 | 分支 |
+|---|---|---|
+| 主会话 | `D:\Vibe\PWA\pwa` | `master` |
+| 并行会话 | `D:\Vibe\PWA\pwa-b` / `pwa-c` / `pwa-d` | 各自 feature 分支 |
+
+禁止修改别人 worktree 里的文件。功能做完提交到**自己的分支**，不要直接提交 master。
+
+### 2. 合并到 master 必须经用户同意
+
+- 并行会话完成后：先向用户报告「准备合并 X，涉及文件 Y，验证方式 Z」
+- **用户明确同意后才可 `git merge`**
+- 主会话看到并行分支有新东西，也要先问用户要不要合，不能自己合
+
+### 3. 部署必须经用户同意
+
+- **任何人不得自行 `scp` 到 `/srv/dsh-mobile`**
+- 部署前必须给出四项：**版本号 / 改动摘要 / 影响面 / 回滚方法**
+- 用户同意后才部署；部署后立刻写 `/srv/dsh-mobile/VERSION`
+
+### 4. 版本记录与更新日志
+
+- 版本号单双号：**master 奇数、并行 偶数**；从文件读当前值，取下一个本侧号码
+- 每次部署**必须**在 `CHANGELOG.md` 追加一行：`版本 | 日期 | 会话 | 摘要 | 影响面 | 验证`
+- 禁止补写未实际发生的版本；归属不确定写「未知」
+
+### 5. 提交
+
+- 只 `git add <具体文件>`，**禁止 `git add -A`**
+- 提交信息格式：`type(scope): 摘要（vNN）`
+
+### 6. 编辑 `.ps1` 的编码坑
+
+带中文的 PowerShell 脚本**必须存成 UTF-8 with BOM**：Windows PowerShell 5.1 把无 BOM 的
 UTF-8 当 ANSI 读，中文字节会把下一行语法一起带坏（实测 11 个 parse error）。用工具改完
 时编码常被写成无 BOM，改完请确认：
 

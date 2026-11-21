@@ -11,6 +11,13 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="AI-HUB">
 <title>AI-HUB</title>
+<script>
+  // 手动主题要在首屏绘制前应用，避免闪一下；auto 时不设属性，走系统配色
+  try {
+    var t = localStorage.getItem('dsh.theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+</script>
 <style>
   :root{
     --bg:#f7f7f8; --card:#ffffff; --fg:#111318; --dim:#8a8f98; --line:#e9e9ee;
@@ -23,6 +30,15 @@
       --bg:#0e1014; --card:#171a20; --fg:#e8eaee; --dim:#8d94a0; --line:#242933;
       --bubble:#22262e; --accent:#4f8cff; --accent-2:#6ea4ff; --ok:#3fb950; --bad:#f85149; --warn:#d29922;
     }
+  }
+  /* 手动主题：覆盖系统配色；auto 时不设 data-theme，仍走上面的媒体查询 */
+  :root[data-theme="dark"]{
+    --bg:#0e1014; --card:#171a20; --fg:#e8eaee; --dim:#8d94a0; --line:#242933;
+    --bubble:#22262e; --accent:#4f8cff; --accent-2:#6ea4ff; --ok:#3fb950; --bad:#f85149; --warn:#d29922;
+  }
+  :root[data-theme="light"]{
+    --bg:#f7f7f8; --card:#ffffff; --fg:#111318; --dim:#8a8f98; --line:#e9e9ee;
+    --bubble:#ededf0; --accent:#2f6bff; --accent-2:#5b8cff; --ok:#2ea043; --bad:#e5484d; --warn:#b58100;
   }
   /* 大屏手机（16 Pro Max 这类 430pt+）：正文字号与内边距略微放大，行宽不至于太松 */
   @media (min-width: 430px){
@@ -46,14 +62,7 @@
   button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;padding:0}
   input,textarea{font:inherit;color:inherit;background:transparent;border:none;outline:none;width:100%}
   .app{max-width:560px;margin:0 auto;display:flex;flex-direction:column;height:var(--vvh, 100dvh);background:var(--bg);position:relative}
-  /* 宽屏两栏 */
-  .app.wide{max-width:none;flex-direction:row;align-items:stretch}
-  .app.wide .side{width:330px;flex:none;min-width:0;display:flex;flex-direction:column;
-    border-right:1px solid var(--line);height:100%;overflow:hidden;background:var(--bg)}
-  .app.wide .pane{flex:1;min-width:0;display:flex;flex-direction:column;height:100%;position:relative}
-  .app.wide .side .list{padding-bottom:12px}
-  .paneempty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    color:var(--dim);text-align:center;padding:24px}
+  /* 只做手机形态：桌面浏览器也走这一版单栏，不再维护宽屏两栏 */
 
   /* ---------- 顶栏 ---------- */
   header{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;gap:4px;
@@ -85,27 +94,40 @@
   .ghead.closed .chev{transform:rotate(-90deg)}
   .branch{font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:1px 7px;flex:none}
   .count{font-size:11px;color:var(--dim);flex:none}
-  .row{display:flex;gap:10px;align-items:flex-start;padding:11px 10px;border-radius:14px}
+  .row{display:flex;gap:10px;align-items:center;padding:9px 10px;border-radius:14px}
   .row:active{background:var(--bubble)}
   .row .body{flex:1;min-width:0}
   .row .t{display:flex;align-items:center;gap:7px}
   .row .title{font-size:15px;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
   .row .time{font-size:12px;color:var(--dim);flex:none}
-  .row .prev{font-size:13px;color:var(--dim);margin-top:3px;display:-webkit-box;-webkit-line-clamp:2;
-    -webkit-box-orient:vertical;overflow:hidden;line-height:1.45}
+  .row .dot{margin-top:0}
+  /* 文件夹里没有可显示的会话时（都被置顶/归档）给一句说明，别让分组像丢了 */
+  .ghint{font-size:12px;color:var(--dim);padding:2px 10px 10px}
   .dot{width:7px;height:7px;border-radius:50%;background:var(--dim);opacity:.45;flex:none;margin-top:7px}
+  /* 状态灯：绿=处理中，黄=待你审批/回答，红=失败未读，蓝=完成未读，灰=空闲 */
   .dot.run{background:var(--ok);opacity:1;box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 18%,transparent)}
+  .dot.pending{background:var(--warn);opacity:1;box-shadow:0 0 0 3px color-mix(in srgb,var(--warn) 20%,transparent)}
+  .dot.failed{background:var(--bad);opacity:1;box-shadow:0 0 0 3px color-mix(in srgb,var(--bad) 18%,transparent)}
+  .dot.done{background:var(--accent);opacity:1;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
 
   /* ---------- 会话详情 ---------- */
   .msg{margin:14px 0}
+  /* 消息行不再用 content-visibility：它按 140px 估高，进入会话/键盘弹起时
+     真实高度逐步替换估高，会让对话流高度来回抖。长会话仍靠 120 条分窗控制 DOM。 */
   .mholder{display:flex;flex-direction:column}
-  /* 排队中的消息 */
-  .qlist{display:flex;flex-direction:column;gap:8px;margin:12px 0 4px}
-  .qitem{border:1px dashed var(--line);border-radius:14px;padding:9px 12px;background:var(--card);opacity:.92}
-  .qhead{display:flex;align-items:center;gap:6px;margin-bottom:5px}
-  .qtag{font-size:10.5px;color:var(--warn);border:1px solid var(--warn);border-radius:999px;padding:1px 7px}
+  /* 排队中的消息：挂在输入框上方（dock 内），默认折叠成一行 */
+  .qdock{display:none;flex-direction:column;gap:6px;padding:2px 0 4px;max-height:220px;overflow-y:auto}
+  .qlist{display:flex;flex-direction:column;gap:6px}
+  .qitem{border:1px dashed var(--line);border-radius:14px;padding:7px 10px;background:var(--card);opacity:.92}
+  .qitem.open{padding:9px 12px}
+  .qhead{display:flex;align-items:center;gap:6px;cursor:pointer;min-width:0}
+  .qitem.open .qhead{margin-bottom:5px}
+  .qtag{font-size:10.5px;color:var(--warn);border:1px solid var(--warn);border-radius:999px;padding:1px 7px;flex:none}
+  .qprev{flex:1;min-width:0;font-size:13px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .qchev{flex:none;font-size:11px;color:var(--dim)}
   .qmini{font-size:11.5px;color:var(--dim);padding:3px 8px;border-radius:999px;border:1px solid var(--line);background:var(--bg)}
   .qmini.primary{color:#fff;background:var(--accent);border-color:var(--accent)}
+  .qacts{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px}
   .qtext{font-size:14.5px;color:var(--fg);white-space:pre-wrap;word-break:break-word;opacity:.9}
 
   /* 每条消息下方的操作行（复制 / 分支） */
@@ -127,8 +149,17 @@
   .md li{margin:3px 0}
   .md code{font:.9em/1.4 ui-monospace,SFMono-Regular,Consolas,monospace;
     background:color-mix(in srgb,var(--fg) 7%,transparent);padding:1.5px 5px;border-radius:5px}
-  .md pre.code{background:#1b1f27;color:#e6e9ef;padding:12px 14px;border-radius:12px;overflow-x:auto;margin:10px 0}
+  .md pre.code{position:relative;background:#1b1f27;color:#e6e9ef;padding:12px 14px;border-radius:12px;overflow-x:auto;margin:10px 0}
   .md pre.code code{background:none;padding:0;color:inherit;font-size:12.5px;line-height:1.55}
+  /* 代码块：外层包一层，右上角复制按钮不随横向滚动跑掉 */
+  .codewrap{position:relative;margin:10px 0}
+  .codewrap pre.code{margin:0}
+  .codewrap .codecopy{position:absolute;top:6px;right:6px;z-index:2;font-size:10.5px;line-height:1.2;
+    padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.14);color:#e6e9ef;
+    border:1px solid rgba(255,255,255,.18);opacity:.8;user-select:none;-webkit-user-select:none}
+  .codewrap .codecopy:active{opacity:1;background:rgba(255,255,255,.26)}
+  /* 「分段复制」模式：每个顶层块点一下复制这一段 */
+  .md.pickcopy > *{outline:1px dashed var(--accent);outline-offset:3px;border-radius:6px;cursor:copy}
   /* 代码高亮 */
   .md pre.code .k{color:#c792ea}
   .md pre.code .s{color:#c3e88d}
@@ -182,6 +213,14 @@
   .rplist .frow .fico{width:22px;text-align:center;flex:none}
   .rplist .chev{color:var(--dim);font-size:14px;flex:none}
   .rpsect{font-size:11.5px;color:var(--dim);padding:8px 2px 2px}
+  /* 新建工作区：目录选择器 */
+  .rpickbar{flex:none;padding:8px 12px 0;border-bottom:1px solid var(--line);background:var(--bg)}
+  .rppath{font-size:12px;line-height:1.4;color:var(--dim);background:var(--card);
+    border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:0 0 6px;word-break:break-all}
+  .rproots{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 8px}
+  .rproot{font-size:12px;padding:2px 10px;border:1px solid var(--line);border-radius:999px;
+    background:var(--card);color:var(--dim)}
+  .rproot.on{color:#fff;background:var(--accent);border-color:var(--accent)}
 
   /* 全屏文件查看器 */
   .viewer{position:fixed;inset:0;z-index:1100;background:var(--bg);display:flex;flex-direction:column}
@@ -224,6 +263,12 @@
     border-top:1px solid var(--line);flex:none}
   .drbtn{font-size:12px;color:var(--dim);background:var(--card);border:1px solid var(--line);
     border-radius:999px;padding:6px 10px}
+  /* 抽屉底部：图标按钮一行放下（通知入口收进「设置」里，不再占一格） */
+  .drfoot.icons{flex-wrap:nowrap;justify-content:space-around;align-items:center;gap:4px;
+    padding:8px 10px calc(8px + var(--safe-b))}
+  .drfoot.icons .drbtn{width:46px;height:42px;padding:0;border-radius:12px;font-size:19px;
+    display:grid;place-items:center;color:var(--fg);background:var(--card)}
+  .drfoot.icons .drbtn:active{background:var(--bubble)}
 
   /* 标题行：连接点 + 标题 */
   header h1{display:flex;align-items:center;justify-content:center;gap:6px;min-width:0;max-width:100%;
@@ -255,15 +300,25 @@
 
   .row .unread{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:none;margin-left:2px}
   .row.hot .title{font-weight:650}
-  /* 顶部图标上的"有待查看"小红点 */
+  /* 顶部 ☰ 的提醒角标：颜色 = 最该处理的一类（黄待处理 / 红失败 / 蓝完成 / 绿进行中），数字是该类会话数 */
   .has-attn{position:relative}
-  .has-attn::after{content:'';position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;
-    background:#ff3b30;box-shadow:0 0 0 2px var(--bg)}
+  .has-attn::after{content:attr(data-attn-n);position:absolute;top:0;right:-2px;min-width:15px;height:15px;
+    padding:0 3px;border-radius:8px;display:grid;place-items:center;font-size:9px;font-weight:700;line-height:1;
+    color:#fff;background:var(--accent);box-shadow:0 0 0 2px var(--bg);letter-spacing:0}
+  .has-attn.attn-pending::after{background:var(--warn);color:#1a1a1a}
+  .has-attn.attn-failed::after{background:var(--bad)}
+  .has-attn.attn-done::after{background:var(--accent)}
+  .has-attn.attn-running::after{background:var(--ok)}
   /* 会话行右侧的三点菜单 */
   .row .rowmore{flex:none;width:30px;height:30px;border-radius:50%;color:var(--dim);font-size:16px;
     display:grid;place-items:center;margin-right:-4px}
   .row .rowmore:active{background:var(--bubble)}
   .pinmark{font-size:10px;margin-right:2px;opacity:.85}
+  /* 「显示更多」：每个工作区默认只露 5 条会话 */
+  .showmore{display:block;width:100%;background:none;border:0;border-top:1px dashed var(--line);
+    color:var(--accent);font-size:12.5px;padding:10px 0 4px;margin-top:2px;text-align:center;
+    font-family:inherit;cursor:pointer}
+  .showmore:active{opacity:.6}
 
   /* 搜索栏 */
   .searchrow{padding:2px 2px 8px}
@@ -274,6 +329,7 @@
   .sres .st{font-size:14.5px;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .sres .ss{font-size:12.5px;color:var(--dim);margin-top:3px;display:-webkit-box;-webkit-line-clamp:2;
     -webkit-box-orient:vertical;overflow:hidden}
+  .sres .smeta{font-size:10.5px;color:var(--dim);margin-top:3px;opacity:.8}
   .md blockquote{margin:10px 0;padding:2px 12px;border-left:3px solid var(--line);color:var(--dim)}
   .md hr{border:none;border-top:1px solid var(--line);margin:14px 0}
   .md a{color:var(--accent);text-decoration:none}
@@ -284,16 +340,29 @@
   .md img,.mdimg,.msg .mdimg{width:64px;height:64px;object-fit:cover;border-radius:10px;
     margin:4px 6px 4px 0;display:inline-block;vertical-align:top;background:var(--bubble)}
   .md img{cursor:zoom-in}
-  /* 点图看大图 */
+  /* 点图看大图（支持双指缩放 / 双击 / 滚轮） */
   .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.94);display:flex;align-items:center;
-    justify-content:center;z-index:90;padding:14px;animation:fade .14s ease}
-  .lightbox img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px}
+    justify-content:center;z-index:90;padding:14px;animation:fade .14s ease;overflow:hidden;
+    touch-action:none;overscroll-behavior:contain}
+  .lightbox img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;
+    transform-origin:center center;touch-action:none;user-select:none;-webkit-user-select:none;
+    -webkit-user-drag:none;will-change:transform}
   .lightbox .lbclose{position:absolute;top:calc(12px + var(--safe-t));right:14px;width:34px;height:34px;
     border-radius:50%;background:rgba(255,255,255,.16);color:#fff;display:grid;place-items:center;font-size:15px}
   .lightbox .lbhint{position:absolute;bottom:calc(20px + var(--safe-b));left:0;right:0;text-align:center;
-    color:rgba(255,255,255,.62);font-size:12px}
+    color:rgba(255,255,255,.62);font-size:12px;pointer-events:none}
   .md .imgph{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--dim);
     border:1px dashed var(--line);border-radius:8px;padding:2px 8px;margin:2px 0}
+  /* 视频/文件附件：上传后正文里只有一条路径，气泡里渲染成文件卡 */
+  .filecard{display:flex;align-items:center;gap:8px;margin-top:7px;padding:7px 9px;
+    border:1px solid var(--line);border-radius:10px;background:var(--card);max-width:100%}
+  .filecard .fico2{width:26px;height:26px;border-radius:8px;background:var(--bubble);
+    display:grid;place-items:center;font-size:14px;flex:none}
+  .filecard .fbody{min-width:0;display:flex;flex-direction:column;align-items:flex-start}
+  .filecard b{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap;max-width:230px;text-align:left}
+  .filecard small{font-size:10.5px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap;max-width:230px}
   .md .tbl{margin:10px 0;overflow-x:auto;-webkit-overflow-scrolling:touch}
   .md table{border-collapse:collapse;font-size:13px;width:100%;table-layout:auto}
   .md th,.md td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;
@@ -320,6 +389,9 @@
 
   /* ---------- 审批 / 提问 ---------- */
   .card{border:1px solid var(--line);background:var(--card);border-radius:16px;padding:13px;margin:14px 0}
+  /* 审批/提问卡提交后先收起再移除，避免对话流高度瞬间掉一截导致跳动 */
+  .card.closing{box-sizing:border-box;overflow:hidden;will-change:height;
+    transition:height .18s ease, opacity .18s ease, margin .18s ease, padding .18s ease, border-width .18s ease}
   .card .ct{font-size:13px;font-weight:650;color:var(--warn);margin-bottom:6px}
   .card .cfact{font-size:14px;margin:4px 0}
   .card .cmeta{font-size:12px;color:var(--dim);margin-top:4px}
@@ -331,6 +403,8 @@
   .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
   .btn.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,var(--line))}
   .btn.no{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,var(--line))}
+  .qblock{padding:8px 0 4px;border-top:1px dashed var(--line)}
+  .qblock:first-of-type{border-top:none;padding-top:0}
   .opt{display:block;width:100%;text-align:left;padding:10px 12px;border:1px solid var(--line);
     border-radius:12px;margin-top:7px;background:var(--card);font-size:14px}
   .opt.sel{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,var(--card))}
@@ -414,6 +488,10 @@
   .pair .btn{flex:none;width:100%}
   .pair input{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;
     font-size:20px;letter-spacing:6px;text-align:center}
+  /* 缁堢 overlay */
+  .termoverlay{position:fixed;inset:0;z-index:1200;background:var(--bg);display:flex;flex-direction:column}
+  .termbar{display:flex;align-items:center;gap:8px;padding:calc(8px + env(safe-area-inset-top)) 10px 8px;border-bottom:1px solid var(--line);background:var(--card);flex:0 0 auto}
+  .termframe{flex:1;width:100%;border:0;background:var(--bg)}
 </style>
 </head>
 <body>
@@ -426,11 +504,28 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v71';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v115';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
 const CACHE_KEYS = { list:'dsh.cache.list', msgs:'dsh.cache.msgs' };
+// 缓存 schema：结构不兼容时只清列表/消息缓存，已读水位和主题等偏好保留
+const CACHE_SCHEMA = 1;
+try {
+  if (localStorage.getItem('dsh.cache.schema') !== String(CACHE_SCHEMA)) {
+    localStorage.removeItem(CACHE_KEYS.list);
+    localStorage.removeItem(CACHE_KEYS.msgs);
+    localStorage.setItem('dsh.cache.schema', String(CACHE_SCHEMA));
+  }
+} catch {}
+
+const THEME_KEY = 'dsh.theme';
+function applyTheme(mode) {
+  const v = mode === 'light' || mode === 'dark' ? mode : '';
+  if (v) document.documentElement.dataset.theme = v;
+  else delete document.documentElement.dataset.theme;
+  try { localStorage.setItem(THEME_KEY, v); } catch {}
+}
 
 function saveListCache(sessions) {
   try {
@@ -456,6 +551,26 @@ const fmtMsgTime = (ts) => {
   if (sameDay) return hm;
   const md = `${d.getMonth() + 1}月${d.getDate()}日`;
   return d.getFullYear() === now.getFullYear() ? `${md} ${hm}` : `${d.getFullYear()}/${md} ${hm}`;
+};
+
+// 时间分隔改成「按天」：长会话里每 10 分钟一条太密，一天一条就够。
+// 精确时间放到 title 上（桌面悬停），手机点一下分隔条用 toast 显示。
+const dayKeyOf = (ts) => {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+};
+const fmtDayLabel = (ts) => {
+  const d = new Date(ts);
+  const now = new Date();
+  if (dayKeyOf(ts) === dayKeyOf(now.getTime())) return '今天';
+  if (dayKeyOf(ts) === dayKeyOf(now.getTime() - 86400000)) return '昨天';
+  const md = `${d.getMonth() + 1}月${d.getDate()}日`;
+  return d.getFullYear() === now.getFullYear() ? md : `${d.getFullYear()}年${md}`;
+};
+const fmtExactTime = (ts) => {
+  const d = new Date(ts);
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
 let msgCacheSig = '';
@@ -486,27 +601,101 @@ function readMsgCache(sid) {
 // iOS 16.4+ 的主屏 Web App、以及 Chrome 安装的 PWA 都支持 Badging API：
 //   navigator.setAppBadge(n) / clearAppBadge()
 // 限制：只有 App 进程活着时才更新得掉；冷启动前无法主动点亮（那需要 Web Push）。
+// 角标公式必须和宿主推送那一侧一致：未读会话数 + 待处理会话数。
+// 宿主在 patches/push-notify.js 的 badgeNumber() 里按「read-receipts 的 lastTurn/readAt」
+// 与「审批/提问桥的挂起表」算同一份数；这里就用 /sessions 下发的 lastTurn 与
+// pendingInteraction（同一个来源）算，推送点亮数字、App 打开覆盖数字时就不会互相跳。
 function unreadCount() {
   let n = 0;
+  const pending = new Set();
   for (const s of state.sessions) {
     const lt = (s && s.lastTurn) || {};
-    if (lt.endedAt && lt.endedAt > (lt.readAt || 0)) n++;
+    if (lt.endedAt && lt.endedAt > readFloor(s)) n++;
+    // pendingInteraction 是宿主给的「这条会话有卡挂着」（approval / question / plan-review）
+    if (s && s.pendingInteraction) pending.add(s.sessionId);
   }
-  if (state.foreign && state.foreign.size) n += state.foreign.size;
-  if (state.view !== 'session') n += state.cards.length;
+  // 列表有 30 秒缓存：刚到达的卡先用本地状态兜底，按会话去重（与宿主同口径）
+  for (const c of state.cards) {
+    const d = (c.data && c.data.data) || c.data || {};
+    const sid = d.sessionId || state.sessionId;
+    pending.add(sid || ('card:' + c.id));
+  }
+  // 别的会话的审批/提问（设备流推来、还没进列表）也算一个待处理会话
+  for (const [, sid] of (state.foreign || new Map())) pending.add(sid || 'foreign');
+  n += pending.size;
   return n;
+}
+
+// 本地已读水位：宿主 readAt 有写入延迟/失败时，开机后蓝点会重新亮回来。
+// 本机记下「这条会话读到哪一刻」，判未读时取 host.readAt 与本地水位的较大值。
+// 水位取打开那一刻的 lastTurn.endedAt（而不是 Date.now()），这样不受手机与电脑时钟偏差影响。
+const READ_LS = 'dsh.read';
+let readMarks = (() => {
+  try { const j = JSON.parse(localStorage.getItem(READ_LS) || '{}'); return j && typeof j === 'object' ? j : {}; }
+  catch { return {}; }
+})();
+function readFloor(s) {
+  const lt = (s && s.lastTurn) || {};
+  const local = Number(readMarks[s && s.sessionId]) || 0;
+  return Math.max(Number(lt.readAt) || 0, local);
+}
+function markOpened(sessionId, at) {
+  if (!sessionId) return;
+  const mark = Number(at) || (state.sessions.find(x => x.sessionId === sessionId)?.lastTurn?.endedAt) || Date.now();
+  if ((Number(readMarks[sessionId]) || 0) >= mark) return;
+  readMarks[sessionId] = mark;
+  const keys = Object.keys(readMarks);
+  if (keys.length > 60) {
+    keys.sort((a, b) => (readMarks[a] || 0) - (readMarks[b] || 0));
+    for (const k of keys.slice(0, keys.length - 60)) delete readMarks[k];
+  }
+  try { localStorage.setItem(READ_LS, JSON.stringify(readMarks)); } catch {}
 }
 
 const isUnread = (s) => {
   const lt = (s && s.lastTurn) || {};
-  return !!(lt.endedAt && lt.endedAt > (lt.readAt || 0));
+  return !!(lt.endedAt && lt.endedAt > readFloor(s));
 };
+
+// 一条会话当前对外展示的状态（颜色优先级：待处理 > 处理中 > 失败未读 > 完成未读 > 空闲）
+const DOT_CLASS = { pending:'pending', running:'run', failed:'failed', done:'done', idle:'' };
+const STATE_LABEL = {
+  pending:'待你审批 / 回答', running:'处理中', failed:'上一轮失败，未读',
+  done:'已完成，未读', idle:'空闲',
+};
+function sessionState(s) {
+  if (!s) return 'idle';
+  if (s.pendingInteraction) return 'pending';
+  if (s.running) return 'running';
+  if (!isUnread(s)) return 'idle';
+  return ((s.lastTurn && s.lastTurn.status) === 'failed') ? 'failed' : 'done';
+}
+// 顶部 ☰ 角标用：按「最需要处理」的那类选颜色，数字是该类会话数
+function attentionStats() {
+  const pending = new Set();
+  for (const s of state.sessions) if (s && s.pendingInteraction) pending.add(s.sessionId);
+  // 列表有 30 秒缓存：刚到达的卡、别的会话推来的卡先按本地状态兜底
+  for (const c of state.cards) {
+    const d = (c.data && c.data.data) || c.data || {};
+    pending.add(d.sessionId || state.sessionId || ('card:' + c.id));
+  }
+  for (const [, sid] of (state.foreign || new Map())) pending.add(sid || 'foreign');
+  let running = 0, done = 0, failed = 0;
+  for (const s of state.sessions) {
+    if (s.pendingInteraction) continue;
+    if (s.running) { running++; continue; }
+    if (!isUnread(s)) continue;
+    if ((s.lastTurn && s.lastTurn.status) === 'failed') failed++; else done++;
+  }
+  return { pending: pending.size, running, done, failed };
+}
 
 let badgeTimer = null;
 function syncBadge() {
   clearTimeout(badgeTimer);
   badgeTimer = setTimeout(async () => {
     const n = unreadCount();
+    const stats = attentionStats();
     state.attn = n;
     try {
       if (n > 0 && navigator.setAppBadge) await navigator.setAppBadge(n);
@@ -514,12 +703,88 @@ function syncBadge() {
     } catch {}
     const title = n > 0 ? `(${n}) DSH` : 'DSH';
     if (document.title !== title) document.title = title;
-    for (const node of document.querySelectorAll('[data-bell]')) node.classList.toggle('has-attn', n > 0);
+    // 黄 = 有待审批/提问；红 = 有失败未读；蓝 = 有完成未读；绿 = 有任务在跑；都没有就不亮
+    const top = stats.pending ? ['pending', stats.pending]
+      : stats.failed ? ['failed', stats.failed]
+      : stats.done ? ['done', stats.done]
+      : stats.running ? ['running', stats.running] : null;
+    const hint = `待处理 ${stats.pending} · 未读完成 ${stats.done} · 失败未读 ${stats.failed} · 进行中 ${stats.running}`;
+    for (const node of document.querySelectorAll('[data-bell]')) {
+      node.classList.remove('attn-pending', 'attn-failed', 'attn-done', 'attn-running');
+      node.classList.toggle('has-attn', !!top);
+      if (top) {
+        node.classList.add('attn-' + top[0]);
+        node.dataset.attnN = String(top[1]);
+        node.title = hint;
+      } else {
+        delete node.dataset.attnN;
+        node.removeAttribute('title');
+      }
+    }
   }, 120);
+}
+
+// 消费 SW 留下的「待打开会话」便条。
+// 为什么要这个：iOS 上点通知只会用 start_url 把 App 拉起来，??session= 传不进来，
+// notification.data 也不保证保留 —— 所以 SW 把 sessionId 写进 Cache Storage，这里取走。
+async function consumePendingOpen() {
+  try {
+    if (!('caches' in window)) return false;
+    const c = await caches.open('dsh-open');
+    const res = await c.match(new Request('./__pending-open'));
+    if (!res) { window.__lastPending = 'no-record'; return false; }
+    const j = await res.json().catch(() => null);
+    window.__lastPending = j;
+    if (!j || !j.sessionId) { await c.delete(new Request('./__pending-open')); return false; }
+    if (Date.now() - (j.at || 0) > 10 * 60 * 1000) { await c.delete(new Request('./__pending-open')); return false; }
+    if (state.view === 'session' && state.sessionId === j.sessionId) {
+      await c.delete(new Request('./__pending-open'));
+      return false;
+    }
+    const s = state.sessions.find(x => x.sessionId === j.sessionId)
+      || { sessionId: j.sessionId, title: '(来自通知)' };
+    openSession(s);
+    // 跳成功才删；失败留着，下次启动还能再试一次
+    await c.delete(new Request('./__pending-open'));
+    window.__lastPending = { ...j, consumed: true };
+    return true;
+  } catch (e) { window.__lastPending = 'err:' + (e && e.message); return false; }
+}
+
+// 推送诊断：把 SW/权限/缓存里那张"便条"都摊开，冷启动点通知后看一眼就知道卡在哪
+async function openPushDiag() {
+  const rows = [];
+  try {
+    const st = await pushStatus();
+    rows.push(['通知状态', st]);
+  } catch { rows.push(['通知状态', 'err']); }
+  rows.push(['权限', (typeof Notification !== 'undefined' ? Notification.permission : '-')]);
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    rows.push(['SW 作用域', reg ? (reg.scope || '-') : '未注册']);
+    rows.push(['SW 状态', reg ? (reg.active ? 'active' : (reg.installing ? 'installing' : 'waiting')) : '-']);
+  } catch { rows.push(['SW', 'err']); }
+  try {
+    const c = await caches.open('dsh-open');
+    const keys = await c.keys();
+    rows.push(['dsh-open 条目', String(keys.length)]);
+    const last = await c.match(new Request('./__last-push'));
+    rows.push(['最近推送会话', last ? ((await last.json()).sessionId || '-').slice(0, 18) : '无']);
+    const pend = await c.match(new Request('./__pending-open'));
+    rows.push(['待打开便条', pend ? JSON.stringify(await pend.json()).slice(0, 60) : '无']);
+  } catch (e) { rows.push(['caches', 'err:' + (e && e.message)]); }
+  rows.push(['本次消费记录', typeof window.__lastPending === 'string' ? window.__lastPending : JSON.stringify(window.__lastPending || null).slice(0, 60)]);
+  openInfoBox('推送诊断', rows);
 }
 
 async function markRead(sessionId) {
   try { await api('/api/mobile/v1/session/read', { method:'POST', body: { sessionId } }); } catch {}
+  // 本地先把这一条标成已读：/sessions 有 30 秒缓存，不这样要等半分钟蓝点才消
+  const s = state.sessions.find(x => x.sessionId === sessionId);
+  if (s) { s.lastTurn = s.lastTurn || {}; s.lastTurn.readAt = Date.now(); }
+  // 本地水位是第二层保险：宿主 readAt 写入失败/延迟时，重开 App 也不会把点又点亮
+  markOpened(sessionId);
+  syncBadge();
 }
 
 function toast(msg) {
@@ -588,20 +853,49 @@ function inlineMd(s){
     .replace(/~~([^~\n]+)~~/g, '<del>$1</del>')
     .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
 }
-// 极简代码高亮：单趟扫描字符串/注释/数字/关键字，不会互相串味
+// 极简代码高亮：单趟扫描字符串/注释/数字/关键字。
+// 只对**确定认识的语言**上色，其余一律纯文本 —— 旧版对任何代码块都硬套一套
+// JS 规则，YAML 的 `key: value`、JSX、PowerShell 的 `#` 变量都会串色。
+// 能上的：js/ts/jsx/tsx、json、py、sh。别的（yaml、html、diff、无标注代码块）保持纯文本。
 const KW = new Set(('const let var function return if else for while class import export from new await async try catch '
   + 'throw switch case break continue default typeof instanceof in of this null undefined true false def elif lambda '
   + 'pass with as None True False echo then fi do done esac local cd sudo rm cp mv grep cat curl git npm pnpm node').split(' '));
-function hl(code) {
-  const re = /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)|(\/\/[^\n]*|#[^\n]*|\/\*[\s\S]*?\*\/)|(\b\d+(?:\.\d+)?\b)|([A-Za-z_$][\w$-]*)/g;
+const HL_LANGS = {
+  js:'js', javascript:'js', mjs:'js', cjs:'js', jsx:'js', ts:'js', typescript:'js', tsx:'js',
+  json:'json', py:'py', python:'py', sh:'sh', bash:'sh', zsh:'sh', shell:'sh', console:'sh',
+};
+const hlFamily = (lang) => {
+  const key = String(lang || '').trim().toLowerCase().replace(/^\./, '').split(/[\s,;]/)[0];
+  return HL_LANGS[key] || '';
+};
+const HL_STR = '"(?:\\\\.|[^"\\\\])*"|\'(?:\\\\.|[^\'\\\\])*\'|`(?:\\\\.|[^`\\\\])*`';
+const HL_TRIPLE = '"""[\\s\\S]*?"""|\'\'\'[\\s\\S]*?\'\'\'';
+const HL_NUM = '\\b\\d+(?:\\.\\d+)?\\b';
+const HL_WORD = '[A-Za-z_$][\\w$-]*';
+function hl(code, lang) {
+  // 调用方明确给了语言（mdToHtml / 文件查看器）就按白名单；没有标注的代码块保持纯文本
+  const family = hlFamily(lang);
+  if (family === '') return esc(code);
+  let src;
+  if (family === 'py') src = `(${HL_TRIPLE}|${HL_STR})|(#[^\\n]*)|(${HL_NUM})|(${HL_WORD})`;
+  else if (family === 'sh') src = `(${HL_STR})|(#[^\\n]*)|(${HL_NUM})|(${HL_WORD})`;
+  else if (family === 'json') src = `(${HL_STR})|(${HL_NUM})|(${HL_WORD})`;
+  else src = `(${HL_STR})|(//[^\\n]*|/\\*[\\s\\S]*?\\*/)|(${HL_NUM})|(${HL_WORD})`;
+  const re = new RegExp(src, 'g');
+  const numGroup = family === 'json' ? 2 : 3;
+  const commentGroup = family === 'json' ? 0 : 2;
+  const wordGroup = family === 'json' ? 3 : 4;
   const out = [];
   let last = 0, m;
   while ((m = re.exec(code))) {
     if (m.index > last) out.push(esc(code.slice(last, m.index)));
     if (m[1]) out.push(`<span class="s">${esc(m[1])}</span>`);
-    else if (m[2]) out.push(`<span class="c">${esc(m[2])}</span>`);
-    else if (m[3]) out.push(`<span class="n">${esc(m[3])}</span>`);
-    else out.push(KW.has(m[4]) ? `<span class="k">${esc(m[4])}</span>` : esc(m[4]));
+    else if (commentGroup && m[commentGroup]) out.push(`<span class="c">${esc(m[commentGroup])}</span>`);
+    else if (m[numGroup]) out.push(`<span class="n">${esc(m[numGroup])}</span>`);
+    else {
+      const word = m[wordGroup] || '';
+      out.push(KW.has(word) ? `<span class="k">${esc(word)}</span>` : esc(word));
+    }
     last = re.lastIndex;
   }
   out.push(esc(code.slice(last)));
@@ -620,7 +914,7 @@ function mdToHtml(src){
       const buf = []; i++;
       while (i < lines.length && !/^\s*```/.test(lines[i])) buf.push(lines[i++]);
       i++;
-      out.push(`<pre class="code"${lang ? ` data-lang="${esc(lang)}"` : ''}><code>${hl(buf.join('\n'))}</code></pre>`);
+      out.push(`<pre class="code"${lang ? ` data-lang="${esc(lang)}"` : ''}><code>${hl(buf.join('\n'), lang)}</code></pre>`);
       continue;
     }
     if (/\|/.test(line) && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i+1])) {
@@ -694,6 +988,7 @@ const state = {
   device: null,
   cards: [],
   collapsed: new Set(JSON.parse(localStorage.getItem(LS.collapsed) || '[]')),
+  expandedGroups: new Set(),
   model: null,
   busy: false,
   stream: 'idle',
@@ -702,7 +997,7 @@ const state = {
   pending: [],
   debug: false,
   unseen: 0,
-  foreign: new Set(),
+  foreign: new Map(),
   attn: 0,
   searchQ: '',
   searchItems: null,
@@ -719,6 +1014,7 @@ const state = {
   filesListing: null,
   filesError: '',
   showHidden: false,
+  roots: null,
   sessionCwd: '',
   gitWs: '',
   gitData: null,
@@ -736,8 +1032,8 @@ window.addEventListener('unhandledrejection', e => {
     el('pre', { text: String((e.reason && e.reason.stack) || e.reason).slice(0, 700) })));
 });
 
-// 局域网 http 访问时浏览器不算「安全上下文」，crypto.randomUUID 和 navigator.clipboard
-// 都不存在；但配对、发消息、复制都要用，所以各给一份等价兜底（https 下行为不变）。
+// 局域网 http 访问时浏览器不算「安全上下文」，crypto.randomUUID 不存在；但配对和发消息
+// 都要用它，所以给一份等价兜底（https 下行为不变）。剪贴板兜底用下面文件里那份 copyText。
 function uuid() {
   try { if (crypto.randomUUID) return crypto.randomUUID(); } catch {}
   const b = new Uint8Array(16);
@@ -747,21 +1043,6 @@ function uuid() {
   b[8] = (b[8] & 0x3f) | 0x80;
   const h = [...b].map(x => x.toString(16).padStart(2, '0')).join('');
   return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
-}
-
-async function copyText(text) {
-  try { if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(text); return true; } } catch {}
-  try {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.setAttribute('readonly', '');
-    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
-    document.body.append(ta);
-    ta.select();
-    const ok = document.execCommand('copy');
-    ta.remove();
-    return ok;
-  } catch { return false; }
 }
 
 // ---------------------------------------------------------------- 连接方式（中转 / 局域网）
@@ -952,7 +1233,6 @@ function openStream(path, { onFrame, onState }) {
 }
 
 // ---------------------------------------------------------------- 渲染入口
-const isWide = () => window.matchMedia('(min-width: 900px)').matches;
 
 // 渲染崩溃兜底：至少让用户看到原因 + 一个能点的地方，而不是白屏
 function showFatal(e) {
@@ -980,43 +1260,27 @@ function render() {
   root.replaceChildren();
   if (!state.token) return renderPair();
   try {
-    if (isWide() && state.view !== 'pair') return renderWide();
     const wrap = el('div', { class:'app' });
     if (state.view === 'list') { ui.sessionId = null; renderList(wrap); }
     else if (state.view === 'files') renderFiles(wrap);
     else if (state.view === 'git') renderGit(wrap);
     else renderSession(wrap);
     root.append(wrap);
-    // 抽屉开着时同步刷新抽屉里的列表（搜索框、tab 都在抽屉内）
-    const drBox = document.querySelector('.drawer-mask .drlist');
-    if (drBox) { drBox.replaceChildren(); renderList(drBox, { noHeader: true, noPull: true }); }
+    paintOpenDrawer();
   } catch (e) {
     console.error('[render]', e);
     showFatal(e);
   }
 }
 
-// 宽屏：左侧会话栏 + 右侧内容（对齐 AI-HUB 桌面形态）
-function renderWide() {
-  const side = el('aside', { class:'side' });
-  const pane = el('section', { class:'pane' });
-  if (state.view === 'list') {
-    ui.sessionId = null;
-    renderList(side);
-    pane.append(el('div', { class:'paneempty' },
-      el('div', { style:'font-size:15px;color:var(--fg);margin-bottom:6px', text:'选一个会话开始' }),
-      el('div', { style:'font-size:12.5px', text:'或点左上角的 ＋ 新建会话' })));
-  } else if (state.view === 'files') {
-    renderFiles(pane); // 文件页暂不占侧栏
-    side.append(el('div', { class:'paneempty', text:'文件浏览' }));
-  } else if (state.view === 'git') {
-    renderGit(pane);
-    side.append(el('div', { class:'paneempty', text:'Git 概览' }));
-  } else {
-    renderList(side);
-    renderSession(pane);
-  }
-  root.append(el('div', { class:'app wide' }, side, pane));
+// 抽屉开着时同步重绘里面的列表（搜索框、tab 都在抽屉内）。
+// 置顶/重命名/归档等操作在会话页里发生时不会走 render()，refreshAll 里也要调一次，
+// 否则抽屉里还是旧数据，得关掉重开才看到。
+function paintOpenDrawer() {
+  const drBox = document.querySelector('.drawer-mask .drlist');
+  if (!drBox) return;
+  drBox.replaceChildren();
+  renderList(drBox, { noHeader: true, noPull: true });
 }
 
 // 键盘适配：iOS 上键盘不改变 layout viewport，只改 visualViewport。
@@ -1043,6 +1307,9 @@ function installViewportSync() {
   const apply = () => {
     const ih = window.innerHeight;
     if (ih > maxH) { maxH = ih; window.__maxH = maxH; }
+    // 改高度前先判断「是不是在看最新消息」——高度一变这个差值就不准了
+    const wasNear = ui && ui.body && ui.body.isConnected
+      ? ui.body.scrollHeight - ui.body.scrollTop - ui.body.clientHeight < 90 : false;
     const vvh = Math.round(vv ? vv.height : ih);
     de.style.setProperty('--vvh', vvh + 'px');
 
@@ -1056,15 +1323,18 @@ function installViewportSync() {
     if (window.scrollY !== 0 || (vv && vv.offsetTop !== 0)) {
       try { window.scrollTo(0, 0); } catch {}
     }
-    // 键盘弹起后可视区变矮：如果原本就在看最新消息，就把列表重新贴到底部，
-    // 否则最新那条会被键盘挡住（用户看到的"内容没被顶起"）
-    if (kb && ui && ui.body && ui.body.isConnected) {
-      const b = ui.body;
-      const near = b.scrollHeight - b.scrollTop - b.clientHeight < 220;
-      if (near) {
-        requestAnimationFrame(() => { try { b.scrollTop = b.scrollHeight; } catch {} });
-        setTimeout(() => { try { b.scrollTop = b.scrollHeight; } catch {} }, 260);
-      }
+    // 键盘弹起 / 窗口缩放后可视区变矮：原本在看最新消息就重贴底部。
+    // iOS 键盘动画会分几段完成，rAF 之后再补 260ms / 700ms；
+    // 用户中途自己上翻（scroll 里把 atBottom 置 false）就停止。
+    if (wasNear) ui.atBottom = true;
+    if (ui && ui.body && ui.body.isConnected && ui.atBottom) {
+      const pin = () => {
+        if (!ui || !ui.body || !ui.body.isConnected || !ui.atBottom) return;
+        try { ui.body.scrollTop = ui.body.scrollHeight; } catch {}
+      };
+      requestAnimationFrame(pin);
+      setTimeout(pin, 260);
+      setTimeout(pin, 700);
     }
     if (state.debug && ui.strip) ui.strip.textContent = debugText();
   };
@@ -1184,13 +1454,25 @@ function workspaceOf(sessionId) {
 
 // 新建会话：先选工作区（AI-HUB 的新会话页也是这个模型），再让宿主建
 function openNewSessionSheet() {
+  // 已有工作区排在前面（日常多数是接着已有目录干活）；「新建工作区…」放最底下，
+  // 选完目录先采纳成工作区，再直接在这个工作区里建会话。
   const items = state.workspaces.map(w => ({
     label: w.title || w.path,
     icon: '📁',
     run: () => createSession(w.workspaceId),
   }));
   items.push({ label: '默认工作区', icon: '＋', run: () => createSession(null) });
+  items.push({ label: '新建工作区…', icon: '＋', run: newSessionInNewWorkspace });
   openSheet(items, '新建会话 · 选择工作区');
+}
+
+async function newSessionInNewWorkspace() {
+  await openWorkspacePicker(state.sessionCwd || '', async (path) => {
+    const ws = await createWorkspaceAt(path);
+    if (!ws || !ws.workspaceId) return false;   // createWorkspaceAt 已经提示过原因
+    await createSession(ws.workspaceId);
+    return true;
+  });
 }
 
 async function createSession(workspaceId) {
@@ -1292,14 +1574,47 @@ function openWorkspaceMenu(g) {
   if (items.length) openSheet(items, g.name || '工作区');
 }
 
+// 新建工作区 = 在电脑的目录树里「点进去选」，不是让手机键盘敲一条绝对路径。
+// 起始目录优先当前会话所在目录（最常加的往往就是它旁边），否则由宿主回主目录。
 async function newWorkspace() {
-  const path = prompt('要被采纳为工作区的目录（电脑上的绝对路径）', 'D:\\Vibe\\');
-  if (path === null || !path.trim()) return;
+  await openWorkspacePicker(state.sessionCwd || '');
+}
+
+// 选目录的公共入口：onPick 不给就是普通「加为工作区」；给了就让调用方接手后续
+// （例如在选中的目录里开新会话）。onPick 返回 false 时选择器不关，方便重选。
+async function openWorkspacePicker(start, onPick) {
+  let roots = [];
+  try { roots = await loadRoots(); } catch {}
+  await openFileDrawer(start || state.sessionCwd || '', {
+    pick: true, roots, onPick: typeof onPick === 'function' ? onPick : null,
+  });
+}
+
+// 盘符/挂载卷清单：宿主主目录永远在 C 盘（macOS 在 /Users/…），没有这一层就跨不到别的盘。
+// 只成功一次就记住；失败也不挡路——目录树本身还能用，只是少了盘符入口。
+async function loadRoots() {
+  if (Array.isArray(state.roots)) return state.roots;
   try {
-    const r = await api('/api/mobile/v1/workspace/create', { method:'POST', body: { path: path.trim() } });
+    const r = await api('/api/mobile/v1/directory/roots');
+    state.roots = (r.roots || []).filter(x => x && typeof x.path === 'string' && x.path);
+  } catch { state.roots = []; }
+  return state.roots;
+}
+
+// 把目录采纳成工作区；成功（含「已经在列表里」）返回工作区项，失败返回 null。
+async function createWorkspaceAt(path) {
+  const t = String(path || '').trim();
+  // 盘符根 "D:\" 去掉尾部分隔符会变成没有意义的 "D:"，单独保住。
+  const target = /^[A-Za-z]:[\\/]$/.test(t) ? t : t.replace(/[\\/]+$/, '');
+  if (!target) { toast('路径是空的'); return null; }
+  try {
+    const r = await api('/api/mobile/v1/workspace/create', { method:'POST', body: { path: target } });
+    let ws = r.workspace || null;
     await refreshAll(true);
-    toast(r.created ? '已添加工作区' : '这个目录已经在列表里了');
-  } catch (e) { toast('添加失败：' + (e.message || e)); }
+    if (!ws) ws = (state.workspaces || []).find(w => samePath(w.path, target)) || null;
+    toast(r.created ? '已添加工作区：' + target : '这个目录已经在列表里了');
+    return ws;
+  } catch (e) { toast('添加失败：' + (e.message || e)); return null; }
 }
 
 // 连接信息：延迟 + 中转健康
@@ -1420,6 +1735,12 @@ async function fetchListing(path) {
   return r.listing || null;
 }
 
+/** 两个目录路径是否同一层：Windows 不区分大小写，尾部分隔符不算差异。 */
+function samePath(a, b) {
+  const norm = (x) => String(x || '').replace(/[\\/]+/g, '/').replace(/\/+$/, '').toLowerCase();
+  return norm(a) === norm(b);
+}
+
 function closeRPanel() {
   const m = document.querySelector('.rpanel-mask');
   if (!m) return;
@@ -1438,8 +1759,10 @@ const fileIcon = (kind, name) => {
   return '📄';
 };
 
-async function openFileDrawer(path) {
+async function openFileDrawer(path, opts = {}) {
   closeRPanel();
+  const pick = !!opts.pick;                       // 工作区选择模式：只列目录，底部给「用这个文件夹」
+  const roots = Array.isArray(opts.roots) ? opts.roots : [];
   const mask = el('div', { class:'rpanel-mask', onclick: (e) => { if (e.target === mask) closeRPanel(); } });
   const panel = el('div', { class:'rpanel' });
   const st = { path: path || state.sessionCwd || '', listing: null, filter: '', showHidden: false, err: '',
@@ -1448,19 +1771,37 @@ async function openFileDrawer(path) {
 
   const nav = async (p) => {
     st.err = '';
+    st.filter = '';   // 换一层目录时旧的筛选词会把新目录过滤成「空」
     try { st.listing = await fetchListing(p); st.path = (st.listing && st.listing.path) || p; }
     catch (e) { st.listing = null; st.err = '打不开这个目录：' + (e.message || e); }
     paint();
   };
 
   const head = el('div', { class:'drhead' },
-    el('button', { class:'ico', text:'‹', onclick: closeRPanel }),
-    el('b', { text:'目录' }),
+    el('button', { class:'ico', text: pick ? '✕' : '‹', onclick: closeRPanel }),
+    el('b', { text: pick ? '选择工作区目录' : '目录' }),
     el('span', { style:'flex:1' }),
   );
 
+  // 选择模式：完整路径与盘符固定在列表上方，滚动时不会跟着跑掉
+  const pickbar = el('div', { class:'rpickbar' });
+  function paintPickbar() {
+    if (!pick) return;
+    pickbar.replaceChildren(el('div', { class:'rppath', text: '当前目录：' + (st.path || '…') }));
+    const bar = el('div', { class:'rproots' });
+    const chip = (name, target, on) => el('span', { class:'rproot' + (on ? ' on' : ''), text: name,
+      onclick: target ? () => nav(target) : null });
+    const L = st.listing;
+    if (L && L.home) bar.append(chip('主目录', L.home, samePath(st.path, L.home)));
+    if (roots.length > 1) {
+      for (const r of roots) bar.append(chip(r.name, r.path, samePath(st.path, r.path)));
+    }
+    if (bar.children.length) pickbar.append(bar);
+  }
+
   function paint() {
     body.replaceChildren();
+    if (pick) paintPickbar();
     if (st.err) { body.append(el('div', { class:'empty', text: st.err })); return; }
     const L = st.listing;
     if (!L) { body.append(el('div', { class:'empty', text:'加载中…' })); return; }
@@ -1480,16 +1821,18 @@ async function openFileDrawer(path) {
       const byName = (a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN', { numeric: true });
       const byTime = (a, b) => (b.modified || 0) - (a.modified || 0);
       const dirs = all.filter(e => e.kind === 'folder' && e.name.toLowerCase().includes(q)).sort(byName);
-      const files = all.filter(e => e.kind !== 'folder' && e.name.toLowerCase().includes(q))
+      const files = pick ? [] : all.filter(e => e.kind !== 'folder' && e.name.toLowerCase().includes(q))
         .sort(st.sort === 'time' ? byTime : byName);
       counts.replaceChildren(
-        el('span', { text: `${dirs.length} 个文件夹 · ${files.length} 个文件` }),
+        el('span', { text: pick ? `${dirs.length} 个文件夹` : `${dirs.length} 个文件夹 · ${files.length} 个文件` }),
         el('span', { style:'flex:1' }),
-        el('button', { class:'ico', text: st.sort === 'time' ? '🕒' : '⇅',
-          title: st.sort === 'time' ? '按修改时间排序' : '按名称排序',
-          onclick: () => { st.sort = st.sort === 'time' ? 'name' : 'time'; paintList(); } }),
-        el('button', { class:'ico', text: st.selecting ? '☑' : '☐', title:'多选引用',
-          onclick: () => { st.selecting = !st.selecting; if (!st.selecting) st.selected.clear(); paintList(); paintFoot(); } }),
+        ...(pick ? [] : [
+          el('button', { class:'ico', text: st.sort === 'time' ? '🕒' : '⇅',
+            title: st.sort === 'time' ? '按修改时间排序' : '按名称排序',
+            onclick: () => { st.sort = st.sort === 'time' ? 'name' : 'time'; paintList(); } }),
+          el('button', { class:'ico', text: st.selecting ? '☑' : '☐', title:'多选引用',
+            onclick: () => { st.selecting = !st.selecting; if (!st.selecting) st.selected.clear(); paintList(); paintFoot(); } }),
+        ]),
         el('button', { class:'ico', text:'⟳', title:'刷新', onclick: () => nav(st.path) }),
       );
       listBox.replaceChildren();
@@ -1535,6 +1878,35 @@ async function openFileDrawer(path) {
 
   function paintFoot() {
     foot.replaceChildren();
+    if (pick) {
+      const mkdir = async () => {
+        const name = prompt('新文件夹名字');
+        if (!name || !name.trim()) return;
+        try {
+          await api('/api/mobile/v1/directory/create', { method:'POST', body: { path: st.path, name: name.trim() } });
+          nav(st.path);
+        } catch (e) { toast('新建失败：' + (e.message || e)); }
+      };
+      const manual = async () => {
+        const typed = prompt('电脑上的绝对路径（例如 D:\\Vibe\\项目）', st.path || '');
+        if (typed === null || !typed.trim()) return;
+        const p = typed.trim();
+        if (typeof opts.onPick === 'function') { if (await opts.onPick(p) !== false) closeRPanel(); return; }
+        if (await createWorkspaceAt(p)) closeRPanel();
+      };
+      foot.append(
+        el('button', { class:'drbtn', style:'color:#fff;background:var(--accent);border-color:var(--accent);'
+            + 'font-size:13px;padding:8px 14px', onclick: async () => {
+          if (!st.path) { toast('还没进到目录里'); return; }
+          if (typeof opts.onPick === 'function') { const keep = await opts.onPick(st.path); if (keep !== false) closeRPanel(); return; }
+          if (await createWorkspaceAt(st.path)) closeRPanel();
+        } }, '✓ 用这个文件夹'),
+        el('button', { class:'drbtn', onclick: mkdir }, '📁 新建文件夹'),
+        el('button', { class:'drbtn', onclick: () => { st.showHidden = !st.showHidden; nav(st.path); } }, '👁 隐藏文件'),
+        el('button', { class:'drbtn', onclick: manual }, '⌨ 手输路径'),
+      );
+      return;
+    }
     if (st.selecting) {
       foot.append(
         el('button', { class:'drbtn', onclick: () => { st.selecting = false; st.selected.clear(); paint(); } }, '取消'),
@@ -1561,7 +1933,7 @@ async function openFileDrawer(path) {
   }
   paintFoot();
 
-  panel.append(head, body, foot);
+  panel.append(head, ...(pick ? [pickbar] : []), body, foot);
   // 面板内右滑关闭
   let rx = 0, ry = 0, drag = false;
   panel.addEventListener('touchstart', (e) => {
@@ -1661,7 +2033,7 @@ async function openViewer(path, name) {
   pre.replaceChildren();
   for (let i = 0; i < lines.length; i++) {
     const row = el('div', { class:'vline' });
-    row.innerHTML = hl(lines[i]) || '&nbsp;';
+    row.innerHTML = hl(lines[i], ext) || '&nbsp;';
     nodes.push(row);
     pre.append(row);
   }
@@ -1713,11 +2085,16 @@ function openDrawer() {
   const listBox = el('div', { class:'drlist' });
   renderList(listBox, { noHeader: true, noPull: true });
 
-  const foot = el('div', { class:'drfoot' },
-    el('button', { class:'drbtn', onclick: () => { closeDrawer(); openAbout(); } }, '⚙ 设置'),
-    el('button', { class:'drbtn', onclick: () => { closeDrawer(); openStats(); } }, '📊 统计'),
-    el('button', { class:'drbtn', onclick: () => { closeDrawer(); openFileDrawer(state.sessionCwd || ''); } }, '📂 文件'),
-    el('button', { class:'drbtn', onclick: () => { closeDrawer(); reloadApp(); } }, '↻ 重载'),
+  // 图标化的一行底部操作。通知入口并入「设置」里的「通知提醒」，不再单独占位。
+  const iconBtn = (icon, label, run) => el('button', {
+    class:'drbtn', title:label, 'aria-label':label, onclick: run,
+  }, icon);
+  const foot = el('div', { class:'drfoot icons' },
+    iconBtn('⚙', '设置', () => { closeDrawer(); openAbout(); }),
+    iconBtn('📊', '统计', () => { closeDrawer(); openStats(); }),
+    iconBtn('📂', '文件', () => { closeDrawer(); openFileDrawer(state.sessionCwd || ''); }),
+    iconBtn('⌘', '终端', () => { closeDrawer(); location.href = '/agents/'; }),
+    iconBtn('↻', '重载', () => { closeDrawer(); reloadApp(); }),
   );
 
   panel.append(head, listBox, foot);
@@ -1785,13 +2162,37 @@ function b64urlToU8(b64) {
 const withTimeout = (p, ms, fallback) =>
   Promise.race([p, new Promise(r => setTimeout(() => r(fallback), ms))]);
 
+// 之前页面根本没注册 SW —— sw.js 一直在，但没人 register，
+// 于是 serviceWorker.ready 永远不 resolve，推送和离线兜底都形同虚设。
+let swRegPromise = null;
+function ensureSW() {
+  if (!('serviceWorker' in navigator)) return Promise.resolve(null);
+  if (!swRegPromise) {
+    swRegPromise = navigator.serviceWorker.register('./sw.js', { scope: './' })
+      .catch(() => navigator.serviceWorker.getRegistration().catch(() => null));
+  }
+  return swRegPromise;
+}
+ensureSW();   // 脚本一加载就注册，别等用户点
+
+// 拿到一个可用的 registration（同样限时，避免 ready 永不 resolve 把界面卡死）
+async function getReg() {
+  await ensureSW();
+  const reg = await withTimeout(navigator.serviceWorker.ready, 5000, null)
+    || await navigator.serviceWorker.getRegistration().catch(() => null);
+  return reg;
+}
+
 async function pushStatus() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return 'unsupported';
   try {
-    // 注意：serviceWorker.ready 在没有活动 SW 时永不 resolve，必须限时
-    const reg = await withTimeout(navigator.serviceWorker.ready, 1500, null);
+    await ensureSW();
+    let reg = await withTimeout(navigator.serviceWorker.ready, 5000, null);
+    if (!reg) reg = await navigator.serviceWorker.getRegistration().catch(() => null);
     if (!reg) return 'nosw';
-    const sub = await withTimeout(reg.pushManager.getSubscription(), 1500, null);
+    // 有可能只是还在安装
+    if (!reg.active && (reg.installing || reg.waiting)) return 'installing';
+    const sub = await withTimeout(reg.pushManager.getSubscription(), 3000, null);
     if (sub) return 'on';
     return (typeof Notification !== 'undefined' && Notification.permission === 'denied') ? 'denied' : 'off';
   } catch { return 'off'; }
@@ -1805,12 +2206,16 @@ async function openPushSettings() {
     off: '未开启',
     denied: '系统里被拒绝，请去 设置 → 通知 里打开',
     unsupported: '这个浏览器不支持 Web Push（需要 iOS 16.4+ 且已添加到主屏）',
-    nosw: 'Service Worker 还没就绪，杀进程重开一次再试',
+    nosw: 'Service Worker 没注册上',
+    installing: 'Service Worker 正在激活，等 5 秒再点一次',
   }[st] || st;
 
   const items = [];
   if (st === 'off') items.push({ label:'开启通知提醒', icon:'🔔', run: enablePush });
   if (st === 'on') items.push({ label:'关闭通知提醒', icon:'🔕', run: disablePush });
+  items.push({ label: (alwaysDone() ? '完成时总是推送：已开' : '完成时总是推送：已关'), icon: '📣',
+    run: () => { setAlwaysDone(!alwaysDone()); pushHeartbeat(); openPushSettings(); } });
+  items.push({ label:'重新检测', icon:'🔄', run: openPushSettings });
   items.push({ label:'重新加载', icon:'↻', run: reloadApp });
 
   openSheet(items, `通知提醒 · ${label}`);
@@ -1822,7 +2227,7 @@ async function enablePush() {
   const perm = await Notification.requestPermission();
   if (perm !== 'granted') { toast('通知权限被拒绝，去 设置 → Safari → 通知 里打开'); return; }
   try {
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await getReg();
     const vapid = await api('/push/vapid', { auth: false });
     if (!vapid || !vapid.publicKey) throw new Error('取不到 VAPID 公钥');
     const sub = await reg.pushManager.subscribe({
@@ -1841,7 +2246,7 @@ async function enablePush() {
 
 async function disablePush() {
   try {
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await getReg();
     const sub = await reg.pushManager.getSubscription();
     if (sub) {
       await api('/push/unsubscribe', { method:'POST', auth:false, body: { endpoint: sub.endpoint } }).catch(() => {});
@@ -1852,10 +2257,51 @@ async function disablePush() {
 }
 
 // 告诉服务端"我正在看"，宿主据此决定要不要推
+const ALWAYS_DONE_KEY = 'dsh.push.alwaysDone';
+function alwaysDone() { try { return localStorage.getItem(ALWAYS_DONE_KEY) === '1'; } catch { return false; } }
+function setAlwaysDone(v) { try { localStorage.setItem(ALWAYS_DONE_KEY, v ? '1' : '0'); } catch {} }
+
 function pushHeartbeat() {
   try {
-    api('/push/active', { method:'POST', auth:false, body: { deviceId: pushDeviceId() } }).catch(() => {});
+    api('/push/active', { method:'POST', auth:false, body: { deviceId: pushDeviceId(), alwaysDone: alwaysDone() } }).catch(() => {});
   } catch {}
+}
+
+function openThemeSheet() {
+  const cur = (() => { try { return localStorage.getItem(THEME_KEY) || ''; } catch { return ''; } })();
+  const mark = k => cur === k ? '✓ ' : '';
+  openSheet([
+    { label: mark('') + '跟随系统', icon:'🌓', run: () => { applyTheme(''); toast('主题：跟随系统'); } },
+    { label: mark('light') + '浅色', icon:'☀️', run: () => { applyTheme('light'); toast('主题：浅色'); } },
+    { label: mark('dark') + '深色', icon:'🌙', run: () => { applyTheme('dark'); toast('主题：深色'); } },
+  ], '主题');
+}
+
+// 版本自检：本地 APP_VERSION / SW 缓存 vs 线上 /VERSION（Caddy 静态目录里那份）
+async function openVersionCheck() {
+  const rows = [['本地 APP', APP_VERSION]];
+  try {
+    const sw = await fetch('./sw.js', { cache:'no-store' }).then(r => r.text());
+    const m = /const CACHE = '([^']+)'/.exec(sw);
+    rows.push(['本地 SW 缓存', m ? m[1] : '?']);
+  } catch { rows.push(['本地 SW 缓存', '读不到']); }
+  try {
+    const r = await fetch('./VERSION', { cache:'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const txt = await r.text();
+    // dev-proxy 没有 VERSION 时会 SPA 兜底回 index.html，不能把 HTML 当版本戳解析
+    if (txt.trim().startsWith('<')) throw new Error('不是 VERSION 文件（本地开发正常）');
+    const appM = /^app=(v\d+)/m.exec(txt);
+    if (!appM) throw new Error('VERSION 内容不合法');
+    const app = appM[1];
+    const swv = (/^sw=([^\n]+)/m.exec(txt) || [])[1] || '?';
+    const commit = (/^commit=([^\n]+)/m.exec(txt) || [])[1] || '?';
+    rows.push(['线上 VERSION', `${app} / ${swv} / ${commit}`]);
+    rows.push(['是否一致', app === APP_VERSION ? '✅ 一致' : `⚠️ 本地 ${APP_VERSION}，线上 ${app}`]);
+  } catch (e) {
+    rows.push(['线上 VERSION', '读不到：' + (e.message || e)]);
+  }
+  openInfoBox('版本自检', rows);
 }
 
 async function openAbout() {
@@ -1872,7 +2318,10 @@ async function openAbout() {
     : '中转';
   openSheet([
     { label:'连接方式', icon:'⇄', run: openConnectionSheet },
+    { label:'主题', icon:'🎨', run: openThemeSheet },
+    { label:'版本自检', icon:'🩺', run: openVersionCheck },
     { label:'通知提醒', icon:'🔔', run: openPushSettings },
+    { label:'推送诊断', icon:'🩺', run: openPushDiag },
     { label:'重新加载', icon:'↻', run: reloadApp },
     { label:'恢复链接', icon:'🔗', run: openRecovery },
     { label:'清除缓存并重载', icon:'🧹', run: async () => {
@@ -1987,6 +2436,24 @@ async function openStats() {
     const billed = models.reduce((a, m) => a + (m.billedTokens || 0), 0);
     const billedNote = (r.overview && (r.overview.historyBilled || r.overview.untrackedBilled))
       ? '已启用' : '该部署未启用计费统计';
+    const detail = el('div', { style:'padding-top:4px' });
+    if (models.length) {
+      detail.append(el('div', { class:'cmeta', style:'margin-top:10px', text:'按模型' }));
+      for (const m of models.slice(0, 6)) {
+        detail.append(el('div', { class:'kvrow' },
+          el('span', { class:'kk', text:(m.modelName || m.model || '?') + (m.providerName ? ' · ' + m.providerName : '') }),
+          el('span', { class:'vv', text:`输出 ${fmtTok(m.outputTokens)} · ${m.turns || 0} 轮 · ${m.requests || 0} 次` })));
+      }
+    }
+    if (days.length) {
+      detail.append(el('div', { class:'cmeta', style:'margin-top:10px', text:'按天（最近 7 天）' }));
+      for (const d of days.slice(-7)) {
+        detail.append(el('div', { class:'kvrow' },
+          el('span', { class:'kk', text:d.day || '?' }),
+          el('span', { class:'vv', text:`输出 ${fmtTok(d.outputTokens)} · ${d.requests || 0} 次` })));
+      }
+    }
+    const extra = el('div', {}, chart, detail);
     openInfoBox(`统计 · 最近 ${(r.overview && r.overview.range) || '7d'}`, [
       ['会话', k.sessions ?? '-'],
       ['轮次 / 步数', `${k.turns ?? '-'} / ${k.steps ?? '-'}`],
@@ -1998,7 +2465,7 @@ async function openStats() {
       ['活跃时长', fmtDur(k.activeMs)],
       ['模型耗时', fmtDur(k.llmMs)],
       ['工具耗时', fmtDur(k.toolMs)],
-    ], null, chart);
+    ], null, extra);
   } catch (e) {
     toast('取统计失败：' + (e.message || e));
   }
@@ -2097,16 +2564,25 @@ async function unarchiveSession(s) {
   } catch (e) { toast('取消归档失败：' + (e.message || e)); }
 }
 
-// 归档集合 = archived=1（该宿主返回全量）− 默认列表（只含未归档）
+// 归档列表：新版宿主（含当前版本 sessions.js）对 archived=1 只返回已归档子集，直接用；
+// 旧版宿主会返回全量，这时用「全量 − 默认列表」做差集兜底。
+// 判据：返回里出现了默认列表中的会话 → 说明它给的是全量。
+// 两边都带 fresh=1，避免 30 秒缓存让差集把「刚取消归档的」又算回归档里。
 async function loadArchived() {
   try {
     const [all, act] = await Promise.all([
       api('/api/mobile/v1/sessions?archived=1&fresh=1'),
       api('/api/mobile/v1/sessions?fresh=1'),
     ]);
-    const activeIds = new Set((act.items || []).map(x => x.sessionId));
-    state.archived = (all.items || []).filter(x => !activeIds.has(x.sessionId));
+    const allItems = Array.isArray(all.items) ? all.items : [];
+    const gotActive = Array.isArray(act.items);
+    const activeItems = gotActive ? act.items : [];
+    const activeIds = new Set(activeItems.map(x => x.sessionId));
+    const looksFullList = allItems.some(x => activeIds.has(x.sessionId));
+    state.archived = looksFullList ? allItems.filter(x => !activeIds.has(x.sessionId)) : allItems;
     state.archivedError = '';
+    // 顺带把列表数据对齐（取消归档 / 在别处归档后），但不重绘当前归档视图
+    if (gotActive) { state.sessions = activeItems; saveListCache(activeItems); }
   } catch (e) {
     state.archived = [];
     state.archivedError = '取归档列表失败：' + (e.message || e);
@@ -2114,14 +2590,184 @@ async function loadArchived() {
   if (state.view === 'list' && state.tab === 'archived') render();
 }
 
+// terminal group (herdr bridge)
+let termAgents = { items: [], at: 0, loading: false };
+function termToken() { return localStorage.getItem('bridge_token') || ''; }
+function loadTermAgents() {
+  const tk = termToken();
+  if (!tk || termAgents.loading) return;
+  termAgents.loading = true;
+  fetch('/agents/snapshot', { headers: { Authorization: 'Bearer ' + tk } })
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
+    .then((j) => {
+      const snap = j && j.result && j.result.snapshot;
+      if (!snap) throw new Error('bad snapshot');
+      const panes = snap.panes || [];
+      const tabs = snap.tabs || [];
+      const agents = snap.agents || [];
+      const items = tabs.map((t) => {
+        const p = panes.find((x) => x.tab_id === t.tab_id) || {};
+        const a = agents.find((x) => x.pane_id === p.pane_id);
+        return {
+          tabId: t.tab_id,
+          label: t.label || (p.cwd ? String(p.cwd).split(/[\\/]/).pop() : 'tab'),
+          paneId: p.pane_id || '',
+          cwd: p.cwd || '',
+          status: (a && a.agent_status) || p.agent_status || 'unknown',
+          agent: a ? (a.name || a.agent || '') : '',
+        };
+      });
+      termAgents.items = items;
+      termAgents.loading = false;
+      termAgents.at = Date.now();
+      if (state.view === 'list') render();
+    })
+    .catch(() => { termAgents.loading = false; termAgents.at = Date.now(); });
+}
+async function newTerminal() {
+  let roots = [];
+  try { roots = await loadRoots(); } catch (e) {}
+  await openFileDrawer(state.sessionCwd || '', { pick: true, roots, onPick: async (p) => {
+    try {
+      const tk = termToken();
+      const r = await fetch('/agents/tab/create', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + tk },
+        body: JSON.stringify({ cwd: p }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+      toast('\u5DF2\u521B\u5EFA\u7EC8\u7AEF');
+      termAgents.at = 0;
+      loadTermAgents();
+    } catch (e) { toast('\u521B\u5EFA\u5931\u8D25\uFF1A' + (e.message || e)); }
+    return true;
+  }});
+}
+function appendTermGroup(main) {
+  if (!termToken()) return;
+  const closed = localStorage.getItem('term.collapsed') === '1';
+  const items = termAgents.items || [];
+  const head = el('div', { class: 'ghead' + (closed ? ' closed' : ''), onclick: () => {
+    localStorage.setItem('term.collapsed', closed ? '0' : '1');
+    render();
+  }},
+    el('span', { class: 'chev', text: '\u25BC' }),
+    el('span', { text: '\u2318' }),
+    el('span', { class: 'gname', text: '\u7EC8\u7AEF' }),
+    el('span', { class: 'count', style: 'margin-left:auto', text: String(items.length) }),
+    el('button', { class: 'ico', text: '\uFF0B', title: '\u65B0\u5EFA\u7EC8\u7AEF', onclick: (ev) => { ev.stopPropagation(); newTerminal(); } }),
+  );
+  const box = el('div', { class: 'group' }, head);
+  if (!closed) {
+    if (!items.length) box.append(el('div', { class: 'empty', text: '\u6CA1\u6709\u7EC8\u7AEF' }));
+    for (const it of items) {
+      box.append(el('div', { class: 'row', onclick: () => openTerminal(it.paneId) },
+        el('span', { class: 'dot' + (it.status === 'working' ? ' run' : '') }),
+        el('div', { class: 'body' },
+          el('div', { class: 't' },
+            el('span', { class: 'title', text: it.label }),
+            it.status === 'blocked' ? el('span', { class: 'unread', title: '\u7B49\u4F60' }) : null,
+            el('span', { class: 'time', text: it.status }))),
+        el('button', { class: 'rowmore', text: '\u00D7', title: '\u5173\u95ED\u7EC8\u7AEF', onclick: (ev) => { ev.stopPropagation(); askCloseTerminal(it); } })));
+    }
+  }
+  main.append(box);
+}
+function askCloseTerminal(it) {
+  openSheet([
+    { label: '\u5173\u95ED\u7EC8\u7AEF\uFF08' + it.label + '\uFF09', icon: '\u00D7', run: () => closeTerminal(it) },
+    { label: '\u53D6\u6D88', icon: '\u21A9', run: () => {} },
+  ], '\u5173\u95ED\u7EC8\u7AEF');
+}
+async function closeTerminal(it) {
+  try {
+    const tk = termToken();
+    const r = await fetch('/agents/tab/close', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + tk },
+      body: JSON.stringify({ tabId: it.tabId }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    toast('\u7EC8\u7AEF\u5DF2\u5173\u95ED');
+    termAgents.at = 0;
+    loadTermAgents();
+  } catch (e) { toast('\u5173\u95ED\u5931\u8D25\uFF1A' + (e.message || e)); }
+}function openTerminal(paneId) {
+  const mask = el('div', { class: 'termoverlay' });
+  const bar = el('div', { class: 'termbar' },
+    el('button', { class: 'ico', text: '\u2039', onclick: () => mask.remove() }),
+    el('b', { text: '\u7EC8\u7AEF' }),
+    el('span', { style: 'flex:1' }),
+    el('button', { class: 'ico', text: '\u2715', onclick: () => mask.remove() }));
+  const frame = el('iframe', { class: 'termframe', src: '/agents/?embed=1&pane=' + encodeURIComponent(paneId || '') });
+  mask.append(bar, frame);
+  document.body.append(mask);
+}
+// 本地搜索：标题 / 最近一条 / **已缓存的消息正文**。
+// 服务端 session/search 在这个部署里是关的（openAt "never"），所以正文只能搜本机
+// dsh.cache.msgs 里那点（每个会话最近 120 条、最多留 10 个会话）。命中后给一段上下文剪辑。
+function cachedMessageHits(sessionId, q) {
+  const c = readMsgCache(sessionId);
+  if (!c || !Array.isArray(c.messages)) return [];
+  const hits = [];
+  for (const m of c.messages) {
+    const text = String((m && m.text) || '');
+    if (!text) continue;
+    const idx = text.toLowerCase().indexOf(q);
+    if (idx < 0) continue;
+    hits.push({ role: m.role, text, idx });
+  }
+  return hits;
+}
+function snippetAround(text, idx, q) {
+  const start = Math.max(0, idx - 30);
+  const end = Math.min(text.length, idx + q.length + 46);
+  return (start > 0 ? '…' : '') + text.slice(start, end).replace(/\s+/g, ' ') + (end < text.length ? '…' : '');
+}
+function buildSearchResults(q) {
+  const out = [];
+  for (const s of state.sessions) {
+    const titleHit = String(s.title || '').toLowerCase().includes(q);
+    const prevRaw = String((s.lastMessage && s.lastMessage.text) || '');
+    const prevPlain = plain(prevRaw);
+    const prevIdx = prevPlain.toLowerCase().indexOf(q);
+    const hits = cachedMessageHits(s.sessionId, q);
+    if (!titleHit && prevIdx < 0 && !hits.length) continue;
+    const first = hits[0];
+    let snippet = '', meta = '';
+    if (first) {
+      snippet = `${first.role === 'user' ? '我' : '助手'}：${snippetAround(first.text, first.idx, q)}`;
+      meta = hits.length > 1 ? `缓存消息命中 ${hits.length} 条` : '缓存消息命中';
+    } else if (prevIdx >= 0) {
+      snippet = snippetAround(prevPlain, prevIdx, q);
+      meta = '最近一条命中';
+    } else {
+      snippet = plain(prevRaw);
+      meta = '标题命中';
+    }
+    out.push({ s, snippet, meta, hits: hits.length, titleHit });
+  }
+  // 标题命中的排前面，其次正文命中条数多的，最后按更新时间
+  out.sort((a, b) => (Number(b.titleHit) - Number(a.titleHit))
+    || (b.hits - a.hits)
+    || ((b.s.updatedAt || 0) - (a.s.updatedAt || 0)));
+  return out.slice(0, 40);
+}
+
 function renderList(wrap, opts = {}) {
+  if (Date.now() - termAgents.at > 15000) loadTermAgents();
   const menu = el('button', { class:'ico', text:'☰', 'data-bell':'', onclick: () => openSheet([
     { label:'刷新', icon:'⟳', run: () => refreshAll(true) },
     { label:'新建工作区', icon:'📁', run: newWorkspace },
     { label:'文件', icon:'📂', run: () => openFileDrawer(state.sessionCwd || '') },
     { label:'连接信息', icon:'⏱', run: openConnInfo },
     { label:'统计', icon:'📊', run: openStats },
+    { label:'终端', icon:'⌘', run: () => { location.href = '/agents/'; } },
     { label:'关于', icon:'ⓘ', run: openAbout },
+    { label:'通知提醒', icon:'🔔', run: openPushSettings },
+    { label:'推送诊断', icon:'🩺', run: openPushDiag },
     { label:'重新加载', icon:'↻', run: reloadApp },
     { label:'恢复链接', icon:'🔗', run: openRecovery },
     { label:'退出登录', icon:'⏏', run: () => { localStorage.clear(); state.token=''; state.view='list'; render(); } },
@@ -2130,8 +2776,8 @@ function renderList(wrap, opts = {}) {
   if (!opts.noHeader) wrap.append(headerEl('会话', menu, plus));
 
   const main = el('main');
-  // 「已归档」= 全量列表(archived=1，该宿主返回全部) 减去 默认列表(只有未归档)，
-  // 两边现成，差集就是归档集合（实测：归档一条后 默认 13→12，archived=1 仍 13）。
+  // 「已归档」页的数据来自 archived=1；当前宿主只返回归档子集，
+  // 老宿主返回全量，loadArchived() 会按「是否出现默认列表里的会话」判断并做差集兜底。
   const tabs = el('div', { class:'tabs' },
     el('b', { class: state.tab === 'archived' ? '' : 'on', text:'全部会话', onclick: () => { state.tab = 'all'; render(); } }),
     el('b', { class: state.tab === 'archived' ? 'on' : '', text:'已归档', onclick: () => {
@@ -2140,22 +2786,21 @@ function renderList(wrap, opts = {}) {
   );
   main.append(tabs);
 
-  // 搜索：服务端内容检索在这个部署里是关闭的（openAt "never"），所以退成本地按标题/预览过滤
-  const searchInput = el('input', { type:'search', placeholder:'搜索会话（标题 / 最近一条）…' });
+  // 搜索：服务端内容检索在这个部署里是关闭的（openAt "never"），
+  // 所以本地过滤标题 / 最近一条，并把范围扩到已缓存的消息正文（见 buildSearchResults）
+  const searchInput = el('input', { type:'search', placeholder:'搜索会话（标题 / 预览 / 已缓存消息）…' });
   searchInput.value = state.searchQ || '';
   searchInput.addEventListener('input', () => {
     const q = searchInput.value.trim().toLowerCase();
     state.searchQ = searchInput.value;
-    state.searchItems = q ? state.sessions.filter(s => {
-      const t = String(s.title || '').toLowerCase();
-      const p = String((s.lastMessage && s.lastMessage.text) || '').toLowerCase();
-      return t.includes(q) || p.includes(q);
-    }) : null;
+    state.searchItems = q ? buildSearchResults(q) : null;
     render();
     const again = document.querySelector('.searchrow input');
     if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
   });
-  main.append(el('div', { class:'searchrow' }, searchInput));
+  // 归档页不显示搜索框：本地搜索的数据源是 state.sessions（不含归档），
+  // 摆在那里输入也搜不到东西（以前就是个死控件）
+  if (state.tab !== 'archived') main.append(el('div', { class:'searchrow' }, searchInput));
 
   if (state.tab === 'archived') {
     const items = state.archived;
@@ -2169,8 +2814,7 @@ function renderList(wrap, opts = {}) {
           el('div', { class:'body' },
             el('div', { class:'t' },
               el('span', { class:'title', text: s.title || '(无标题)' }),
-              el('span', { class:'time', text: fmtTime(s.updatedAt) })),
-            el('div', { class:'preview prev', text: s.cwd || '' })),
+              el('span', { class:'time', text: fmtTime(s.updatedAt) }))),
           el('button', { class:'rowmore', text:'↩', title:'取消归档', onclick: (e) => {
             e.stopPropagation(); unarchiveSession(s);
           }}));
@@ -2183,10 +2827,11 @@ function renderList(wrap, opts = {}) {
 
   if (state.searchItems) {
     if (!state.searchItems.length) main.append(el('div', { class:'empty', text:'没有匹配的会话' }));
-    for (const s of state.searchItems) {
-      main.append(el('div', { class:'sres', onclick: () => openSession(s) },
-        el('div', { class:'st', text: s.title || '(无标题)' }),
-        el('div', { class:'ss', text: plain((s.lastMessage && s.lastMessage.text) || '') })));
+    for (const r of state.searchItems) {
+      main.append(el('div', { class:'sres', onclick: () => openSession(r.s) },
+        el('div', { class:'st', text: r.s.title || '(无标题)' }),
+        r.snippet ? el('div', { class:'ss', text: r.snippet }) : null,
+        el('div', { class:'smeta', text: r.meta })));
     }
     wrap.append(main);
     return;
@@ -2196,17 +2841,76 @@ function renderList(wrap, opts = {}) {
     main.append(el('div', { class:'empty', html:'还没有会话<br>下拉或点右上角刷新' }));
   }
 
-  // 按工作区分组；不属于任何工作区的按 cwd 兜底
+  // 单行会话：列表分组与全局置顶共用（长按 / 桌面右键出会话菜单）
+  // opts.hidePin：顶部「置顶」分组里不再重复画 📌（看分组头就知道）
+  function sessionRow(s, opts = {}) {
+    const more = el('button', { class:'rowmore', text:'⋯', onclick: (e) => {
+      e.stopPropagation();
+      openSessionMenu(s);
+    }});
+    const st = sessionState(s);
+    const dotCls = DOT_CLASS[st] ? 'dot ' + DOT_CLASS[st] : 'dot';
+    const row = el('div', { class: (st === 'pending' || isUnread(s)) ? 'row hot' : 'row', onclick: () => { if (row.__lp) { row.__lp = false; return; } openSession(s); } },
+      el('span', { class: dotCls, title: STATE_LABEL[st] || '' }),
+      el('div', { class:'body' },
+        el('div', { class:'t' },
+          s.pinned && !opts.hidePin ? el('span', { class:'pinmark', text:'📌' }) : null,
+          el('span', { class:'title', text: s.title || '(无标题)' }),
+          el('span', { class:'time', text: fmtTime(s.updatedAt) })),
+      ),
+      more);
+    // 长按（或桌面右键）出菜单：重命名 / 置顶
+    let lp = null;
+    const arm = () => { lp = setTimeout(() => { row.__lp = true; openSessionMenu(s); }, 480); };
+    const disarm = () => { if (lp) { clearTimeout(lp); lp = null; } };
+    row.addEventListener('touchstart', arm, { passive: true });
+    row.addEventListener('touchend', disarm, { passive: true });
+    row.addEventListener('touchmove', disarm, { passive: true });
+    row.addEventListener('contextmenu', (e) => { e.preventDefault(); openSessionMenu(s); });
+    return row;
+  }
+
+  // 全局置顶：跨工作区聚合到最上方；置顶会话不再在各自文件夹里重复出现
+  const pinnedItems = state.sessions.filter(s => s.pinned)
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  if (pinnedItems.length) {
+    const pinKey = 'pin:global';
+    const pinClosed = state.collapsed.has(pinKey);
+    const pinHead = el('div', { class: `ghead${pinClosed ? ' closed' : ''}`, onclick: () => {
+      if (state.collapsed.has(pinKey)) state.collapsed.delete(pinKey); else state.collapsed.add(pinKey);
+      localStorage.setItem(LS.collapsed, JSON.stringify([...state.collapsed]));
+      render();
+    }},
+      el('span', { class:'chev', text:'▼' }),
+      el('span', { text:'📌' }),
+      el('span', { class:'gname', text:'置顶' }),
+      el('span', { class:'count', style:'margin-left:auto', text: String(pinnedItems.length) }),
+    );
+    const pinBox = el('div', { class:'group' }, pinHead);
+    if (!pinClosed) for (const s of pinnedItems) pinBox.append(sessionRow(s, { hidePin: true }));
+    main.append(pinBox);
+  }
+
+  // 按工作区分组；不属于任何工作区的按 cwd 兜底。置顶会话在顶部聚合一份，
+  // 同时仍保留在所属文件夹里——文件夹是找会话的主路径，不能因为置顶就消失。
+  // 工作区先全部建组：即使一个会话都没有，文件夹也不会凭空消失。
   const groups = new Map();
+  for (const w of state.workspaces) {
+    groups.set(`w:${w.workspaceId}`, { key: `w:${w.workspaceId}`, name: w.title || w.path, path: w.path, git: w.git, items: [] });
+  }
   for (const s of state.sessions) {
     const w = workspaceOf(s.sessionId);
     const key = w ? `w:${w.workspaceId}` : `c:${s.cwd || '(未登记)'}`;
-    const name = w ? (w.title || w.path) : (s.cwd ? s.cwd.split(/[\\/]/).pop() : '(未登记目录)');
-    if (!groups.has(key)) groups.set(key, { key, name, path: w ? w.path : s.cwd, git: w && w.git, items: [] });
+    if (!groups.has(key)) {
+      const name = w ? (w.title || w.path) : (s.cwd ? s.cwd.split(/[\\/]/).pop() : '(未登记目录)');
+      groups.set(key, { key, name, path: w ? w.path : s.cwd, git: w && w.git, items: [] });
+    }
     groups.get(key).items.push(s);
   }
   const order = [...state.workspaces.map(w => `w:${w.workspaceId}`), ...groups.keys()];
   const keys = [...new Set(order)].filter(k => groups.has(k));
+  // 每个文件夹默认只露 5 条，其余点「显示更多」展开
+  const PREVIEW_COUNT = 5;
 
   for (const k of keys) {
     const g = groups.get(k);
@@ -2230,39 +2934,24 @@ function renderList(wrap, opts = {}) {
     head.addEventListener('contextmenu', (e) => { e.preventDefault(); openWorkspaceMenu(g); });
     const box = el('div', { class:'group' }, head);
     if (!closed) {
-      // 置顶优先，其次按更新时间
+      // 文件夹里置顶的排前面（与全局置顶区一致），其余按更新时间
       const sorted = g.items.slice().sort((a, b) =>
         ((b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)) || ((b.updatedAt || 0) - (a.updatedAt || 0)));
-      for (const s of sorted) {
-        const more = el('button', { class:'rowmore', text:'⋯', onclick: (e) => {
-          e.stopPropagation();
-          openSessionMenu(s);
-        }});
-        const row = el('div', { class: isUnread(s) ? 'row hot' : 'row', onclick: () => { if (row.__lp) { row.__lp = false; return; } openSession(s); } },
-          el('span', { class: s.running ? 'dot run' : 'dot' }),
-          el('div', { class:'body' },
-            el('div', { class:'t' },
-              s.pinned ? el('span', { class:'pinmark', text:'📌' }) : null,
-              el('span', { class:'title', text: s.title || '(无标题)' }),
-              isUnread(s) ? el('span', { class:'unread', title:'有未查看的新回复' }) : null,
-              el('span', { class:'time', text: fmtTime(s.updatedAt) })),
-            s.lastMessage ? el('div', { class:'preview prev', text:
-              `${s.lastMessage.role === 'user' ? '我' : '助手'}：${plain(s.lastMessage.text)}` }) : null,
-          ),
-          more);
-        // 长按（或桌面右键）出菜单：重命名 / 置顶
-        let lp = null;
-        const arm = () => { lp = setTimeout(() => { row.__lp = true; openSessionMenu(s); }, 480); };
-        const disarm = () => { if (lp) { clearTimeout(lp); lp = null; } };
-        row.addEventListener('touchstart', arm, { passive: true });
-        row.addEventListener('touchend', disarm, { passive: true });
-        row.addEventListener('touchmove', disarm, { passive: true });
-        row.addEventListener('contextmenu', (e) => { e.preventDefault(); openSessionMenu(s); });
-        box.append(row);
+      const expanded = state.expandedGroups.has(k);
+      const visible = expanded ? sorted : sorted.slice(0, PREVIEW_COUNT);
+      if (!sorted.length) box.append(el('div', { class:'ghint', text:'这个文件夹还没有会话' }));
+      for (const s of visible) box.append(sessionRow(s));
+      if (sorted.length > PREVIEW_COUNT) {
+        box.append(el('button', { class:'showmore', onclick: () => {
+          if (state.expandedGroups.has(k)) state.expandedGroups.delete(k);
+          else state.expandedGroups.add(k);
+          render();
+        }}, expanded ? '收起' : `显示更多（还有 ${sorted.length - PREVIEW_COUNT} 条）`));
       }
     }
     main.append(box);
   }
+  appendTermGroup(main);
   if (!opts.noPull) installPullToRefresh(main);
   wrap.append(main);
 }
@@ -2270,15 +2959,112 @@ function renderList(wrap, opts = {}) {
 // ---------------------------------------------------------------- 会话详情
 // 会话页的「增量渲染」骨架：header / 列表 / 卡片 / composer 各建一次，
 // 之后只动列表和卡片，输入框不会因为来帧而重建（否则会丢焦点、丢输入）。
-let ui = { sessionId:null, body:null, listWrap:null, cardsWrap:null, ta:null, sendBtn:null, strip:null, dot:null, sig:'' };
+let ui = { sessionId:null, body:null, listWrap:null, cardsWrap:null, ta:null, sendBtn:null, strip:null, dot:null, sig:'',
+  atBottom: true };
 
+// 大图查看器：双指缩放（1–5x）、放大后单指拖动、双击切换、桌面滚轮缩放。
+// 关键点：
+//   - touch-action:none + 非 passive 的 touchmove：否则 iOS Safari 会把双指手势抢去缩放整个页面
+//   - 双击/拖动后的合成 click 不能顺手关掉浮层（用 moved / lastToggle 挡掉）
+//   - 平移边界按「图片显示尺寸 × (scale-1)/2」夹住，放大后不会把图拖出屏幕找不回来
 function openImageFull(src) {
-  const mask = el('div', { class:'lightbox', onclick: () => mask.remove() },
-    el('img', { src }),
+  const img = el('img', { src, alt: '' });
+  const hint = el('div', { class:'lbhint', text:'双指缩放 · 双击放大 · 点空白处关闭' });
+  const mask = el('div', { class:'lightbox' },
+    img,
     el('div', { class:'lbclose', text:'✕', onclick: (e) => { e.stopPropagation(); mask.remove(); } }),
-    el('div', { class:'lbhint', text:'点任意处关闭 · 双指可缩放' }),
+    hint,
   );
   document.body.append(mask);
+
+  const MIN = 1, MAX = 5;
+  let scale = 1, tx = 0, ty = 0;
+  let mode = '', sx = 0, sy = 0, ox = 0, oy = 0;
+  let pinchDist = 0, pinchScale = 1;
+  let moved = false, lastTap = 0, lastToggle = 0;
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+
+  function apply() {
+    const w = img.clientWidth || 0, h = img.clientHeight || 0;
+    // 放大后允许拖动的范围：多出来的那一半（图片按 contain 居中）
+    const mx = Math.max(0, (w * (scale - 1)) / 2);
+    const my = Math.max(0, (h * (scale - 1)) / 2);
+    tx = clamp(tx, -mx, mx);
+    ty = clamp(ty, -my, my);
+    img.style.transform = `translate3d(${tx}px,${ty}px,0) scale(${scale})`;
+    hint.textContent = scale > 1.01
+      ? '放大中 · 单指拖动 · 双击还原'
+      : '双指缩放 · 双击放大 · 点空白处关闭';
+  }
+  function reset() { scale = 1; tx = 0; ty = 0; apply(); }
+  function toggleZoom() {
+    lastToggle = Date.now();
+    if (scale > 1.01) reset();
+    else { scale = 2.5; tx = 0; ty = 0; apply(); }
+  }
+
+  mask.addEventListener('touchstart', (e) => {
+    moved = false;
+    if (e.touches.length >= 2) {
+      mode = 'pinch';
+      pinchDist = dist(e.touches[0], e.touches[1]);
+      pinchScale = scale;
+    } else if (e.touches.length === 1) {
+      mode = 'pan';
+      sx = e.touches[0].clientX; sy = e.touches[0].clientY; ox = tx; oy = ty;
+    }
+  }, { passive: true });
+
+  mask.addEventListener('touchmove', (e) => {
+    if (mode === 'pinch' && e.touches.length >= 2) {
+      // 拦下浏览器自己的双指缩放（iOS 上会连整个页面一起缩）
+      e.preventDefault();
+      const d = dist(e.touches[0], e.touches[1]);
+      if (pinchDist > 0) scale = clamp(pinchScale * (d / pinchDist), MIN, MAX);
+      moved = true;
+      apply();
+    } else if (mode === 'pan' && e.touches.length === 1) {
+      const dx = e.touches[0].clientX - sx, dy = e.touches[0].clientY - sy;
+      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) moved = true;
+      if (scale > 1.01) {
+        e.preventDefault();
+        tx = ox + dx; ty = oy + dy;
+        apply();
+      }
+    }
+  }, { passive: false });
+
+  mask.addEventListener('touchend', (e) => {
+    if (mode === 'pinch') {
+      if (scale <= 1.05) reset(); else apply();
+      if (!e.touches || e.touches.length === 0) mode = '';
+      return;
+    }
+    mode = '';
+    if (moved) return;
+    const t = e.changedTouches && e.changedTouches[0];
+    if (t && t.target === img) {
+      const now = Date.now();
+      if (now - lastTap < 300) { lastTap = 0; toggleZoom(); }
+      else lastTap = now;
+    }
+  }, { passive: true });
+
+  // 桌面：滚轮缩放
+  mask.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    scale = clamp(scale * (e.deltaY < 0 ? 1.15 : 1 / 1.15), MIN, MAX);
+    if (scale <= 1.01) reset(); else apply();
+  }, { passive: false });
+
+  mask.addEventListener('click', (e) => {
+    // 拖动/双指刚结束后的合成 click 不算「点关闭」
+    if (moved) { moved = false; return; }
+    if (Date.now() - lastToggle < 400) return;
+    if (e.target === img && scale > 1.01) return;
+    mask.remove();
+  });
 }
 
 // 正文图：dsh-local-image 的编号 → 字节。带鉴权头所以只能 fetch 成 data URL，<img src> 直接引会 401。
@@ -2328,6 +3114,35 @@ async function uploadFile(file, onProgress) {
   return { uploadId, path: fin.path, name: fin.name || file.name };
 }
 
+// 视频附件：/session/send 只收 text / image 块，视频只能「上传 + 把路径写进正文」。
+// 拿不到可播放的文件流，所以不做内嵌播放，但至少要在气泡里标清楚它是视频文件，
+// 别让人以为那是一张裂图（以前缩略图拿 <img> 显示 video 的 objectURL，就是裂的）。
+const VIDEO_EXT = /\.(mp4|m4v|mov|webm|mkv|avi|3gp)$/i;
+const isVideoName = (name) => VIDEO_EXT.test(String(name || ''));
+const isVideoFile = (a) => /^video\//i.test((a && a.mediaType) || '') || isVideoName(a && a.name);
+// 从消息正文里拆出「已上传视频/文件」那几行，渲染成文件卡片
+function splitAttachmentNotes(text) {
+  const kept = [];
+  const files = [];
+  for (const line of String(text || '').split('\n')) {
+    const m = /^(?:🎬\s*已上传视频|📎\s*已上传文件)[：:]\s*(.+)$/.exec(line.trim());
+    if (m && m[1]) { files.push(m[1].trim()); continue; }
+    kept.push(line);
+  }
+  return { text: kept.join('\n').replace(/\n{3,}/g, '\n\n').trim(), files };
+}
+function openFileCard(path, isVideo) {
+  const name = String(path).split(/[\\/]/).pop();
+  const dir = String(path).replace(/[\\/][^\\/]+$/, '');
+  openSheet([
+    { label:'复制路径', icon:'⧉', run: async () => {
+      try { await navigator.clipboard.writeText(path); toast('已复制路径'); }
+      catch { toast('复制失败，长按消息复制'); }
+    } },
+    { label:'打开所在目录', icon:'📂', run: () => openFileDrawer(dir) },
+  ], `${isVideo ? '🎬 视频文件' : '📎 文件'} · ${name}（作为路径发送）`);
+}
+
 // 附件图（消息里 type:'image' 的块）：POST /session/attachment 取 base64
 const attCache = new Map();
 async function hydrateAttachments(rootEl) {
@@ -2356,6 +3171,7 @@ function paintSession({ scroll = 'auto' } = {}) {
   if (!ui.body || !ui.body.isConnected) return;
   state.lastPaint = Date.now();
   const atBottom = ui.body.scrollHeight - ui.body.scrollTop - ui.body.clientHeight < 90;
+  ui.atBottom = atBottom;
   // 长会话只渲染最近 N 条，避免几百条 DOM 一起卡（点"显示更早"再加）
   const limit = state.msgLimit || 120;
   const hidden = Math.max(0, state.messages.length - limit);
@@ -2376,7 +3192,7 @@ function paintSession({ scroll = 'auto' } = {}) {
   if (ui.updateJump) ui.updateJump();
   // ---- 增量渲染：只改动变化的那几条，避免整列表重建导致抖动 / 图片重新取回 ----
   const items = [];
-  let lastT = 0;
+  let lastDay = '';
   for (const it of feed) {
     if (it.kind === 'tools') {
       const k = toolGroupKey(it.tools);
@@ -2384,11 +3200,13 @@ function paintSession({ scroll = 'auto' } = {}) {
       continue;
     }
     const ts = it.m && it.m.time;
-    if (ts && (!lastT || ts - lastT > 10 * 60 * 1000)) {
-      const label = fmtMsgTime(ts);
-      items.push({ type:'sep', key:`S:${label}`, text: label });
+    const day = ts ? dayKeyOf(ts) : '';
+    if (day && day !== lastDay) {
+      const label = fmtDayLabel(ts);
+      // key 带上 label：App 跨过午夜还开着时，「今天」要能变成「昨天」
+      items.push({ type:'sep', key:`S:${day}:${label}`, text: label, ts });
+      lastDay = day;
     }
-    if (ts) lastT = ts;
     const txt = (it.m && it.m.text) || '';
     const nb = (it.m && it.m.blocks && it.m.blocks.length) || 0;
     items.push({ type:'msg', key:`M:${it.m.id}:${txt.length}:${nb}`, m: it.m });
@@ -2405,14 +3223,13 @@ function paintSession({ scroll = 'auto' } = {}) {
   ui.nodes.length = keep;
   for (let i = keep; i < items.length; i++) {
     const it = items[i];
-    const node = it.type === 'sep' ? el('div', { class:'sep', text: it.text })
+    const node = it.type === 'sep' ? el('div', { class:'sep', text: it.text, title: it.ts ? fmtExactTime(it.ts) : '' })
       : it.type === 'tools' ? renderTools(it.tools)
       : renderMessage(it.m);
-    // 有"深度求索中"或排队条时插在它们前面，保证顺序是 消息 → 排队 → 运行中
-    const anchor = (ui.qBox && ui.qBox.isConnected) ? ui.qBox
-      : (ui.typingNode && ui.typingNode.isConnected) ? ui.typingNode : null;
-    if (anchor) ui.listWrap.insertBefore(node, anchor);
-    else ui.listWrap.append(node);
+    // 手机上没地方悬停：点一下分隔条把精确时间 toast 出来
+    if (it.type === 'sep' && it.ts) node.addEventListener('click', () => toast(fmtExactTime(it.ts)));
+    // 消息只进对话流；排队卡片固定在 dock（输入框上方），不再插进消息里
+    ui.listWrap.append(node);
     ui.nodes.push(node);
     ui.keys.push(it.key);
   }
@@ -2439,36 +3256,44 @@ function paintSession({ scroll = 'auto' } = {}) {
     hydrateAttachments(ui.listWrap);
   }
   pruneCards();
-  ui.cardsWrap.replaceChildren();
-  for (const c of state.cards) ui.cardsWrap.append(renderCard(c));
-  // 排队中的消息：主机把「正在跑的时候发的消息」放在 inbox 里排队
-  if (!ui.qBox) ui.qBox = el('div', { class:'qlist' });
-  if (state.queue && state.queue.length) {
-    ui.qBox.replaceChildren();
-    for (const it of state.queue) ui.qBox.append(renderQueueItem(it));
-    const anchor = (ui.typingNode && ui.typingNode.isConnected) ? ui.typingNode : null;
-    if (!ui.qBox.isConnected) {
-      if (anchor) ui.listWrap.insertBefore(ui.qBox, anchor);
-      else ui.listWrap.append(ui.qBox);
-    } else if (anchor && ui.qBox.nextSibling !== anchor) {
-      ui.listWrap.insertBefore(ui.qBox, anchor);
+  // 卡片必须增量渲染：以前每次 paint 都 replaceChildren + 重建，
+  // 流式期间每秒有几十次 paint，用户正在点的选项会被换掉 ——
+  // 表现就是"多问题时选项失效、而且失效得很快"。这里按卡片缓存节点。
+  const cardKey = state.cards.map(c => c.id).join('|');
+  if (cardKey !== ui.cardsKey) {
+    ui.cardsKey = cardKey;
+    ui.cardsWrap.replaceChildren();
+    for (const c of state.cards) {
+      // 节点还在就复用（已选中的选项、展开状态都保留），否则重建一次
+      if (!c._node || !c._node.isConnected) c._node = renderCard(c);
+      ui.cardsWrap.append(c._node);
     }
-  } else if (ui.qBox.isConnected) {
-    ui.qBox.remove();
   }
-
-  // 运行状态放在对话流末尾（像 AI-HUB 的"深度求索中"），不再挂在输入框下面
-  if (state.busy) {
-    if (!ui.typingNode || !ui.typingNode.isConnected) {
-      ui.typingNode = el('div', { class:'typing' }, el('i'), el('i'), el('i'), el('span', { text:'深度求索中…' }));
-      ui.listWrap.append(ui.typingNode);
+  // 排队中的消息：固定在输入框上方的 dock 里，默认折叠；不再插进消息流
+  if (ui.qDock) {
+    const q = state.queue || [];
+    if (q.length) {
+      ui.qDock.style.display = 'flex';
+      ui.qDock.replaceChildren();
+      for (const it of q) ui.qDock.append(renderQueueItem(it));
+      for (const id of [...queueOpen]) if (!q.some(x => x.id === id)) queueOpen.delete(id);
+    } else {
+      ui.qDock.style.display = 'none';
+      ui.qDock.replaceChildren();
     }
-  } else if (ui.typingNode) {
-    if (ui.typingNode.isConnected) ui.typingNode.remove();
-    ui.typingNode = null;
+  }
+  // 运行状态只保留 dock 里这一份；对话流末尾不再重复一次
+  if (ui.strip) {
+    ui.strip.textContent = state.stream === 'open'
+      ? (state.busy ? '深度求索中…' : '')
+      : (state.stream ? '实时连接断开，重连中…' : '');
   }
   if (scroll === 'bottom' || atBottom) {
-    requestAnimationFrame(() => { ui.body.scrollTop = ui.body.scrollHeight; });
+    ui.atBottom = true;
+    requestAnimationFrame(() => {
+      if (!ui.body || !ui.body.isConnected) return;
+      ui.body.scrollTop = ui.body.scrollHeight;
+    });
   }
 }
 
@@ -2584,9 +3409,18 @@ function renderSession(wrap) {
     } catch {}
   };
 
-  // 聚焦输入框时把列表带到底部（键盘弹起后不用手动滑）
+  // 聚焦输入框：只在「本来就在底部」时继续贴底，并覆盖键盘弹起后的几次重排；
+  // 正在翻历史时不要强行把人拉回底部。
   ta.addEventListener('focus', () => {
-    setTimeout(() => { if (ui.body) ui.body.scrollTop = ui.body.scrollHeight; }, 320);
+    const b = ui.body;
+    if (!b) return;
+    if (b.scrollHeight - b.scrollTop - b.clientHeight > 120) { ui.atBottom = false; return; }
+    ui.atBottom = true;
+    const pin = () => {
+      if (!ui || !ui.body || !ui.atBottom) return;
+      try { ui.body.scrollTop = ui.body.scrollHeight; } catch {}
+    };
+    [0, 120, 320, 700, 1000].forEach(ms => setTimeout(pin, ms));
   });
   // 输入 `/` 弹指令面板，输入 `@` 弹文件引用
   const slashBox = el('div', { class:'slash' });
@@ -2696,7 +3530,13 @@ function renderSession(wrap) {
         if (a.previewUrl) openImageFull(a.previewUrl);
       }});
       if (a.previewUrl) chip.append(el('img', { src: a.previewUrl, alt: a.name || '' }));
-      else chip.append(el('span', { class:'attdoc', text:'📎' }));
+      else {
+        const vid = isVideoFile(a);
+        chip.append(el('span', { class:'attdoc', text: vid ? '🎬' : '📎' }));
+        chip.title = vid
+          ? `${a.name || '视频'}：会作为文件路径发送，App 内不能播放`
+          : (a.name || '');
+      }
       if (a.uploading) {
         chip.append(el('div', { class:'attprog', style:`width:${Math.round((a.progress||0)*100)}%` }));
         chip.append(el('div', { class:'attpct', text:Math.round((a.progress||0)*100) + '%' }));
@@ -2744,7 +3584,7 @@ function renderSession(wrap) {
     const notes = [];
     for (const a of atts) {
       if (a.uploadId) blocks.push({ type:'image', mediaType: a.mediaType, uploadId: a.uploadId });
-      else if (a.path) notes.push(`📎 已上传文件：${a.path}`);
+      else if (a.path) notes.push(`${isVideoFile(a) ? '🎬 已上传视频' : '📎 已上传文件'}：${a.path}`);
     }
     const fullText = [text, ...notes].filter(Boolean).join('\n');
     if (fullText) blocks.unshift({ type:'text', text: fullText });
@@ -2797,10 +3637,15 @@ function renderSession(wrap) {
     fileInput.value = '';
     for (const f of files) {
       const mediaType = f.type || 'image/jpeg';
+      const isImg = /^image\//i.test(mediaType);
       state.pending.push({
         file: f, mediaType, name: f.name,
-        previewUrl: URL.createObjectURL(f), progress: 0, uploading: false,
+        // 视频（以及其它非图片）不建 objectURL：<img> 显示 video 的 URL 只会裂图
+        previewUrl: isImg ? URL.createObjectURL(f) : null, progress: 0, uploading: false,
       });
+      if (isVideoFile({ mediaType, name: f.name })) {
+        toast('视频会作为文件路径发送，App 内不能播放');
+      }
     }
     renderAttach();
   });
@@ -2815,10 +3660,12 @@ function renderSession(wrap) {
       state.busy = false; paintSession();
     } catch (e) { toast('取消失败：' + (e.message || e)); }
   }});
+  const qDock = el('div', { class:'qdock' });
   const dock = el('div', { class:'dock' },
-    strip,
     slashBox,
     attach,
+    qDock,
+    strip,
     el('div', { class:'composer' }, ta,
       el('div', { class:'crow' },
         el('button', { class:'plus', text:'+', onclick: () => fileInput.click() }),
@@ -2829,6 +3676,7 @@ function renderSession(wrap) {
 
   // 回到底部 + 新消息提示
   const jump = el('button', { class:'jump', text:'↓ 回到底部', onclick: () => {
+    ui.atBottom = true;
     body.scrollTop = body.scrollHeight; state.unseen = 0; updateJump();
   }});
   function updateJump() {
@@ -2837,8 +3685,11 @@ function renderSession(wrap) {
     jump.textContent = state.unseen > 0 ? `↓ ${state.unseen} 条新消息` : '↓ 回到底部';
   }
   body.addEventListener('scroll', () => {
-    const far = body.scrollHeight - body.scrollTop - body.clientHeight > 240;
+    const distance = body.scrollHeight - body.scrollTop - body.clientHeight;
+    const far = distance > 240;
     if (!far) state.unseen = 0;
+    // 记录「用户是不是在看最新消息」：键盘弹起、窗口缩放、贴底校正都靠它判断
+    if (ui && ui.body === body) ui.atBottom = distance < 90;
     updateJump();
   }, { passive: true });
 
@@ -2854,7 +3705,7 @@ function renderSession(wrap) {
   }
 
   ui = { sessionId: state.sessionId, body, listWrap, cardsWrap, ta, sendBtn, stopBtn, strip, dot, modelEl: modelRow,
-    jump, updateJump, loadStats: loadSessionStats, keys: [], nodes: [], prevCount: undefined };
+    qDock, jump, updateJump, loadStats: loadSessionStats, keys: [], nodes: [], cardsKey: '', prevCount: undefined, atBottom: true };
   paintSession({ scroll:'bottom' });
   // 进会话直接定位到底部 + 聚焦输入框（iOS 上焦点可能被系统拦，忽略即可）
   requestAnimationFrame(() => { body.scrollTop = body.scrollHeight; });
@@ -2998,18 +3849,101 @@ async function queueEdit(it, old) {
   toast('已撤回，改完直接发送');
 }
 
+const queueOpen = new Set();
+function toggleQueueItem(id) {
+  if (queueOpen.has(id)) queueOpen.delete(id);
+  else queueOpen.add(id);
+  paintSession();
+}
+
 function renderQueueItem(it) {
   const text = queueText(it);
-  return el('div', { class:'qitem' },
-    el('div', { class:'qhead' },
-      el('span', { class:'qtag', text:'排队中' }),
-      el('span', { style:'flex:1' }),
+  const open = queueOpen.has(it.id);
+  const preview = text.replace(/\s+/g, ' ').trim().slice(0, 60) || '(空消息)';
+  const item = el('div', { class:'qitem' + (open ? ' open' : '') });
+  item.append(el('div', { class:'qhead', onclick: (e) => {
+    if (e.target.closest('button')) return;
+    toggleQueueItem(it.id);
+  }},
+    el('span', { class:'qtag', text:'排队中' }),
+    el('span', { class:'qprev', text:preview }),
+    el('span', { class:'qchev', text:open ? '▾' : '▸' }),
+  ));
+  if (open) {
+    item.append(el('div', { class:'qacts' },
       el('button', { class:'qmini', text:'删除', onclick: () => queueAct(it, { kind:'remove' }, '已删除') }),
       el('button', { class:'qmini', text:'编辑', onclick: () => queueEdit(it, text) }),
       el('button', { class:'qmini primary', text:'立刻发送', onclick: () => queueAct(it, { kind:'steer' }, '已插话，马上处理') }),
-    ),
-    el('div', { class:'qtext', text }),
-  );
+    ));
+    item.append(el('div', { class:'qtext', text }));
+  }
+  return item;
+}
+
+async function copyText(text) {
+  const s = String(text == null ? '' : text);
+  try { await navigator.clipboard.writeText(s); return true; }
+  catch {
+    try {
+      const t = document.createElement('textarea');
+      t.value = s; t.style.position = 'fixed'; t.style.opacity = '0';
+      document.body.append(t); t.select();
+      const ok = document.execCommand('copy'); t.remove();
+      return ok;
+    } catch { return false; }
+  }
+}
+
+// 代码块右上角「复制」：只复制 code 内容，不混入按钮文字
+function decorateCodeCopies(mdNode) {
+  for (const pre of [...mdNode.querySelectorAll('pre.code')]) {
+    if (pre.parentElement && pre.parentElement.classList.contains('codewrap')) continue;
+    const wrap = el('div', { class:'codewrap' });
+    pre.replaceWith(wrap);
+    wrap.append(pre);
+    wrap.append(el('button', { class:'codecopy', text:'⧉ 复制', onclick: async (e) => {
+      e.stopPropagation();
+      const code = pre.querySelector('code');
+      const txt = (code ? code.textContent : pre.textContent) || '';
+      if (await copyText(txt)) toast('已复制代码');
+      else toast('复制失败');
+    }}));
+  }
+}
+
+function cancelBlockCopy(mdNode) {
+  if (!mdNode) return;
+  mdNode.classList.remove('pickcopy');
+  if (mdNode._copyHandler) mdNode.removeEventListener('click', mdNode._copyHandler, true);
+  mdNode._copyHandler = null;
+  if (mdNode._copyTimer) clearTimeout(mdNode._copyTimer);
+  mdNode._copyTimer = null;
+}
+
+// 「分段复制」：给每个顶层块（段落/标题/列表/引用/代码/表格）点一下复制本段
+function toggleBlockCopy(btn) {
+  const holder = btn.closest('.mholder');
+  const mdNode = holder && holder.querySelector('.md');
+  if (!mdNode) { toast('这条消息没有可复制的文本'); return; }
+  if (mdNode._copyHandler) { cancelBlockCopy(mdNode); toast('已退出分段复制'); return; }
+  mdNode.classList.add('pickcopy');
+  toast('点要复制的那一段');
+  const handler = async (e) => {
+    if (e.target.closest('.codecopy')) return;   // 代码块自己的复制按钮优先
+    const block = e.target.closest('.md > *');
+    if (!block) return;
+    e.preventDefault(); e.stopPropagation();
+    // 代码块外层有复制按钮，innerText 会把按钮文字带进去；只取 code 内容
+    const code = block.querySelector && block.querySelector('pre.code code');
+    const txt = code ? (code.textContent || '').trim() : (block.innerText || '').trim();
+    if (!txt) return;
+    if (await copyText(txt)) toast('已复制这一段');
+    else toast('复制失败');
+    cancelBlockCopy(mdNode);
+  };
+  mdNode._copyHandler = handler;
+  mdNode.addEventListener('click', handler, true);
+  mdNode._copyTimer = setTimeout(() => cancelBlockCopy(mdNode), 8000);
 }
 
 function msgActions(m, alignRight) {
@@ -3018,14 +3952,13 @@ function msgActions(m, alignRight) {
   if (text) {
     row.append(el('button', { onclick: async (e) => {
       e.stopPropagation();
-      try { await navigator.clipboard.writeText(text); }
-      catch {
-        const t = document.createElement('textarea');
-        t.value = text; document.body.append(t); t.select();
-        document.execCommand('copy'); t.remove();
-      }
-      toast('已复制这条消息');
+      if (await copyText(text)) toast('已复制这条消息');
+      else toast('复制失败');
     }}, '⧉ 复制'));
+    if (!alignRight) row.append(el('button', { onclick: (e) => {
+      e.stopPropagation();
+      toggleBlockCopy(e.currentTarget);
+    }}, '¶ 分段'));
   }
   const seq = Number.isSafeInteger(m && m.seq) ? m.seq : null;
   if (seq !== null && seq > 0) {
@@ -3065,15 +3998,29 @@ function renderMessage(m) {
 
   if (m.role === 'user') {
     const bubble = el('div', { class:'bubble', style: m.pending ? 'opacity:.55' : '' });
-    if (body) bubble.append(document.createTextNode(body));
+    // 附件（视频/文件）在正文里只有一行路径：拆出来渲染成文件卡，别让它看起来像一段乱码
+    const notes = splitAttachmentNotes(body);
+    if (notes.text) bubble.append(document.createTextNode(notes.text));
     if (gallery) bubble.append(gallery);
-    if (!body && !images.length) bubble.append(document.createTextNode('(空消息)'));
+    for (const p of notes.files) {
+      const vid = isVideoName(p);
+      bubble.append(el('div', { class:'filecard', onclick: () => openFileCard(p, vid) },
+        el('span', { class:'fico2', text: vid ? '🎬' : '📎' }),
+        el('div', { class:'fbody' },
+          el('b', { text: String(p).split(/[\\/]/).pop() || p }),
+          el('small', { text: vid ? '视频文件 · 作为路径发送，App 内不能播放' : '文件 · 作为路径发送' }))));
+    }
+    if (!notes.text && !notes.files.length && !images.length) bubble.append(document.createTextNode('(空消息)'));
     return el('div', { class:'mholder' },
       attachMsgActions(el('div', { class:'msg user' }, bubble), body, m.time),
       msgActions(m, true));
   }
   const wrap = el('div', { class:'msg assistant' });
-  if (body) wrap.append(el('div', { class:'md', html: mdToHtml(body) }));
+  if (body) {
+    const mdNode = el('div', { class:'md', html: mdToHtml(body) });
+    decorateCodeCopies(mdNode);
+    wrap.append(mdNode);
+  }
   if (gallery) wrap.append(gallery);
   if (toolBlocks.length) {
     wrap.append(el('div', { class:'tools' }, toolBlocks.map(b =>
@@ -3085,6 +4032,34 @@ function renderMessage(m) {
 }
 
 // ---------------------------------------------------------------- 审批 / 提问卡
+// 提交后先让卡片收起到 0 高度，再从 state 移除并重绘。
+// 直接删会让 cardsWrap 高度瞬间少一截，对话流跟着跳；收起过程中若本来在底部就持续贴底。
+function dismissCard(c) {
+  return new Promise((resolve) => {
+    const node = c && c._node;
+    if (!node || !node.isConnected) { resolve(); return; }
+    const b = ui.body;
+    if (b && b.scrollHeight - b.scrollTop - b.clientHeight < 120) ui.atBottom = true;
+    const pin = () => { if (ui.body && ui.body.isConnected && ui.atBottom) ui.body.scrollTop = ui.body.scrollHeight; };
+    const h = node.getBoundingClientRect().height;
+    node.classList.add('closing');
+    node.style.height = h + 'px';
+    void node.offsetHeight;
+    requestAnimationFrame(() => {
+      node.style.height = '0px';
+      node.style.opacity = '0';
+      node.style.marginTop = '0px';
+      node.style.marginBottom = '0px';
+      node.style.paddingTop = '0px';
+      node.style.paddingBottom = '0px';
+      node.style.borderWidth = '0px';
+    });
+    pin();
+    const timer = setInterval(pin, 30);
+    setTimeout(() => { clearInterval(timer); resolve(); }, 200);
+  });
+}
+
 function renderCard(c) {
   // 帧有两种形状：顶层字段（approval/requested）与全部包在 data 里（approval/asked），统一摊平
   const d = (c.data && c.data.data) ? { ...c.data, ...c.data.data } : (c.data || {});
@@ -3114,33 +4089,50 @@ function renderCard(c) {
   }
   card.append(el('div', { class:'ct', text:'需要你回答' }));
   const qs = d.questions || [];
-  const picks = new Map(qs.map(q => [q.id, new Set()]));
+  // 选中状态挂在卡片对象上，而不是渲染闭包里：即便节点被重建，勾选也不会丢
+  const picks = c._picks || (c._picks = new Map(qs.map(q => [q.id, new Set()])));
   for (const q of qs) {
-    if (q.header) card.append(el('div', { class:'cmeta', text: q.header }));
-    card.append(el('div', { class:'cfact', style:'font-weight:600', text: q.question || q.id }));
-    if (q.detail) card.append(el('div', { class:'cmeta', text: q.detail }));
+    const block = el('div', { class:'qblock' });
+    if (q.header) block.append(el('div', { class:'cmeta', text: q.header }));
+    block.append(el('div', { class:'cfact', style:'font-weight:600', text: q.question || q.id }));
+    if (q.detail) block.append(el('div', { class:'cmeta', text: q.detail }));
     const labelOf = o => typeof o === 'string' ? o : (o.label ?? o.value ?? '');
+    const set = picks.get(q.id) || new Set();
+    picks.set(q.id, set);
+    const btns = [];
     for (const o of (q.options || [])) {
-      const btn = el('button', { class:'opt' },
-        el('div', { text: labelOf(o) }),
+      const l = labelOf(o);
+      const btn = el('button', { class:'opt' + (set.has(l) ? ' sel' : '') },
+        el('div', { text: l }),
         (o && o.description) ? el('small', { text: o.description }) : null);
       btn.addEventListener('click', () => {
-        const set = picks.get(q.id), l = labelOf(o);
         if (q.multiSelect) { set.has(l) ? set.delete(l) : set.add(l); }
         else { set.clear(); set.add(l); }
-        btn.classList.toggle('sel', set.has(l));
+        for (const b of btns) b.classList.toggle('sel', set.has(b.__label));
       });
-      card.append(btn);
+      btn.__label = l;
+      btns.push(btn);
+      block.append(btn);
     }
+    card.append(block);
   }
   card.append(el('div', { class:'acts' }, el('button', { class:'btn primary', onclick: async () => {
+    // 宿主侧「每题恰好一条答案」，空 selected 会被当成"没选"直接跳过；
+    // 这里先挡一道，避免一次误提交把整组问题都 skip 掉
+    const missing = qs.filter(q => !(picks.get(q.id) && picks.get(q.id).size));
+    if (missing.length) { toast(`还有 ${missing.length} 个问题没选`); return; }
     try {
       await api('/api/mobile/v1/question/respond', { method:'POST', body: {
         rpcId: d.rpcId, sessionId: d.sessionId || state.sessionId,
         answer: { answers: [...picks].map(([id, set]) => ({ id, selected: [...set] })) },
       }});
+      await dismissCard(c);
       state.cards = state.cards.filter(x => x !== c); paint();
-    } catch (e) { alert(String(e.message || e)); }
+      // 角标把「挂着的卡」算进待处理数：答完要立刻重算，并拉一次 fresh 列表
+      // 让 pendingInteraction 同步掉（/sessions 有 30 秒缓存）
+      syncBadge();
+      void refreshAll(true);
+    } catch (e) { toast('提交失败：' + String(e.message || e)); }
   }}, '提交')));
   return card;
 }
@@ -3153,7 +4145,11 @@ async function respondApproval(d, outcome, c) {
       approvalId: d.approvalId || d.id || (c && c.data && (c.data.approvalId || (c.data.data && c.data.data.id))),
       outcome,
     }});
+    await dismissCard(c);
     state.cards = state.cards.filter(x => x !== c); paint();
+    // 同提问卡：答完立刻重算角标，并 fresh 一次让 pendingInteraction 跟上
+    syncBadge();
+    void refreshAll(true);
   } catch (e) { toast(String(e.message || e)); }
 }
 
@@ -3241,13 +4237,17 @@ async function refreshAll(force=false) {
     state.sessions = s.items || [];
     state.workspaces = w.items || [];
     saveListCache(state.sessions);
+    // 设备流里记下的「别的会话待处理」：强制刷新拿到的最新列表说没有了就撤掉
+    // （缓存响应可能滞后，所以只在 force 时清）
+    if (force && state.foreign && state.foreign.size) {
+      for (const [id, sid] of state.foreign) {
+        const sess = state.sessions.find(x => x.sessionId === sid);
+        if (!sess || !sess.pendingInteraction) state.foreign.delete(id);
+      }
+    }
     syncBadge();
     if (state.view === 'list') render();
-    else if (isWide()) {
-      // 宽屏下会话开着时，只刷左侧栏，不动右侧聊天（否则会打断输入、跳滚动位置）
-      const side = document.querySelector('.app.wide .side');
-      if (side) { side.replaceChildren(); renderList(side); }
-    }
+    else if (force) paintOpenDrawer();
   } catch (e) {
     if (['device-revoked','device-expired','unauthorized'].includes(e.code)) {
       state.token = ''; localStorage.clear(); render();
@@ -3283,7 +4283,10 @@ function pushCard(kind, frame) {
 }
 function pruneCards() {
   const now = Date.now();
+  const before = state.cards.length;
   state.cards = state.cards.filter(c => !c.at || now - c.at < 5 * 60 * 1000);
+  // 过期的卡不再算「待处理」，角标跟着掉
+  if (state.cards.length !== before) syncBadge();
 }
 
 function openSession(s) {
@@ -3296,6 +4299,8 @@ function openSession(s) {
   state.queue = [];
   state.modelGroups = []; state.modelMeta = null;
   state.sessionCwd = s.cwd || '';
+  // 本地已读水位：进来的这一刻就消点，不等宿主 readAt 落盘
+  markOpened(s.sessionId, s.lastTurn && s.lastTurn.endedAt);
   render();
   // 先拿本地缓存把内容画出来（秒开 / 离线也能看），再用网络结果覆盖
   const cachedMsgs = readMsgCache(s.sessionId);
@@ -3304,10 +4309,14 @@ function openSession(s) {
     paintSession({ scroll:'bottom' });
   }
   // 先取完消息拿到正确的 lastSeq，再订阅流：否则 lastSeq=0 会把历史帧（含旧审批）整体回放一遍
-  loadMessages().then(() => {
+  // force=true：打开会话（包括从通知点进来）一律落到最新一条，别停在历史位置
+  loadMessages(true).then(() => {
     loadModel(); subscribeSession();
+    // 图片/代码块加载后高度会变，再补两次贴底
+    requestAnimationFrame(() => { if (ui.body && ui.body.isConnected) ui.body.scrollTop = ui.body.scrollHeight; });
+    setTimeout(() => { if (ui.body && ui.body.isConnected) ui.body.scrollTop = ui.body.scrollHeight; }, 350);
     // 打开即视为已读（宿主侧有 readAt，图标角标也就跟着掉一个）
-    markRead(state.sessionId).then(() => { refreshAll(); syncBadge(); });
+    markRead(state.sessionId).then(() => { refreshAll(true); syncBadge(); });
   });
   // 兜底轮询：SSE 走不通时这条就是主通道，1.5 秒一次，保证"发完马上能看到"。
   // SSE 通的时候它会先到，轮询只是补漏（1.5s 内没有新内容就不会重绘，开销很小）。
@@ -3421,8 +4430,18 @@ function onFrame(frame) {
     if (state.view === 'session') paintSession();
     return;
   }
-  else if (t === 'approval/resolved' || t === 'approval/decided') state.cards = state.cards.filter(c => c.data.approvalId !== frame.approvalId);
-  else if (t === 'question/resolved') state.cards = state.cards.filter(c => c.data.rpcId !== frame.questionRpcId);
+  else if (t === 'approval/resolved' || t === 'approval/decided') {
+    const rid = frame.approvalId || (frame.data && frame.data.id);
+    const before = state.cards.length;
+    state.cards = state.cards.filter(c => c.id !== rid);
+    if (state.cards.length !== before) syncBadge();
+  }
+  else if (t === 'question/resolved') {
+    const rid = frame.questionId || frame.rpcId || (frame.data && frame.data.id);
+    const before = state.cards.length;
+    state.cards = state.cards.filter(c => c.id !== rid);
+    if (state.cards.length !== before) syncBadge();
+  }
   else if (t === 'session/event') {
     const ev = frame.event || {};
     const inner = (ev.data && ev.data.type) || (frame.data && frame.data.type) || ev.type || '';
@@ -3465,11 +4484,15 @@ function subscribeDevice() {
       if (t === 'approval/requested' || t === 'approval/asked' || t === 'question/requested') {
         const sid = p.sessionId || (p.data && p.data.sessionId);
         const id = p.approvalId || p.questionId || (p.data && p.data.id);
-        if (sid && state.sessionId && sid !== state.sessionId && id) {
-          state.foreign = state.foreign || new Set();
-          state.foreign.add(id);
+        // 当前会话的卡由 state.cards 负责，这里只记别的会话的
+        if (sid && id && sid !== state.sessionId) {
+          state.foreign = state.foreign || new Map();
+          state.foreign.set(id, sid);
           syncBadge();
         }
+      } else if (t === 'approval/resolved' || t === 'approval/decided' || t === 'question/resolved') {
+        const id = p.approvalId || p.questionId || (p.data && (p.data.id || p.data.approvalId));
+        if (id && state.foreign && state.foreign.delete(id)) syncBadge();
       }
     },
   });
@@ -3498,13 +4521,6 @@ function subscribeDevice() {
   installSwipeBack();
   installViewportSync();
   installOfflineBar();
-  // 跨过宽屏断点时重排（手机转平板 / 桌面拖窗口）
-  try {
-    const mq = window.matchMedia('(min-width: 900px)');
-    const onMq = () => { if (state.token) render(); };
-    if (mq.addEventListener) mq.addEventListener('change', onMq);
-    else if (mq.addListener) mq.addListener(onMq);
-  } catch {}
   if (state.token) {
     // ?lanbase=https://x:8443 强制走某条局域网入口（排障、换 SSID 时用）
     try {
@@ -3514,10 +4530,12 @@ function subscribeDevice() {
     // 锁了「仅局域网」就先定通道再拉数据；自动档放到后台探，别拖慢首屏
     if (state.mode === 'lan') await applyNetMode({ silent: true });
     state.booted = true;
-    refreshAll(); subscribeDevice();
+    consumePendingOpen();                          // 先按本地缓存的列表直接跳，别等网络
+    refreshAll().catch(() => {}).then(() => { consumePendingOpen(); });
+    subscribeDevice();
     if (state.mode === 'auto') applyNetMode({ silent: true }).catch(() => {});
     pushHeartbeat();
-    // 从通知点进来会带 ?session=<id>，等列表加载完再跳
+    // 从通知点进来会带 ?session=<id>（浏览器场景），等列表加载完再跳
     const wantSid = new URLSearchParams(location.search).get('session');
     if (wantSid) {
       setTimeout(() => {
@@ -3534,7 +4552,8 @@ document.addEventListener('visibilitychange', () => {
     (async () => {
       // 回前台先确认通道：从公司网络回到家、或手机刚连上 Wi-Fi，都靠这一下切过去
       try { await applyNetMode(); } catch {}
-      refreshAll();
+      consumePendingOpen();                          // 先按本地缓存的列表直接跳，别等网络
+      refreshAll().catch(() => {}).then(() => { consumePendingOpen(); });
       syncBadge();
       pushHeartbeat();
       if (state.view === 'session') { loadMessages(); subscribeSession(); }
