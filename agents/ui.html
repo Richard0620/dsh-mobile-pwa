@@ -245,7 +245,7 @@
     bar.classList.toggle('on', !!blocked);
     if (!blocked) return;
     $('#blockedWho').textContent = (a.name || a.agent) + ' · ' + pane;
-    const lines = lastText.trim().split('\n').slice(-8).join('\n');
+    const lines = lastText.trim().split('\n').filter((l) => l.trim()).slice(-5).join('\n');
     $('#blockedEx').textContent = lines;
     const acts = $('#blockedActs');
     if (!acts.childElementCount) {
