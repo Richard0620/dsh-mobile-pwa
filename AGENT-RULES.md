@@ -90,3 +90,24 @@ ssh root@38.189.61.57 "cat /srv/dsh-mobile/VERSION"
 - 不要两边同时 `scp` 到 `/srv/dsh-mobile`
 - 不要在 `pwa-b` 里再 `git init`（它是同一个仓库的 worktree）
 - 不要把 `node_modules`、`icon-src.png` 提交进去（已在 `.gitignore`）
+
+## 事故复盘：整文件覆盖 sw.js（2026-11-20 深夜）
+
+主会话为了加"通知点击跳转"，用新内容**整文件重写**了 `sw.js`，把并行会话刚加的
+`/agents/` 路由豁免覆盖掉了；同时版本号按记忆写成 v72（真实是 v87），线上版本戳因此是错的。
+
+**为什么 git 没拦住**：两边都在 `master` 上直接改同一个文件，提交时不会冲突——
+后提交的版本直接包含"被覆盖后的内容"，看起来是一次正常提交。
+
+### 新增硬规则
+
+1. **改版本号必须读当前值再 +1**：
+   ```powershell
+   $cur = [regex]::Match((Get-Content index.html -Raw -Encoding UTF8), "const APP_VERSION = '(v\d+)'").Groups[1].Value
+   ```
+   禁止按记忆写数字。
+2. **禁止整文件重写** `sw.js` / `index.html`。要改就做定点替换，改完 `git diff` 看一遍。
+3. **部署前先 `git log -1`**：如果最新提交不是你自己的，说明对方刚动过，先看清楚再动。
+4. **动 `sw.js` 时特别小心**：它里面的路由豁免列表（`/api/` `/push/` `/agents/` `/__lan_pair`）
+   是两边各自加过的，覆盖会让某些请求开始被 SW 拦截缓存。
+5. 冲突检测靠人：提交前 `git diff --stat` 只应该出现你打算改的文件。
