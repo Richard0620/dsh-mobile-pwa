@@ -331,6 +331,8 @@
   .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
   .btn.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,var(--line))}
   .btn.no{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,var(--line))}
+  .qblock{padding:8px 0 4px;border-top:1px dashed var(--line)}
+  .qblock:first-of-type{border-top:none;padding-top:0}
   .opt{display:block;width:100%;text-align:left;padding:10px 12px;border:1px solid var(--line);
     border-radius:12px;margin-top:7px;background:var(--card);font-size:14px}
   .opt.sel{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,var(--card))}
@@ -426,7 +428,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v67';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v68';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -2233,8 +2235,19 @@ function paintSession({ scroll = 'auto' } = {}) {
     hydrateAttachments(ui.listWrap);
   }
   pruneCards();
-  ui.cardsWrap.replaceChildren();
-  for (const c of state.cards) ui.cardsWrap.append(renderCard(c));
+  // 卡片必须增量渲染：以前每次 paint 都 replaceChildren + 重建，
+  // 流式期间每秒有几十次 paint，用户正在点的选项会被换掉 ——
+  // 表现就是"多问题时选项失效、而且失效得很快"。这里按卡片缓存节点。
+  const cardKey = state.cards.map(c => c.id).join('|');
+  if (cardKey !== ui.cardsKey) {
+    ui.cardsKey = cardKey;
+    ui.cardsWrap.replaceChildren();
+    for (const c of state.cards) {
+      // 节点还在就复用（已选中的选项、展开状态都保留），否则重建一次
+      if (!c._node || !c._node.isConnected) c._node = renderCard(c);
+      ui.cardsWrap.append(c._node);
+    }
+  }
   // 排队中的消息：主机把「正在跑的时候发的消息」放在 inbox 里排队
   if (!ui.qBox) ui.qBox = el('div', { class:'qlist' });
   if (state.queue && state.queue.length) {
@@ -2648,7 +2661,7 @@ function renderSession(wrap) {
   }
 
   ui = { sessionId: state.sessionId, body, listWrap, cardsWrap, ta, sendBtn, stopBtn, strip, dot, modelEl: modelRow,
-    jump, updateJump, loadStats: loadSessionStats, keys: [], nodes: [], prevCount: undefined };
+    jump, updateJump, loadStats: loadSessionStats, keys: [], nodes: [], cardsKey: '', prevCount: undefined };
   paintSession({ scroll:'bottom' });
   // 进会话直接定位到底部 + 聚焦输入框（iOS 上焦点可能被系统拦，忽略即可）
   requestAnimationFrame(() => { body.scrollTop = body.scrollHeight; });
@@ -2908,33 +2921,45 @@ function renderCard(c) {
   }
   card.append(el('div', { class:'ct', text:'需要你回答' }));
   const qs = d.questions || [];
-  const picks = new Map(qs.map(q => [q.id, new Set()]));
+  // 选中状态挂在卡片对象上，而不是渲染闭包里：即便节点被重建，勾选也不会丢
+  const picks = c._picks || (c._picks = new Map(qs.map(q => [q.id, new Set()])));
   for (const q of qs) {
-    if (q.header) card.append(el('div', { class:'cmeta', text: q.header }));
-    card.append(el('div', { class:'cfact', style:'font-weight:600', text: q.question || q.id }));
-    if (q.detail) card.append(el('div', { class:'cmeta', text: q.detail }));
+    const block = el('div', { class:'qblock' });
+    if (q.header) block.append(el('div', { class:'cmeta', text: q.header }));
+    block.append(el('div', { class:'cfact', style:'font-weight:600', text: q.question || q.id }));
+    if (q.detail) block.append(el('div', { class:'cmeta', text: q.detail }));
     const labelOf = o => typeof o === 'string' ? o : (o.label ?? o.value ?? '');
+    const set = picks.get(q.id) || new Set();
+    picks.set(q.id, set);
+    const btns = [];
     for (const o of (q.options || [])) {
-      const btn = el('button', { class:'opt' },
-        el('div', { text: labelOf(o) }),
+      const l = labelOf(o);
+      const btn = el('button', { class:'opt' + (set.has(l) ? ' sel' : '') },
+        el('div', { text: l }),
         (o && o.description) ? el('small', { text: o.description }) : null);
       btn.addEventListener('click', () => {
-        const set = picks.get(q.id), l = labelOf(o);
         if (q.multiSelect) { set.has(l) ? set.delete(l) : set.add(l); }
         else { set.clear(); set.add(l); }
-        btn.classList.toggle('sel', set.has(l));
+        for (const b of btns) b.classList.toggle('sel', set.has(b.__label));
       });
-      card.append(btn);
+      btn.__label = l;
+      btns.push(btn);
+      block.append(btn);
     }
+    card.append(block);
   }
   card.append(el('div', { class:'acts' }, el('button', { class:'btn primary', onclick: async () => {
+    // 宿主侧「每题恰好一条答案」，空 selected 会被当成"没选"直接跳过；
+    // 这里先挡一道，避免一次误提交把整组问题都 skip 掉
+    const missing = qs.filter(q => !(picks.get(q.id) && picks.get(q.id).size));
+    if (missing.length) { toast(`还有 ${missing.length} 个问题没选`); return; }
     try {
       await api('/api/mobile/v1/question/respond', { method:'POST', body: {
         rpcId: d.rpcId, sessionId: d.sessionId || state.sessionId,
         answer: { answers: [...picks].map(([id, set]) => ({ id, selected: [...set] })) },
       }});
       state.cards = state.cards.filter(x => x !== c); paint();
-    } catch (e) { alert(String(e.message || e)); }
+    } catch (e) { toast('提交失败：' + String(e.message || e)); }
   }}, '提交')));
   return card;
 }
@@ -3215,8 +3240,14 @@ function onFrame(frame) {
     if (state.view === 'session') paintSession();
     return;
   }
-  else if (t === 'approval/resolved' || t === 'approval/decided') state.cards = state.cards.filter(c => c.data.approvalId !== frame.approvalId);
-  else if (t === 'question/resolved') state.cards = state.cards.filter(c => c.data.rpcId !== frame.questionRpcId);
+  else if (t === 'approval/resolved' || t === 'approval/decided') {
+    const rid = frame.approvalId || (frame.data && frame.data.id);
+    state.cards = state.cards.filter(c => c.id !== rid);
+  }
+  else if (t === 'question/resolved') {
+    const rid = frame.questionId || frame.rpcId || (frame.data && frame.data.id);
+    state.cards = state.cards.filter(c => c.id !== rid);
+  }
   else if (t === 'session/event') {
     const ev = frame.event || {};
     const inner = (ev.data && ev.data.type) || (frame.data && frame.data.type) || ev.type || '';
