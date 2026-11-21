@@ -207,14 +207,20 @@ function createPushNotifier(deps) {
     return Math.min(unread + pending, 99);
   }
   function mirrorToWebPush(payload) {
+    try { return mirrorToWebPush2(payload); } catch (e) { console.error('[mirror] threw', e && e.message); }
+  }
+  function mirrorToWebPush2(payload) {
     const target = webPushTarget();
     if (!target) return;
     const title = (payload && typeof payload.title === 'string' && payload.title) || 'DSH';
     const body = (payload && typeof payload.body === 'string') ? payload.body : '';
     const kind = payload && payload.pushKind;
     const sessionId = payload && payload.sessionId;
-    const label = kind === 'approval' ? '待审批' : kind === 'question' ? '有问题'
-      : kind === 'done' ? '已完成' : '提醒';
+    const label = kind === 'approval' ? '待审批'
+      : kind === 'question' ? '有问题'
+      : (kind === 'done' || kind === 'completed') ? '已完成'
+      : kind === 'failed' ? '失败'
+      : '提醒';
     const badge = badgeNumber(sessionId);
     const json = JSON.stringify({
       title: 'DSH · ' + label + ' · ' + title,

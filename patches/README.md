@@ -38,3 +38,16 @@
 1. 把本目录的 `push-notify.js` 与新版对比，重新插入上面几处
 2. 或者直接 `cp patches/push-notify.js "$DSH_PROFILE_DIR/node_modules/dsh-mobile-plugin/lib/mobile/"`
 3. 重启 DSH 生效
+
+## 状态：自动更新已关闭（2026-11-21，用户操作）
+
+用户在 DSH UI 里关闭了 `dsh-mobile-plugin` 的自动更新。此前它一天内升了三次
+（0.5.88 → 0.5.91 → 0.5.93），每次都把本目录的补丁冲掉，导致"改了却看不到效果"。
+
+**若补丁再次消失**（`mirrorToWebPush` 数量为 0），按以下顺序查：
+
+1. 插件版本是否变了 → `(Get-Content "$env:DSH_PROFILE_DIR\node_modules\dsh-mobile-plugin\package.json" -Raw | ConvertFrom-Json).version`
+2. 变了解释：有人重新开了自动更新，或手动升级了插件 → 按本目录 README 重新贴补丁
+3. 没变还消失 → 检查是不是别的会话覆盖过这个文件（`git log` 里搜 push-notify）
+
+重贴后**必须重启 DSH** 才生效（Node 模块加载后不热更新）。

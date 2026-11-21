@@ -165,6 +165,7 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, { ok: true, skipped: 'active', sent: 0, dropped: 0, failed: 0 });
       }
     }
+    console.log('[notify]', payload.kind || '-', JSON.stringify(payload.title || ''), 'badge=' + (payload.badge === undefined ? '-' : payload.badge));
     const results = await broadcast(payload);
     return json(res, 200, { ok: true, ...results });
   }
