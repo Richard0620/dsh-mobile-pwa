@@ -2048,6 +2048,8 @@ async function openPushSettings() {
   const items = [];
   if (st === 'off') items.push({ label:'开启通知提醒', icon:'🔔', run: enablePush });
   if (st === 'on') items.push({ label:'关闭通知提醒', icon:'🔕', run: disablePush });
+  items.push({ label: (alwaysDone() ? '完成时总是推送：已开' : '完成时总是推送：已关'), icon: '📣',
+    run: () => { setAlwaysDone(!alwaysDone()); pushHeartbeat(); openPushSettings(); } });
   items.push({ label:'重新检测', icon:'🔄', run: openPushSettings });
   items.push({ label:'重新加载', icon:'↻', run: reloadApp });
 
@@ -2090,9 +2092,13 @@ async function disablePush() {
 }
 
 // 告诉服务端"我正在看"，宿主据此决定要不要推
+const ALWAYS_DONE_KEY = 'dsh.push.alwaysDone';
+function alwaysDone() { try { return localStorage.getItem(ALWAYS_DONE_KEY) === '1'; } catch { return false; } }
+function setAlwaysDone(v) { try { localStorage.setItem(ALWAYS_DONE_KEY, v ? '1' : '0'); } catch {} }
+
 function pushHeartbeat() {
   try {
-    api('/push/active', { method:'POST', auth:false, body: { deviceId: pushDeviceId() } }).catch(() => {});
+    api('/push/active', { method:'POST', auth:false, body: { deviceId: pushDeviceId(), alwaysDone: alwaysDone() } }).catch(() => {});
   } catch {}
 }
 

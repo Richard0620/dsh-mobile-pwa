@@ -31,19 +31,21 @@ webpush.setVapidDetails(SUBJECT, PUB, PRIV);
 // ---------------------------------------------------------------- 订阅存储
 let subs = [];   // [{ deviceId, endpoint, keys:{p256dh,auth}, at, ua }]
 let active = {}; // { deviceId: lastActiveAt }
+let prefs = {};   // { deviceId: { alwaysDone } }
 
 function load() {
   try {
     const j = JSON.parse(readFileSync(DATA, 'utf8'));
     subs = Array.isArray(j.subs) ? j.subs : [];
     active = j.active && typeof j.active === 'object' ? j.active : {};
+    prefs = j.prefs && typeof j.prefs === 'object' ? j.prefs : {};
   } catch { subs = []; active = {}; }
 }
 function save() {
   try {
     mkdirSync(dirname(DATA), { recursive: true });
     const tmp = DATA + '.tmp';
-    writeFileSync(tmp, JSON.stringify({ subs, active, savedAt: Date.now() }));
+    writeFileSync(tmp, JSON.stringify({ subs, active, prefs, savedAt: Date.now() }));
     renameSync(tmp, DATA);
   } catch (e) { console.error('保存失败', e.message); }
 }
@@ -116,6 +118,7 @@ const server = http.createServer(async (req, res) => {
     subs = subs.filter(s => s.endpoint !== sub.endpoint);      // 同一端点只留一条
     subs.push({ deviceId, endpoint: sub.endpoint, keys: sub.keys, at: Date.now(), ua: String(b.ua || '').slice(0, 120) });
     active[deviceId] = Date.now();
+    if (typeof b.alwaysDone === 'boolean') prefs[deviceId] = { alwaysDone: b.alwaysDone };
     save();
     return json(res, 200, { ok: true, subs: subs.length });
   }
@@ -135,6 +138,7 @@ const server = http.createServer(async (req, res) => {
     try { b = await readBody(req); } catch {}
     const deviceId = String(b.deviceId || '').slice(0, 80) || 'unknown';
     active[deviceId] = Date.now();
+    if (typeof b.alwaysDone === 'boolean') prefs[deviceId] = { alwaysDone: b.alwaysDone };
     save();
     return json(res, 200, { ok: true });
   }
@@ -155,8 +159,9 @@ const server = http.createServer(async (req, res) => {
     // 「已完成 / 失败」这类：你刚还在 App 里（60 秒内有心跳）就别打扰
     if (payload.kind && /^(completed|failed|done|turn-end)$/.test(String(payload.kind))) {
       const quietMs = Number(process.env.DONE_QUIET_MS || 60000);
+      const anyAlways = Object.values(prefs).some((p) => p && p.alwaysDone);
       const last = Object.values(active).reduce((a, b) => Math.max(a, Number(b) || 0), 0);
-      if (last && Date.now() - last < quietMs) {
+      if (!anyAlways && last && Date.now() - last < quietMs) {
         return json(res, 200, { ok: true, skipped: 'active', sent: 0, dropped: 0, failed: 0 });
       }
     }
