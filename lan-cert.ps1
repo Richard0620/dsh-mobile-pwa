@@ -38,7 +38,8 @@ else {
     ForEach-Object { $_.IPAddress })
 }
 foreach ($extra in $AlsoIps) { $ips += ($extra -split '[,，\s]+') }
-$ips = $ips | Where-Object { $_ } | ForEach-Object { $_.Trim() } | Select-Object -Unique
+# 必须 @() 包一层：只有一个 IP 时管线会塌成标量字符串，$ips[0] 就成了首字符（曾把 CN 写成 "1"）
+$ips = @($ips | Where-Object { $_ } | ForEach-Object { $_.ToString().Trim() } | Select-Object -Unique)
 
 if (-not $ips -or $ips.Count -eq 0) { throw '找不到内网 IP，用 -Ip 指定一个' }
 foreach ($one in $ips) {
