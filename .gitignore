@@ -1,5 +1,8 @@
-﻿icon-src.png
+icon-src.png
 *.log
 node_modules/
 push/node_modules/
 .DS_Store
+# 自签证书里带私钥，绝不入库
+certs/
+*.pfx
