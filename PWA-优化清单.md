@@ -1,107 +1,122 @@
-# DSH Mobile PWA —— 剩余优化清单
+# DSH Mobile PWA —— 优化清单与进度（唯一台账）
 
-> 写给接手的会话：这是一份**待办清单**，不是设计文档。
-> 每条都标了「问题 / 建议 / 涉及位置 / 怎么算做完」。
-> 当前线上版本以 `ssh root@38.189.61.57 cat /srv/dsh-mobile/VERSION` 为准。
-
-生成时间：2026-11-20 晚 · 对应代码 `D:\Vibe\PWA\pwa`（master）
+> **所有会话、子代理都只改这一份。** 开工前先读；完成一项或发版后立刻更新状态，不要另建清单，也不要只把进度写在聊天里。
+>
+> 最后更新：2026-11-21 · 线上 **v83 / sw v84**（以 `ssh root@38.189.61.57 cat /srv/dsh-mobile/VERSION` 为准）
+> 代码主目录：`D:\Vibe\PWA\pwa`（master，主会话负责合并与部署）
 
 ---
 
-## 0. 先读这几条约定（避免又把文件搞乱）
+## 0. 协作约定（多会话必读）
 
 | 事项 | 规则 |
 |---|---|
-| 仓库 | `D:\Vibe\PWA\pwa` = `master`（主会话，负责合并与部署）<br>`D:\Vibe\PWA\pwa-b` = `feature/parallel`（另一个会话） |
-| 冲突面 | 单文件应用，冲突只会出现在 `index.html`；改完必须 `git commit` |
-| 版本号 | `index.html` 的 `APP_VERSION`、`sw.js` 的 `CACHE` 名**必须同时 +1**，否则手机看到的是旧缓存 |
-| 部署 | 只有主会话部署；`deploy.ps1` 会写 `/srv/dsh-mobile/VERSION` 版本戳 |
-| 语法检查 | 每次改完必须 `node --check` 抽取出的 `<script type="module">` 内容 |
+| 仓库 / 工作区 | `pwa` = `master`（主会话，合并 + 部署）；`pwa-b` = `feature/parallel`；`pwa-c` = `feature/lan`；`pwa-d` = 临时功能分支目录（按需 `git switch -C`） |
+| 待办台账 | **本文**。新优化点加进对应优先级；完成后改状态并写版本，不允许只记在聊天里 |
+| 状态标记 | ✅ 已完成 / 已上线　🟡 进行中 / 待决策　⬜ 未开始　⛔ 不做 |
+| 冲突面 | 单文件应用，冲突只会出现在 `index.html`；动手前先 `git merge master`（或从最新 master 开分支） |
+| 版本号 | `index.html` 的 `APP_VERSION` 与 `sw.js` 的 `CACHE` 一起 +1（CACHE = APP+1），否则手机看到旧缓存 |
+| 部署 | 只有主会话部署；`deploy.ps1` 会写 `/srv/dsh-mobile/VERSION` |
+| 语法检查 | 每次改完抽取 `<script type="module">` 跑 `node --check`（见第 7 节） |
+| 提交 | 一个功能一个 commit；提交信息带版本号（如 `feat: xxx（v83）`） |
 
 ---
 
-## 1. P0 —— 影响日常使用，建议优先
+## 1. 进度快照
 
-### 1.1 推送角标与客户端角标"打架"
+| 版本 | 内容 | 状态 |
+|---|---|---|
+| v81 / sw v82 | P0：1.1 推送/客户端角标同公式、1.2 本地已读水位；P1：2.1–2.7 全部 | ✅ 已上线 |
+| v83 / sw v84 | 2.8 全局置顶；2.9 每个工作区默认 5 条 + 显示更多 | ✅ 已上线 |
+| 待定 | 1.3 桌面两栏布局 | 🟡 待用户拍板 |
 
-**问题**：推送 payload 里的 `badge` 是发送方拍的数字；App 一打开，`syncBadge()` 会用真实未读数（`lastTurn.endedAt > readAt`）覆盖它。两边数字不一致时用户会看到"跳变"。
-
-**建议**：让推送 payload 的 `badge` 也由**宿主**按同一公式算：
-`未读会话数 + 待处理审批数`。宿主要在发推送前查一次 sessions（或者推送服务自己查）。
-
-**涉及**：`push/server.mjs`（发送前算）、`~/.dsh/.../push-notify.js` 的 `mirrorToWebPush`
-**验收**：手机图标数字在"关着 App 收到推送"和"打开 App"前后不再跳变。
-
-### 1.2 未读蓝点依赖宿主 `readAt`，有延迟风险
-
-**问题**：v71 已做乐观更新（`markRead` 成功后本地把 `lastTurn.readAt` 置为当前时间）+ `refreshAll(true)` 绕过 30 秒缓存。但如果宿主对 `readAt` 的写入本身有延迟/失败，蓝点还是会回来。
-
-**建议**：再加一层**纯本地水位**：`localStorage` 里记 `{sessionId: lastOpenAt}`，未读判定改成
-`lastTurn.endedAt > max(host.readAt, localLastOpenAt)`。
-这样即使宿主不更新，本地也能消点。
-
-**涉及**：`isUnread()`、`openSession()`
-**验收**：点进会话再返回，蓝点立刻消失，且重新打开 App 后仍然没有。
-
-### 1.3 桌面两栏布局是否保留
-
-**问题**：`≥900px` 时会切成"左侧会话栏 + 右侧聊天"。用户明确说过**主要用手机**，这个桌面形态可能没人用。
-
-**建议**：二选一
-- 保留但把断点提到 `≥1200px`（平板横屏也不触发）
-- 直接删掉 `renderWide()` / `.app.wide` 相关代码，减少维护面
-
-**涉及**：`render()`、`renderWide()`、CSS `.app.wide`
-**验收**：手机/平板横屏都是单栏，桌面宽屏行为符合选择。
+> 1.1 的**宿主补丁**已装进插件，但需要重启 DSH 才加载，见第 6 节。
 
 ---
 
-## 2. P1 —— 体验打磨
+## 2. P0（影响日常使用）
 
-### 2.1 消息时间分隔的时间来源
-现在用 `message.time`，间隔 >10 分钟或跨天插一条。可考虑改成"按天分隔 + 悬停显示精确时间"，手机上现在略密。
+### 1.1 推送角标与客户端角标"打架" ✅（v81；宿主补丁待 DSH 重启）
 
-### 2.2 图片查看器没有缩放
-现在 `object-fit: contain` + 点击关闭，长截图要看清细节只能截屏放大。
-**建议**：加双指缩放（CSS `touch-action: pinch-zoom` + `transform: scale` 至少要做到不被浏览器手势抢走）。
+- **已完成**：镜像到 Web Push 的帧带 `badge`，由宿主按「未读会话数 + 待处理会话数」计算；客户端的 `unreadCount()` 改成同一口径（`pendingInteraction` + 本地卡按会话去重），App 打开时不再跳变。读不到台账就**不带 badge**，不发假数字。
+- 宿主补丁在 `patches/push-notify.js`，已装到 `~/.dsh/profiles/desktop/node_modules/dsh-mobile-plugin/lib/mobile/push-notify.js`（原文件有 `.bak` 备份）。
+- **待做**：重启 DSH 后看 `journalctl -u dsh-push -f` 是否出现带 badge 的 `[notify]` 帧。
+- **验收**：杀掉 App → 触发一轮完成 / 审批 → 看主屏图标数字；打开 App 时数字不跳变（= 未读会话 + 待处理会话）。
 
-### 2.3 代码块高亮过于简陋
-`hl()` 是单趟正则，只分字符串/注释/数字/关键字。常见问题：JSX、YAML、多行字符串会串色。
-**建议**：要么接入一个 <10KB 的轻量高亮（Prism 的核心子集），要么限制只对 `js/ts/sh/json/py` 高亮，其他语言保持纯文本。
+### 1.2 未读蓝点依赖宿主 `readAt`，有延迟风险 ✅（v81）
 
-### 2.4 长会话渲染
-现在是分窗 120 条 + 「显示更早」。几百条滚动仍可能掉帧。
-**建议**：真虚拟列表（只渲染视口附近），或至少把已渲染节点做成 `content-visibility: auto`。
+- **已完成**：`localStorage.dsh.read` 记本地已读水位（`{sessionId: 打开时的 lastTurn.endedAt}`），未读判定取 `max(host.readAt, 本地水位)`；`openSession` / `markRead` 都写入，最多保留 60 条。用 `endedAt` 而不是 `Date.now()`，不受手机与电脑时钟偏差影响。
+- **验收**：点进有蓝点的会话再返回 → 蓝点立刻消失；杀进程重开 → 仍然没有；新跑一轮 → 重新出现。
 
-### 2.5 附件：视频只能变成路径文本
-`session/send` 只接受 `text` / `image` 块，视频走"上传 + 把路径拼进正文"。
-**建议**：至少在气泡里识别自己是视频路径，渲染成一个可点播放的缩略（需要能拿到文件流），否则维持现状但**在 UI 上说明**这是文件不是图片。
+### 1.3 桌面两栏布局是否保留 🟡 待用户拍板
 
-### 2.6 搜索只有本地
-服务端 `session/search` 在该部署被关（`openAt "never"`），现在只过滤标题 + 最近一条。
-**建议**：把本地搜索扩展到**已缓存的消息正文**（`dsh.cache.msgs` 里已有最近 120 条/会话），命中后显示片段。
-
-### 2.7 已归档视图的实现需要复核
-另一个会话用「`archived=1` 全量 - 默认列表」做差集（宿主忽略 `archived` 参数）。
-**建议**：验证边界——空归档时是否显示"没有归档"、差集运算是否会因分页/缓存漏项。参考 `state.tab === 'archived'` 分支。
+- **问题**：`≥900px` 会切成「左侧会话栏 + 右侧聊天」。用户明确说过主要用手机；iPad 横屏（1024–1366）都会触发两栏。
+- **现状（调研结论）**：约 41 行、全在 `index.html`：`isWide()`（4 处调用）、`renderWide()`（~21 行）、`.app.wide` 相关 CSS（~7 行）；顺带发现宽屏下 ☰ 与常驻列表重复、文件/Git 视图左栏浪费、跨断点 resize 会整页重渲染。
+- **两个选项**：
+  - **A. 断点提高 / 只认精细指针**：改 `isWide()` + 启动 `matchMedia` 两处；推荐写成 `(min-width:900px) and (hover:hover) and (pointer:fine)`，触屏一律单栏。代价是宽屏分支继续维护。
+  - **B. 删掉 `renderWide()` / `.app.wide`**：约 41 行，桌面退回居中单栏；回滚就是 revert 一个 commit。子代理倾向 B（用户主要用手机）。
+- **决定后**：单独一个 commit；验收手机/平板横屏都是单栏，桌面行为符合选择。
 
 ---
 
-## 3. P2 —— 功能补齐（AI-HUB 有，我们没有）
+## 3. P1（体验打磨）
+
+### 2.1 消息时间分隔 ✅（v81）
+
+改为按天分隔（今天 / 昨天 / M月D日 / YYYY年），精确时间放 `title`，手机点分隔条 toast；增量渲染 key 带上日期+标签，跨午夜会重算。
+
+### 2.2 图片查看器缩放 ✅（v81）
+
+双指 1–5x、放大后单指拖动带边界、双击 2.5x/还原、桌面滚轮；`touch-action:none` + 非 passive `touchmove`，不被 iOS 页面手势抢走；拖动/双击的合成 click 不会误关。
+
+### 2.3 代码块高亮 ✅（v81）
+
+按语言白名单：js/ts/jsx/tsx、json、py、sh（及 bash/zsh 等别名）；yaml/html/diff/无标注代码块保持纯文本；文件查看器按扩展名判断。修掉 YAML/JSX 串色、json 数字被当注释、sh `#` 在字符串里误判。
+
+### 2.4 长会话渲染 ✅（v81，低风险档）
+
+`.mholder` 加 `content-visibility:auto; contain-intrinsic-size:auto 140px`；滚到底后 120ms 再校正一次（用户已上翻则不动）。**真虚拟列表仍未做**；iOS <18 会忽略该属性（等同未改）。
+
+### 2.5 附件：视频只能变成路径文本 ✅（v81，兜底档）
+
+视频不建 `objectURL`（以前用 `<img>` 显示 video URL 会裂图），缩略图显示 🎬，选择时 toast 说明，发送标记 `🎬 已上传视频：路径`；用户气泡拆出文件卡（文件名/「视频文件 · App 内不能播放」/点开复制路径或打开目录）。**没有伪造播放**：内嵌播放需要宿主提供文件流接口（当前 ⛔）。
+
+### 2.6 搜索只有本地 ✅（v81，扩展到缓存正文）
+
+在标题 + 最近一条之外，搜 `dsh.cache.msgs`（每个会话最近 120 条、最多 10 个会话），命中显示「我/助手：…片段」+「缓存消息命中 N 条」；标题命中优先，最多 40 条。没打开过的会话仍只搜标题/预览；服务端 `session/search` 在该部署被关（`openAt "never"`）。
+
+### 2.7 已归档视图 ✅（v81）
+
+实测当前宿主 `archived=1` 已只返回归档子集（10 条）而默认列表 15 条、集合无重叠；现在直接使用归档结果，仅在返回里出现默认列表会话（旧宿主全量）时做「全量−默认」兜底；两边 `fresh=1`；归档页不再显示搜不到东西的搜索框。
+
+### 2.8 置顶改成全局置顶 ✅（v83）
+
+- **问题**：置顶只在所在工作区里排最前，换一个文件夹就看不到，等于「文件夹内排序」。
+- **实现**：列表顶部新增「📌 置顶」分组，跨工作区聚合所有 `pinned` 会话（按更新时间排序、可折叠、计数）；置顶会话不再在各自文件夹里重复出现；取消置顶后回到原文件夹。
+- **验收**：在 PWA、CRM 各置顶一条 → 顶部「置顶」同时出现；取消其中一条 → 它回到对应文件夹；折叠「置顶」不影响文件夹折叠状态。
+
+### 2.9 每个工作区默认最多 5 条，其余收进「显示更多」 ✅（v83）
+
+- **实现**：分组内按更新时间排序，默认只渲染 5 条；超出时底部显示「显示更多（还有 N 条）」，点开展开全部并变成「收起」。展开状态是本次会话内存态，刷新后回到 5 条。
+- **验收**：任意工作区会话 >5 条 → 默认只看到 5 条 + 更多入口；展开能看到全部、可收起；搜索/归档视图不受影响。
+
+---
+
+## 4. P2（功能补齐，AI-HUB 有我们没有）
 
 | 功能 | 说明 | 依赖 |
 |---|---|---|
-| 多设备/多宿主切换 | 现在固定一个 instanceId | 需要凭据切换 UI + localStorage 多份 |
+| 多设备 / 多宿主切换 | 现在固定一个 `instanceId` | 需要凭据切换 UI + localStorage 多份 |
 | 语音输入 | AI-HUB 有麦克风 | 浏览器 `MediaRecorder` + 宿主侧无 STT 接口，可能做不了 |
 | `/` 指令的真实执行 | 面板已有，选中只是插入文本 | 需确认 `/compact` 等是否走 `session/send` 的文本 |
 | `@` 引用的目录跳转 | 现在只列当前 cwd 一层 | 加"进入子目录"交互 |
-| 统计：按模型/按天明细 | 现在只有 7 天总量 + 柱状图 | `stats/overview` 已给 `models[]`、`days[]` |
+| 统计：按模型 / 按天明细 | 现在只有 7 天总量 + 柱状图 | `stats/overview` 已给 `models[]`、`days[]` |
 | 主题手动切换 | 只跟随系统 | 加 `data-theme` + 开关 |
 | 国际化 | 文案中英混杂、部分中文硬编码在 JS 里 | 抽 `i18n` 表 |
 
 ---
 
-## 4. 明确"不要做"或"做不了"的
+## 5. 明确"不要做"或"做不了"的
 
 | 项 | 原因 |
 |---|---|
@@ -109,10 +124,11 @@
 | 锁屏推送（不装 Web Push） | PWA 被挂起/杀掉后没有进程，必须靠 Web Push |
 | 服务端内容检索 | 部署侧 `session-query` 的 `openAt` 是 `never`，接口直接 400 |
 | 改 `dsh-mobile-plugin` 上游 | 已有本地补丁（`patches/`），升级后要重新套用，不要 fork 整个包 |
+| 视频内嵌播放 | `session/send` 只收 text/image，宿主没有文件流接口；当前只做文件卡 + 路径 |
 
 ---
 
-## 5. 推送系统现状（重要背景）
+## 6. 推送系统现状（2026-11-21）
 
 ```
 DSH 插件 sendFrame() ──► ~/.dsh/webpush.json ──► https://dsh.easymana.online:8443/push/notify
@@ -122,16 +138,14 @@ DSH 插件 sendFrame() ──► ~/.dsh/webpush.json ──► https://dsh.easym
                                              Apple 推送 → iPhone
 ```
 
-- **已通**：VPS 服务、VAPID、订阅（`subs=1`）、SW 的 `push`/`notificationclick`、角标
-- **未生效**：插件里的镜像出口**需要 DSH 重启才加载**（当前进程从早上 8:30 一直没重启）
-- **完成类推送**只在"你不在看"时发（60 秒心跳窗口）；审批/提问无条件发
-- 补丁位置：`patches/push-notify.js` + `patches/README.md`
-
-**接手后第一件事**：让用户重启 DSH，然后看 `journalctl -u dsh-push -f` 里有没有 `[notify]` 行。
+- **已通**：VPS 服务、VAPID、订阅（`subs=1`）、SW 的 `push`/`notificationclick`、角标。
+- **补丁已装、未生效**：`patches/push-notify.js` 已覆盖 `~/.dsh/profiles/desktop/node_modules/dsh-mobile-plugin/lib/mobile/push-notify.js`（备份 `.bak.1795245255`），**需要重启 DSH** 才加载新模块。
+- **验证**：重启后 `journalctl -u dsh-push -f` 应出现带 `badge` 的 `[notify]` 帧；没重启时推送只是不带 badge（不会发错数字），不要据此判断代码失败。
+- **完成类推送**只在"你不在看"时发（60 秒心跳窗口）；审批/提问无条件发。
 
 ---
 
-## 6. 验收方式（每次改动）
+## 7. 验收方式（每次改动）
 
 ```powershell
 cd D:\Vibe\PWA\pwa
@@ -139,8 +153,10 @@ cd D:\Vibe\PWA\pwa
 $m = [regex]::Match((Get-Content index.html -Raw -Encoding UTF8), '(?s)<script type="module">(.*?)</script>')
 $m.Groups[1].Value | Set-Content $env:TEMP\app.mjs -Encoding UTF8
 node --check $env:TEMP\app.mjs
-# 2. 版本号 +1（APP_VERSION 与 sw.js CACHE）
-# 3. 部署（只有主会话）
+# 2. 版本号 +1（APP_VERSION 与 sw.js CACHE，CACHE = APP+1）
+# 3. 部署（只有主会话；deploy.ps1 会写 VERSION）
 ./deploy.ps1
 # 4. 手机上：杀进程重开 → ☰ 看版本号
 ```
+
+**更新本文的时机**：开工前读最新状态；完成一项就改对应条目的状态与版本；每次发版更新第 1 节「进度快照」和第 6 节推送现状。这样任何会话接进来都能从这一页知道进度。
