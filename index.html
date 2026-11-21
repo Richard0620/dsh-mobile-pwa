@@ -182,6 +182,14 @@
   .rplist .frow .fico{width:22px;text-align:center;flex:none}
   .rplist .chev{color:var(--dim);font-size:14px;flex:none}
   .rpsect{font-size:11.5px;color:var(--dim);padding:8px 2px 2px}
+  /* 新建工作区：目录选择器 */
+  .rpickbar{flex:none;padding:8px 12px 0;border-bottom:1px solid var(--line);background:var(--bg)}
+  .rppath{font-size:12px;line-height:1.4;color:var(--dim);background:var(--card);
+    border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:0 0 6px;word-break:break-all}
+  .rproots{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 8px}
+  .rproot{font-size:12px;padding:2px 10px;border:1px solid var(--line);border-radius:999px;
+    background:var(--card);color:var(--dim)}
+  .rproot.on{color:#fff;background:var(--accent);border-color:var(--accent)}
 
   /* 全屏文件查看器 */
   .viewer{position:fixed;inset:0;z-index:1100;background:var(--bg);display:flex;flex-direction:column}
@@ -432,7 +440,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v73';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v75';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -721,6 +729,7 @@ const state = {
   filesListing: null,
   filesError: '',
   showHidden: false,
+  roots: null,
   sessionCwd: '',
   gitWs: '',
   gitData: null,
@@ -1159,14 +1168,36 @@ function openWorkspaceMenu(g) {
   if (items.length) openSheet(items, g.name || '工作区');
 }
 
+// 新建工作区 = 在电脑的目录树里「点进去选」，不是让手机键盘敲一条绝对路径。
+// 起始目录优先当前会话所在目录（最常加的往往就是它旁边），否则由宿主回主目录。
 async function newWorkspace() {
-  const path = prompt('要被采纳为工作区的目录（电脑上的绝对路径）', 'D:\\Vibe\\');
-  if (path === null || !path.trim()) return;
+  let roots = [];
+  try { roots = await loadRoots(); } catch {}
+  await openFileDrawer(state.sessionCwd || '', { pick: true, roots });
+}
+
+// 盘符/挂载卷清单：宿主主目录永远在 C 盘（macOS 在 /Users/…），没有这一层就跨不到别的盘。
+// 只成功一次就记住；失败也不挡路——目录树本身还能用，只是少了盘符入口。
+async function loadRoots() {
+  if (Array.isArray(state.roots)) return state.roots;
   try {
-    const r = await api('/api/mobile/v1/workspace/create', { method:'POST', body: { path: path.trim() } });
+    const r = await api('/api/mobile/v1/directory/roots');
+    state.roots = (r.roots || []).filter(x => x && typeof x.path === 'string' && x.path);
+  } catch { state.roots = []; }
+  return state.roots;
+}
+
+async function createWorkspaceAt(path) {
+  const t = String(path || '').trim();
+  // 盘符根 "D:\" 去掉尾部分隔符会变成没有意义的 "D:"，单独保住。
+  const target = /^[A-Za-z]:[\\/]$/.test(t) ? t : t.replace(/[\\/]+$/, '');
+  if (!target) { toast('路径是空的'); return false; }
+  try {
+    const r = await api('/api/mobile/v1/workspace/create', { method:'POST', body: { path: target } });
     await refreshAll(true);
-    toast(r.created ? '已添加工作区' : '这个目录已经在列表里了');
-  } catch (e) { toast('添加失败：' + (e.message || e)); }
+    toast(r.created ? '已添加工作区：' + target : '这个目录已经在列表里了');
+    return true;
+  } catch (e) { toast('添加失败：' + (e.message || e)); return false; }
 }
 
 // 连接信息：延迟 + 中转健康
@@ -1287,6 +1318,12 @@ async function fetchListing(path) {
   return r.listing || null;
 }
 
+/** 两个目录路径是否同一层：Windows 不区分大小写，尾部分隔符不算差异。 */
+function samePath(a, b) {
+  const norm = (x) => String(x || '').replace(/[\\/]+/g, '/').replace(/\/+$/, '').toLowerCase();
+  return norm(a) === norm(b);
+}
+
 function closeRPanel() {
   const m = document.querySelector('.rpanel-mask');
   if (!m) return;
@@ -1305,8 +1342,10 @@ const fileIcon = (kind, name) => {
   return '📄';
 };
 
-async function openFileDrawer(path) {
+async function openFileDrawer(path, opts = {}) {
   closeRPanel();
+  const pick = !!opts.pick;                       // 工作区选择模式：只列目录，底部给「用这个文件夹」
+  const roots = Array.isArray(opts.roots) ? opts.roots : [];
   const mask = el('div', { class:'rpanel-mask', onclick: (e) => { if (e.target === mask) closeRPanel(); } });
   const panel = el('div', { class:'rpanel' });
   const st = { path: path || state.sessionCwd || '', listing: null, filter: '', showHidden: false, err: '',
@@ -1315,19 +1354,37 @@ async function openFileDrawer(path) {
 
   const nav = async (p) => {
     st.err = '';
+    st.filter = '';   // 换一层目录时旧的筛选词会把新目录过滤成「空」
     try { st.listing = await fetchListing(p); st.path = (st.listing && st.listing.path) || p; }
     catch (e) { st.listing = null; st.err = '打不开这个目录：' + (e.message || e); }
     paint();
   };
 
   const head = el('div', { class:'drhead' },
-    el('button', { class:'ico', text:'‹', onclick: closeRPanel }),
-    el('b', { text:'目录' }),
+    el('button', { class:'ico', text: pick ? '✕' : '‹', onclick: closeRPanel }),
+    el('b', { text: pick ? '选择工作区目录' : '目录' }),
     el('span', { style:'flex:1' }),
   );
 
+  // 选择模式：完整路径与盘符固定在列表上方，滚动时不会跟着跑掉
+  const pickbar = el('div', { class:'rpickbar' });
+  function paintPickbar() {
+    if (!pick) return;
+    pickbar.replaceChildren(el('div', { class:'rppath', text: '当前目录：' + (st.path || '…') }));
+    const bar = el('div', { class:'rproots' });
+    const chip = (name, target, on) => el('span', { class:'rproot' + (on ? ' on' : ''), text: name,
+      onclick: target ? () => nav(target) : null });
+    const L = st.listing;
+    if (L && L.home) bar.append(chip('主目录', L.home, samePath(st.path, L.home)));
+    if (roots.length > 1) {
+      for (const r of roots) bar.append(chip(r.name, r.path, samePath(st.path, r.path)));
+    }
+    if (bar.children.length) pickbar.append(bar);
+  }
+
   function paint() {
     body.replaceChildren();
+    if (pick) paintPickbar();
     if (st.err) { body.append(el('div', { class:'empty', text: st.err })); return; }
     const L = st.listing;
     if (!L) { body.append(el('div', { class:'empty', text:'加载中…' })); return; }
@@ -1347,16 +1404,18 @@ async function openFileDrawer(path) {
       const byName = (a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN', { numeric: true });
       const byTime = (a, b) => (b.modified || 0) - (a.modified || 0);
       const dirs = all.filter(e => e.kind === 'folder' && e.name.toLowerCase().includes(q)).sort(byName);
-      const files = all.filter(e => e.kind !== 'folder' && e.name.toLowerCase().includes(q))
+      const files = pick ? [] : all.filter(e => e.kind !== 'folder' && e.name.toLowerCase().includes(q))
         .sort(st.sort === 'time' ? byTime : byName);
       counts.replaceChildren(
-        el('span', { text: `${dirs.length} 个文件夹 · ${files.length} 个文件` }),
+        el('span', { text: pick ? `${dirs.length} 个文件夹` : `${dirs.length} 个文件夹 · ${files.length} 个文件` }),
         el('span', { style:'flex:1' }),
-        el('button', { class:'ico', text: st.sort === 'time' ? '🕒' : '⇅',
-          title: st.sort === 'time' ? '按修改时间排序' : '按名称排序',
-          onclick: () => { st.sort = st.sort === 'time' ? 'name' : 'time'; paintList(); } }),
-        el('button', { class:'ico', text: st.selecting ? '☑' : '☐', title:'多选引用',
-          onclick: () => { st.selecting = !st.selecting; if (!st.selecting) st.selected.clear(); paintList(); paintFoot(); } }),
+        ...(pick ? [] : [
+          el('button', { class:'ico', text: st.sort === 'time' ? '🕒' : '⇅',
+            title: st.sort === 'time' ? '按修改时间排序' : '按名称排序',
+            onclick: () => { st.sort = st.sort === 'time' ? 'name' : 'time'; paintList(); } }),
+          el('button', { class:'ico', text: st.selecting ? '☑' : '☐', title:'多选引用',
+            onclick: () => { st.selecting = !st.selecting; if (!st.selecting) st.selected.clear(); paintList(); paintFoot(); } }),
+        ]),
         el('button', { class:'ico', text:'⟳', title:'刷新', onclick: () => nav(st.path) }),
       );
       listBox.replaceChildren();
@@ -1402,6 +1461,32 @@ async function openFileDrawer(path) {
 
   function paintFoot() {
     foot.replaceChildren();
+    if (pick) {
+      const mkdir = async () => {
+        const name = prompt('新文件夹名字');
+        if (!name || !name.trim()) return;
+        try {
+          await api('/api/mobile/v1/directory/create', { method:'POST', body: { path: st.path, name: name.trim() } });
+          nav(st.path);
+        } catch (e) { toast('新建失败：' + (e.message || e)); }
+      };
+      const manual = async () => {
+        const typed = prompt('电脑上的绝对路径（例如 D:\\Vibe\\项目）', st.path || '');
+        if (typed === null || !typed.trim()) return;
+        if (await createWorkspaceAt(typed)) closeRPanel();
+      };
+      foot.append(
+        el('button', { class:'drbtn', style:'color:#fff;background:var(--accent);border-color:var(--accent);'
+            + 'font-size:13px;padding:8px 14px', onclick: async () => {
+          if (!st.path) { toast('还没进到目录里'); return; }
+          if (await createWorkspaceAt(st.path)) closeRPanel();
+        } }, '✓ 用这个文件夹'),
+        el('button', { class:'drbtn', onclick: mkdir }, '📁 新建文件夹'),
+        el('button', { class:'drbtn', onclick: () => { st.showHidden = !st.showHidden; nav(st.path); } }, '👁 隐藏文件'),
+        el('button', { class:'drbtn', onclick: manual }, '⌨ 手输路径'),
+      );
+      return;
+    }
     if (st.selecting) {
       foot.append(
         el('button', { class:'drbtn', onclick: () => { st.selecting = false; st.selected.clear(); paint(); } }, '取消'),
@@ -1428,7 +1513,7 @@ async function openFileDrawer(path) {
   }
   paintFoot();
 
-  panel.append(head, body, foot);
+  panel.append(head, ...(pick ? [pickbar] : []), body, foot);
   // 面板内右滑关闭
   let rx = 0, ry = 0, drag = false;
   panel.addEventListener('touchstart', (e) => {
