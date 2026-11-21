@@ -275,6 +275,11 @@
     display:grid;place-items:center;margin-right:-4px}
   .row .rowmore:active{background:var(--bubble)}
   .pinmark{font-size:10px;margin-right:2px;opacity:.85}
+  /* 「显示更多」：每个工作区默认只露 5 条会话 */
+  .showmore{display:block;width:100%;background:none;border:0;border-top:1px dashed var(--line);
+    color:var(--accent);font-size:12.5px;padding:10px 0 4px;margin-top:2px;text-align:center;
+    font-family:inherit;cursor:pointer}
+  .showmore:active{opacity:.6}
 
   /* 搜索栏 */
   .searchrow{padding:2px 2px 8px}
@@ -457,7 +462,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v81';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v83';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -812,6 +817,7 @@ const state = {
   device: null,
   cards: [],
   collapsed: new Set(JSON.parse(localStorage.getItem(LS.collapsed) || '[]')),
+  expandedGroups: new Set(),
   model: null,
   busy: false,
   stream: 'idle',
@@ -2419,9 +2425,60 @@ function renderList(wrap, opts = {}) {
     main.append(el('div', { class:'empty', html:'还没有会话<br>下拉或点右上角刷新' }));
   }
 
-  // 按工作区分组；不属于任何工作区的按 cwd 兜底
+  // 单行会话：列表分组与全局置顶共用（长按 / 桌面右键出会话菜单）
+  function sessionRow(s) {
+    const more = el('button', { class:'rowmore', text:'⋯', onclick: (e) => {
+      e.stopPropagation();
+      openSessionMenu(s);
+    }});
+    const row = el('div', { class: isUnread(s) ? 'row hot' : 'row', onclick: () => { if (row.__lp) { row.__lp = false; return; } openSession(s); } },
+      el('span', { class: s.running ? 'dot run' : 'dot' }),
+      el('div', { class:'body' },
+        el('div', { class:'t' },
+          s.pinned ? el('span', { class:'pinmark', text:'📌' }) : null,
+          el('span', { class:'title', text: s.title || '(无标题)' }),
+          isUnread(s) ? el('span', { class:'unread', title:'有未查看的新回复' }) : null,
+          el('span', { class:'time', text: fmtTime(s.updatedAt) })),
+        s.lastMessage ? el('div', { class:'preview prev', text:
+          `${s.lastMessage.role === 'user' ? '我' : '助手'}：${plain(s.lastMessage.text)}` }) : null,
+      ),
+      more);
+    // 长按（或桌面右键）出菜单：重命名 / 置顶
+    let lp = null;
+    const arm = () => { lp = setTimeout(() => { row.__lp = true; openSessionMenu(s); }, 480); };
+    const disarm = () => { if (lp) { clearTimeout(lp); lp = null; } };
+    row.addEventListener('touchstart', arm, { passive: true });
+    row.addEventListener('touchend', disarm, { passive: true });
+    row.addEventListener('touchmove', disarm, { passive: true });
+    row.addEventListener('contextmenu', (e) => { e.preventDefault(); openSessionMenu(s); });
+    return row;
+  }
+
+  // 全局置顶：跨工作区聚合到最上方；置顶会话不再在各自文件夹里重复出现
+  const pinnedItems = state.sessions.filter(s => s.pinned)
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  if (pinnedItems.length) {
+    const pinKey = 'pin:global';
+    const pinClosed = state.collapsed.has(pinKey);
+    const pinHead = el('div', { class: `ghead${pinClosed ? ' closed' : ''}`, onclick: () => {
+      if (state.collapsed.has(pinKey)) state.collapsed.delete(pinKey); else state.collapsed.add(pinKey);
+      localStorage.setItem(LS.collapsed, JSON.stringify([...state.collapsed]));
+      render();
+    }},
+      el('span', { class:'chev', text:'▼' }),
+      el('span', { text:'📌' }),
+      el('span', { class:'gname', text:'置顶' }),
+      el('span', { class:'count', style:'margin-left:auto', text: String(pinnedItems.length) }),
+    );
+    const pinBox = el('div', { class:'group' }, pinHead);
+    if (!pinClosed) for (const s of pinnedItems) pinBox.append(sessionRow(s));
+    main.append(pinBox);
+  }
+
+  // 按工作区分组；不属于任何工作区的按 cwd 兜底。置顶的已在上面统一展示。
   const groups = new Map();
   for (const s of state.sessions) {
+    if (s.pinned) continue;
     const w = workspaceOf(s.sessionId);
     const key = w ? `w:${w.workspaceId}` : `c:${s.cwd || '(未登记)'}`;
     const name = w ? (w.title || w.path) : (s.cwd ? s.cwd.split(/[\\/]/).pop() : '(未登记目录)');
@@ -2430,6 +2487,8 @@ function renderList(wrap, opts = {}) {
   }
   const order = [...state.workspaces.map(w => `w:${w.workspaceId}`), ...groups.keys()];
   const keys = [...new Set(order)].filter(k => groups.has(k));
+  // 每个文件夹默认只露 5 条，其余点「显示更多」展开
+  const PREVIEW_COUNT = 5;
 
   for (const k of keys) {
     const g = groups.get(k);
@@ -2453,35 +2512,16 @@ function renderList(wrap, opts = {}) {
     head.addEventListener('contextmenu', (e) => { e.preventDefault(); openWorkspaceMenu(g); });
     const box = el('div', { class:'group' }, head);
     if (!closed) {
-      // 置顶优先，其次按更新时间
-      const sorted = g.items.slice().sort((a, b) =>
-        ((b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)) || ((b.updatedAt || 0) - (a.updatedAt || 0)));
-      for (const s of sorted) {
-        const more = el('button', { class:'rowmore', text:'⋯', onclick: (e) => {
-          e.stopPropagation();
-          openSessionMenu(s);
-        }});
-        const row = el('div', { class: isUnread(s) ? 'row hot' : 'row', onclick: () => { if (row.__lp) { row.__lp = false; return; } openSession(s); } },
-          el('span', { class: s.running ? 'dot run' : 'dot' }),
-          el('div', { class:'body' },
-            el('div', { class:'t' },
-              s.pinned ? el('span', { class:'pinmark', text:'📌' }) : null,
-              el('span', { class:'title', text: s.title || '(无标题)' }),
-              isUnread(s) ? el('span', { class:'unread', title:'有未查看的新回复' }) : null,
-              el('span', { class:'time', text: fmtTime(s.updatedAt) })),
-            s.lastMessage ? el('div', { class:'preview prev', text:
-              `${s.lastMessage.role === 'user' ? '我' : '助手'}：${plain(s.lastMessage.text)}` }) : null,
-          ),
-          more);
-        // 长按（或桌面右键）出菜单：重命名 / 置顶
-        let lp = null;
-        const arm = () => { lp = setTimeout(() => { row.__lp = true; openSessionMenu(s); }, 480); };
-        const disarm = () => { if (lp) { clearTimeout(lp); lp = null; } };
-        row.addEventListener('touchstart', arm, { passive: true });
-        row.addEventListener('touchend', disarm, { passive: true });
-        row.addEventListener('touchmove', disarm, { passive: true });
-        row.addEventListener('contextmenu', (e) => { e.preventDefault(); openSessionMenu(s); });
-        box.append(row);
+      const sorted = g.items.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      const expanded = state.expandedGroups.has(k);
+      const visible = expanded ? sorted : sorted.slice(0, PREVIEW_COUNT);
+      for (const s of visible) box.append(sessionRow(s));
+      if (sorted.length > PREVIEW_COUNT) {
+        box.append(el('button', { class:'showmore', onclick: () => {
+          if (state.expandedGroups.has(k)) state.expandedGroups.delete(k);
+          else state.expandedGroups.add(k);
+          render();
+        }}, expanded ? '收起' : `显示更多（还有 ${sorted.length - PREVIEW_COUNT} 条）`));
       }
     }
     main.append(box);
