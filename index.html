@@ -2090,6 +2090,7 @@ async function openAbout() {
   const inst = (state.instanceId || '').slice(0, 8);
   openSheet([
     { label:'通知提醒', icon:'🔔', run: openPushSettings },
+    { label:'推送诊断', icon:'🩺', run: openPushDiag },
     { label:'重新加载', icon:'↻', run: reloadApp },
     { label:'恢复链接', icon:'🔗', run: openRecovery },
     { label:'清除缓存并重载', icon:'🧹', run: async () => {
@@ -2450,6 +2451,7 @@ function renderList(wrap, opts = {}) {
     { label:'终端', icon:'⌘', run: () => { location.href = '/agents/'; } },
     { label:'关于', icon:'ⓘ', run: openAbout },
     { label:'通知提醒', icon:'🔔', run: openPushSettings },
+    { label:'推送诊断', icon:'🩺', run: openPushDiag },
     { label:'重新加载', icon:'↻', run: reloadApp },
     { label:'恢复链接', icon:'🔗', run: openRecovery },
     { label:'退出登录', icon:'⏏', run: () => { localStorage.clear(); state.token=''; state.view='list'; render(); } },
