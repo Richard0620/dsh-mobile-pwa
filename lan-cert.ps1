@@ -14,24 +14,35 @@
 # 主屏安装和通知 —— https 或 localhost 才算。局域网 IP 永远是 http，所以必须自己签。
 param(
   [string]$Ip = '',
+  # 换 Wi-Fi 前先把常去的地址一起签进去（家里/公司/热点），之后不用重签
+  [string[]]$AlsoIps = @(),
   [string]$Out = (Join-Path $PSScriptRoot 'certs'),
   [string]$Passphrase = 'dsh-lan'
 )
 
 $ErrorActionPreference = 'Stop'
 
-if (-not $Ip) {
-  $Ip = (Get-NetIPAddress -AddressFamily IPv4 |
+# 默认把本机当前所有内网 IPv4 都签进去：多网卡（网线 + Wi-Fi）、多网段一次覆盖
+$ips = @()
+if ($Ip) { $ips += $Ip }
+else {
+  $ips += (Get-NetIPAddress -AddressFamily IPv4 |
     Where-Object { $_.IPAddress -notmatch '^(127\.|169\.254\.|198\.1[89]\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)' } |
     Sort-Object -Property SkipAsSource, InterfaceMetric |
-    Select-Object -First 1 -ExpandProperty IPAddress)
+    ForEach-Object { $_.IPAddress })
 }
-if (-not $Ip) { throw '找不到内网 IP，用 -Ip 指定一个' }
-if ($Ip -notmatch '^\d+\.\d+\.\d+\.\d+$') { throw "-Ip 要 IPv4 地址，收到：$Ip" }
+foreach ($extra in $AlsoIps) { $ips += ($extra -split '[,，\s]+') }
+$ips = $ips | Where-Object { $_ } | ForEach-Object { $_.Trim() } | Select-Object -Unique
+
+if (-not $ips -or $ips.Count -eq 0) { throw '找不到内网 IP，用 -Ip 指定一个' }
+foreach ($one in $ips) {
+  if ($one -notmatch '^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$') { throw "IP 要 IPv4 地址，收到：$one" }
+}
+$Ip = $ips[0]   # 第一个留给下面打印用
 
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
 $caName = 'DSH Mobile LAN CA'
-$leafName = "DSH Mobile LAN ($Ip)"
+$leafName = "DSH Mobile LAN ($($ips -join ', '))"
 
 # 1) 根 CA：只有它在手机上需要「完全信任」
 $ca = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -eq "CN=$caName" } | Select-Object -First 1
@@ -50,7 +61,8 @@ if (-not $ca) {
 }
 
 # 2) 服务端证书：SAN 里放 IP，iOS 只认 SAN，不看 CN
-$san = "2.5.29.17={text}IPAddress=$Ip&DNS=localhost"
+$sanParts = @($ips | ForEach-Object { "IPAddress=$_" }) + @('DNS=localhost')
+$san = "2.5.29.17={text}" + ($sanParts -join '&')
 $leaf = New-SelfSignedCertificate `
   -Subject "CN=$Ip" `
   -Signer $ca `
@@ -68,11 +80,13 @@ Export-PfxCertificate -Cert $leaf -FilePath $pfxPath -Password $pfxSecret | Out-
 Export-Certificate -Cert $ca -FilePath (Join-Path $Out 'lan-ca.cer') -Type CERT | Out-Null
 Export-Certificate -Cert $leaf -FilePath (Join-Path $Out 'lan-cert.cer') -Type CERT | Out-Null
 
-# 4) 自检：SAN 里必须真的有这个 IP，否则手机一定报证书错误
+# 4) 自检：SAN 里必须真的有每一个 IP，否则手机一定报证书错误
 $x509 = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($leaf.RawData)
 $sanText = ($x509.Extensions | Where-Object { $_.Oid.Value -eq '2.5.29.17' }).Format($false)
-if ($sanText -notmatch [regex]::Escape("IP Address=$Ip")) {
-  throw "证书 SAN 里没有 $Ip（实际：$sanText）"
+foreach ($one in $ips) {
+  if ($sanText -notmatch [regex]::Escape("IP Address=$one")) {
+    throw "证书 SAN 里没有 $one（实际：$sanText）"
+  }
 }
 
 # 本机自己也要信任这张 CA，否则电脑上 curl/Chrome 也会拦。
@@ -91,9 +105,9 @@ if ($env:DSH_LAN_NO_TRUST -ne '1') {
 }
 
 Write-Host ''
-Write-Host "内网 IP      $Ip"
+Write-Host "内网 IP      $($ips -join ', ')"
 Write-Host "服务端证书   $pfxPath   口令 $Passphrase"
-Write-Host "手机要装的   $(Join-Path $Out 'lan-ca.cer')"
+Write-Host "手机要装的   $(Join-Path $Out 'lan-ca.cer')（只需装一次，换网络不用重装）"
 Write-Host ''
 Write-Host '下一步：'
 Write-Host "  node lan-server.mjs --port 8443 --pfx `"$pfxPath`" --passphrase $Passphrase"
