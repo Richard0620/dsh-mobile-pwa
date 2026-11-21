@@ -3,7 +3,7 @@
    1. 让页面可安装（Android 上 WebAPK 需要 SW + fetch handler）
    2. 对静态外壳做离线兜底（API 与 SSE 一律不缓存、不拦截）
    3. 接收 Web Push：即使 App 已被杀掉，也能被推送唤醒并弹通知、点角标 */
-const CACHE = 'dsh-mobile-v78';
+const CACHE = 'dsh-mobile-v80';
 const SHELL = ['./', './index.html', './manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {

@@ -440,7 +440,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v77';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v79';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1060,15 +1060,15 @@ function workspaceOf(sessionId) {
 
 // 新建会话：先选工作区（AI-HUB 的新会话页也是这个模型），再让宿主建
 function openNewSessionSheet() {
-  // 最上面给「新建工作区…」：列表里没有的新目录，选完目录先采纳成工作区，
-  // 再直接在这个工作区里建会话——不用先退回列表加工作区、再点一次新建会话。
-  const items = [{ label: '新建工作区…', icon: '＋', run: newSessionInNewWorkspace }];
-  items.push(...state.workspaces.map(w => ({
+  // 已有工作区排在前面（日常多数是接着已有目录干活）；「新建工作区…」放最底下，
+  // 选完目录先采纳成工作区，再直接在这个工作区里建会话。
+  const items = state.workspaces.map(w => ({
     label: w.title || w.path,
     icon: '📁',
     run: () => createSession(w.workspaceId),
-  })));
+  }));
   items.push({ label: '默认工作区', icon: '＋', run: () => createSession(null) });
+  items.push({ label: '新建工作区…', icon: '＋', run: newSessionInNewWorkspace });
   openSheet(items, '新建会话 · 选择工作区');
 }
 
