@@ -1,5 +1,5 @@
 # Keep a reverse tunnel open: VPS 127.0.0.1:18888 -> host 127.0.0.1:18888
-$key = if ($env:AGENTS_SSH_KEY) { $env:AGENTS_SSH_KEY } else { 'D:\Vibe\CRM\.tools\id_rsa_relay' }
+$key = if ($env:AGENTS_SSH_KEY) { $env:AGENTS_SSH_KEY } else { 'D:\Vibe\.ssh\keys\id_rsa_relay' }
 $logDir = Join-Path $env:LOCALAPPDATA 'agents-bridge'
 New-Item -ItemType Directory -Force $logDir | Out-Null
 $log = Join-Path $logDir 'tunnel.log'
