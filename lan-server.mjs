@@ -85,6 +85,10 @@ const MIME = {
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
   '.txt': 'text/plain; charset=utf-8',
+  // iOS 认这个 content-type 才会弹「安装描述文件」，用 octet-stream 只会存进「文件」
+  '.cer': 'application/x-x509-ca-cert',
+  '.crt': 'application/x-x509-ca-cert',
+  '.mobileconfig': 'application/x-apple-aspen-config',
 };
 
 // 要转给插件的路径前缀。只放行这些，其余一律当静态文件。
@@ -142,6 +146,8 @@ async function serveStatic(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   let path = decodeURIComponent(url.pathname);
   if (path === '/' || path === '') path = '/index.html';
+  // 手机装证书的短地址：不用记路径，Safari 打开就直接弹「安装描述文件」
+  if (path === '/lan-ca.cer' || path === '/ca.cer') path = '/certs/lan-ca.cer';
 
   const file = normalize(join(flags.root, path));
   if (!file.startsWith(normalize(flags.root))) return send(res, 403, 'forbidden');

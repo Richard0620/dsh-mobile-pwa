@@ -184,11 +184,17 @@ git add index.html sw.js AGENT-RULES.md     # 只写你改过的文件
 ### 6. 远端（GitHub）：`main` 是唯一主线，本地叫 `master`
 
 - GitHub 上的默认分支叫 **`main`**；本地主线仍叫 `master`，两者**必须始终指向同一个提交**
-- 主会话每次把分支合进 `master` 后，**立刻**推送对齐：
+- **`main` 已加保护（2026-11-21）**：必须走 PR、禁止 force-push、禁止删除，管理员同样受限
+  - 直接 `git push origin master:main` 会被服务端拒绝：`GH006: Changes must be made through a pull request`
+  - **发布流程**：推 feature 分支 → 开 PR（base = `main`）→ 合并 → 本地 `master` 快进
   ```powershell
-  git push origin master:main        # 本地 master → 远端 main
-  git fetch origin && git rev-parse master origin/main   # 两个哈希必须相同
+  git push origin feature/xxx            # 推自己的分支（不需要 PR）
+  # 开 PR + 合并：网页点，或用 GitHub API（python + 系统代理 127.0.0.1:7897）
+  git fetch origin --quiet
+  git merge --ff-only origin/main        # 合并后本地 master 快进对齐
+  git rev-parse master origin/main       # 两个哈希必须相同
   ```
+
 - **其他会话（含并行、子会话）一律不准动 `master` / `main`**：只在自己的 feature 分支提交，
   由主会话合并。要发布就报告，不要自己 push 到 main
 - 部署前若 `master` 与 `origin/main` 不一致，**先对齐再部署**，避免线上版本和仓库对不上
