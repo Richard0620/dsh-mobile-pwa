@@ -6,7 +6,7 @@
    4. 记住"通知对应的会话"，让点击后能真正跳过去
       —— iOS 上点击通知只会用 start_url 拉起 App，URL 参数传不进来，
          notification.data 也不保证保留，所以必须自己持久化。 */
-const CACHE = 'dsh-mobile-v73';
+const CACHE = 'dsh-mobile-v89';
 const SHELL = ['./', './index.html', './manifest.webmanifest'];
 
 const OPEN_CACHE = 'dsh-open';
@@ -29,7 +29,7 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   // API / 推送 / 配对 / 流式一律直通网络（绝不缓存，绝不吃掉 SSE）
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/push/')
-      || url.pathname.startsWith('/__lan_pair')) return;
+      || url.pathname.startsWith('/__lan_pair') || url.pathname.startsWith('/agents/')) return;
   if (e.request.method !== 'GET') return;
 
   e.respondWith(
