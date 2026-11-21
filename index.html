@@ -428,7 +428,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v69';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v70';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1647,13 +1647,37 @@ function b64urlToU8(b64) {
 const withTimeout = (p, ms, fallback) =>
   Promise.race([p, new Promise(r => setTimeout(() => r(fallback), ms))]);
 
+// 之前页面根本没注册 SW —— sw.js 一直在，但没人 register，
+// 于是 serviceWorker.ready 永远不 resolve，推送和离线兜底都形同虚设。
+let swRegPromise = null;
+function ensureSW() {
+  if (!('serviceWorker' in navigator)) return Promise.resolve(null);
+  if (!swRegPromise) {
+    swRegPromise = navigator.serviceWorker.register('./sw.js', { scope: './' })
+      .catch(() => navigator.serviceWorker.getRegistration().catch(() => null));
+  }
+  return swRegPromise;
+}
+ensureSW();   // 脚本一加载就注册，别等用户点
+
+// 拿到一个可用的 registration（同样限时，避免 ready 永不 resolve 把界面卡死）
+async function getReg() {
+  await ensureSW();
+  const reg = await withTimeout(navigator.serviceWorker.ready, 5000, null)
+    || await navigator.serviceWorker.getRegistration().catch(() => null);
+  return reg;
+}
+
 async function pushStatus() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return 'unsupported';
   try {
-    // 注意：serviceWorker.ready 在没有活动 SW 时永不 resolve，必须限时
-    const reg = await withTimeout(navigator.serviceWorker.ready, 1500, null);
+    await ensureSW();
+    let reg = await withTimeout(navigator.serviceWorker.ready, 5000, null);
+    if (!reg) reg = await navigator.serviceWorker.getRegistration().catch(() => null);
     if (!reg) return 'nosw';
-    const sub = await withTimeout(reg.pushManager.getSubscription(), 1500, null);
+    // 有可能只是还在安装
+    if (!reg.active && (reg.installing || reg.waiting)) return 'installing';
+    const sub = await withTimeout(reg.pushManager.getSubscription(), 3000, null);
     if (sub) return 'on';
     return (typeof Notification !== 'undefined' && Notification.permission === 'denied') ? 'denied' : 'off';
   } catch { return 'off'; }
@@ -1667,12 +1691,14 @@ async function openPushSettings() {
     off: '未开启',
     denied: '系统里被拒绝，请去 设置 → 通知 里打开',
     unsupported: '这个浏览器不支持 Web Push（需要 iOS 16.4+ 且已添加到主屏）',
-    nosw: 'Service Worker 还没就绪，杀进程重开一次再试',
+    nosw: 'Service Worker 没注册上',
+    installing: 'Service Worker 正在激活，等 5 秒再点一次',
   }[st] || st;
 
   const items = [];
   if (st === 'off') items.push({ label:'开启通知提醒', icon:'🔔', run: enablePush });
   if (st === 'on') items.push({ label:'关闭通知提醒', icon:'🔕', run: disablePush });
+  items.push({ label:'重新检测', icon:'🔄', run: openPushSettings });
   items.push({ label:'重新加载', icon:'↻', run: reloadApp });
 
   openSheet(items, `通知提醒 · ${label}`);
@@ -1684,7 +1710,7 @@ async function enablePush() {
   const perm = await Notification.requestPermission();
   if (perm !== 'granted') { toast('通知权限被拒绝，去 设置 → Safari → 通知 里打开'); return; }
   try {
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await getReg();
     const vapid = await api('/push/vapid', { auth: false });
     if (!vapid || !vapid.publicKey) throw new Error('取不到 VAPID 公钥');
     const sub = await reg.pushManager.subscribe({
@@ -1703,7 +1729,7 @@ async function enablePush() {
 
 async function disablePush() {
   try {
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await getReg();
     const sub = await reg.pushManager.getSubscription();
     if (sub) {
       await api('/push/unsubscribe', { method:'POST', auth:false, body: { endpoint: sub.endpoint } }).catch(() => {});
