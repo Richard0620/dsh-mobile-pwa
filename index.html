@@ -2046,7 +2046,8 @@ async function loadArchived() {
   if (state.view === 'list' && state.tab === 'archived') render();
 }
 
-// ---------------------------------------------------------------- 缁堢鍒嗙粍锛坔erdr bridge锛?let termAgents = { items: [], at: 0, loading: false };
+// terminal group (herdr bridge)
+let termAgents = { items: [], at: 0, loading: false };
 function termToken() { return localStorage.getItem('bridge_token') || ''; }
 function loadTermAgents() {
   const tk = termToken();
