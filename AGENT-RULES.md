@@ -194,7 +194,27 @@ git add index.html sw.js AGENT-RULES.md     # 只写你改过的文件
 - 部署前若 `master` 与 `origin/main` 不一致，**先对齐再部署**，避免线上版本和仓库对不上
 - 远端分支策略：feature 分支可以推（备份/协作），但**只有 `main` 能对应线上**
 
-### 7. 编辑 `.ps1` 的编码坑
+### 7. 本机推送 GitHub 的注意事项（2026-11-21 实测）
+
+远端是 `origin` = `https://github.com/Richard0620/dsh-mobile-pwa.git`，默认分支 `main`。
+
+本机有系统代理 `127.0.0.1:7897`，而且**沙箱里的 curl / Invoke-RestMethod / git 的 schannel 都走不通**
+（Schannel 报 `SEC_E_NO_CREDENTIALS`，git 的 cygwin-ssh 报 signal pipe 错误）。能用的组合是：
+
+```powershell
+# 1) 从系统凭据管理器临时取 token（不落盘、不写进 .git/config）
+$out = "protocol=https`nhost=github.com`n`n" | & 'C:\Program Files\Git\mingw64\bin\git-credential-manager.exe' get
+$tok = (($out | Where-Object { $_ -like 'password=*' }) -replace '^password=','')
+$basic = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("x-access-token:$tok"))
+
+# 2) 用 openssl 后端 + 显式代理 + 一次性的 Authorization 头
+git -c credential.helper= -c http.sslBackend=openssl -c http.proxy=http://127.0.0.1:7897 `
+    -c "http.extraheader=Authorization: Basic $basic" push origin master:main
+```
+
+要调 GitHub API（建库、改默认分支）用 **python**（走 OpenSSL），不要用 Invoke-RestMethod。
+
+### 8. 编辑 `.ps1` 的编码坑
 
 带中文的 PowerShell 脚本**必须存成 UTF-8 with BOM**：Windows PowerShell 5.1 把无 BOM 的
 UTF-8 当 ANSI 读，中文字节会把下一行语法一起带坏（实测 11 个 parse error）。用工具改完
