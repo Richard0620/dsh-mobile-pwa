@@ -142,6 +142,21 @@
   .agp .md th{color:var(--dim);font-weight:600;font-size:12.5px}
   .agp .msg .bubble.tool{background:var(--bg);border:1px dashed var(--line);color:var(--dim);
     font:11.5px/1.45 ui-monospace,Consolas,monospace;border-radius:10px;max-width:94%;white-space:pre-wrap}
+  /* approval card, ported from the PWA */
+  .agp .card{border:1px solid var(--line);background:var(--card);border-radius:16px;padding:13px;margin:10px 0 4px;align-self:stretch}
+  .agp .card .ct{font-size:13px;font-weight:650;color:var(--warn);margin-bottom:6px}
+  .agp .card .cfact{font-size:14px;margin:4px 0}
+  .agp .card pre{font:12px/1.5 ui-monospace,Consolas,monospace;color:var(--dim);white-space:pre-wrap;
+    max-height:160px;overflow:auto;margin:8px 0 0}
+  .agp .card .acts{display:flex;gap:8px;margin-top:10px}
+  .agp .card .btn{flex:1;text-align:center;padding:9px;border-radius:12px;border:1px solid var(--line);
+    background:var(--card);font-size:14px;font-weight:600}
+  .agp .card .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .agp .card .btn.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,var(--line))}
+  .agp .card .btn.no{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,var(--line))}
+  .agp .tools{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-self:flex-start;max-width:88%}
+  .agp .tool{font-size:11.5px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:2px 8px;
+    max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -152,7 +167,7 @@
       <div class="title">终端</div>
       <div class="sub" id="conn">connecting…</div>
     </div>
-    <span class="ver">v6</span>
+    <span class="ver">v7</span>
     <span class="grow"></span>
     <div class="seg" id="seg"><button id="vChat">对话</button><button id="vTerm">终端</button></div>
     <button class="chip" id="startBtn">＋ claude</button>
@@ -371,14 +386,40 @@
           b.innerHTML = mdToHtml(m.text);
           row.appendChild(b);
         }
-        for (const t of (m.tools || [])) row.appendChild(E('div', { class: 'bubble tool' }, '\u2699 ' + t.name + '\n' + t.input));
+        if ((m.tools || []).length) {
+          const tw = E('div', { class: 'tools' });
+          for (const t of m.tools) { const chip = E('span', { class: 'tool' }, '\u2699 ' + t.name); chip.title = t.input || ''; tw.appendChild(chip); }
+          row.appendChild(tw);
+        }
         row.appendChild(E('div', { class: 'mtime' }, fmtClock(m.time)));
         box.appendChild(row);
       } else if (m.role === 'tool') {
         box.appendChild(E('div', { class: 'bubble tool' }, m.text));
       }
     }
+    appendApprovalCard(box);
     if (near) box.scrollTop = box.scrollHeight;
+  }
+
+  function appendApprovalCard(box) {
+    const a = chatAgent();
+    if (!a || a.agent_status !== 'blocked') return;
+    const card = E('div', { class: 'card' });
+    card.appendChild(E('div', { class: 'ct' }, '\u5DE5\u5177\u8BF7\u6C42\u786E\u8BA4'));
+    card.appendChild(E('div', { class: 'cfact' }, (a.name || a.agent || 'agent') + ' \u5728\u7B49\u4F60\u7684\u8F93\u5165'));
+    const lines = lastText.trim().split('\n').filter((l) => l.trim()).slice(-8).join('\n');
+    if (lines) card.appendChild(E('pre', {}, lines));
+    const mk = (label, k, cls) => { const b = E('button', { class: 'btn ' + (cls || '') }, label); b.onclick = () => key(k); return b; };
+    const a1 = E('div', { class: 'acts' });
+    a1.appendChild(mk('1', '1')); a1.appendChild(mk('2', '2')); a1.appendChild(mk('3', '3'));
+    card.appendChild(a1);
+    const a2 = E('div', { class: 'acts' });
+    a2.appendChild(mk('\u5141\u8BB8 (y)', 'y', 'ok')); a2.appendChild(mk('\u62D2\u7EDD (n)', 'n', 'no'));
+    card.appendChild(a2);
+    const a3 = E('div', { class: 'acts' });
+    a3.appendChild(mk('Enter', 'enter', 'primary')); a3.appendChild(mk('Esc', 'esc'));
+    card.appendChild(a3);
+    box.appendChild(card);
   }
   async function chatTick() {
     if (!pane || viewMode !== 'chat') return;
