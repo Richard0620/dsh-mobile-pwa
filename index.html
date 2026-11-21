@@ -426,7 +426,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v66';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v67';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1619,6 +1619,80 @@ async function ensureCommands() {
 }
 
 // ---------------- 关于 / 设置 ----------------
+// ---------------- Web Push（通知提醒） ----------------
+const PUSH_DEVICE_KEY = 'dsh.push.device';
+
+function pushDeviceId() {
+  let id = localStorage.getItem(PUSH_DEVICE_KEY);
+  if (!id) {
+    id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
+    localStorage.setItem(PUSH_DEVICE_KEY, id);
+  }
+  return id;
+}
+
+// VAPID 公钥是 base64url，订阅时要 Uint8Array
+function b64urlToU8(b64) {
+  const pad = '='.repeat((4 - (b64.length % 4)) % 4);
+  const s = (b64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(s);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+async function pushStatus() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return 'unsupported';
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) return 'on';
+    return (typeof Notification !== 'undefined' && Notification.permission === 'denied') ? 'denied' : 'off';
+  } catch { return 'off'; }
+}
+
+async function enablePush() {
+  if (!('Notification' in window)) { toast('这个浏览器不支持通知'); return; }
+  toast('正在申请通知权限…');
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') { toast('通知权限被拒绝，去 设置 → Safari → 通知 里打开'); return; }
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const vapid = await api('/push/vapid', { auth: false });
+    if (!vapid || !vapid.publicKey) throw new Error('取不到 VAPID 公钥');
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: b64urlToU8(vapid.publicKey),
+    });
+    await api('/push/subscribe', {
+      method: 'POST', auth: false,
+      body: { deviceId: pushDeviceId(), subscription: sub.toJSON(), ua: navigator.userAgent.slice(0, 120) },
+    });
+    toast('通知已开启');
+  } catch (e) {
+    toast('开启失败：' + (e.message || e));
+  }
+}
+
+async function disablePush() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      await api('/push/unsubscribe', { method:'POST', auth:false, body: { endpoint: sub.endpoint } }).catch(() => {});
+      await sub.unsubscribe().catch(() => {});
+    }
+    toast('通知已关闭');
+  } catch (e) { toast('关闭失败：' + (e.message || e)); }
+}
+
+// 告诉服务端"我正在看"，宿主据此决定要不要推
+function pushHeartbeat() {
+  try {
+    api('/push/active', { method:'POST', auth:false, body: { deviceId: pushDeviceId() } }).catch(() => {});
+  } catch {}
+}
+
 async function openAbout() {
   let devices = '';
   try {
@@ -1628,7 +1702,17 @@ async function openAbout() {
   } catch {}
   const host = location.host;
   const inst = (state.instanceId || '').slice(0, 8);
+  const ps = await pushStatus();
+  const pushLabel = ps === 'on' ? '关闭通知提醒'
+    : ps === 'denied' ? '通知已被拒绝（去系统设置里改）'
+    : ps === 'unsupported' ? '这个浏览器不支持通知'
+    : '开启通知提醒';
   openSheet([
+    { label: pushLabel, icon: '🔔', run: async () => {
+      if (ps === 'on') return disablePush();
+      if (ps === 'unsupported' || ps === 'denied') return;
+      await enablePush();
+    } },
     { label:'重新加载', icon:'↻', run: reloadApp },
     { label:'恢复链接', icon:'🔗', run: openRecovery },
     { label:'清除缓存并重载', icon:'🧹', run: async () => {
@@ -3145,6 +3229,19 @@ function onFrame(frame) {
   if (state.view === 'session') paint();
 }
 
+// 通知点击：SW 会 postMessage，带着要打开的会话
+if ('serviceWorker' in navigator) {
+  try {
+    navigator.serviceWorker.addEventListener('message', (e) => {
+      const d = e.data || {};
+      if (d.type === 'open-session' && d.sessionId) {
+        const s = state.sessions.find(x => x.sessionId === d.sessionId);
+        openSession(s || { sessionId: d.sessionId, title: '(来自通知)' });
+      }
+    });
+  } catch {}
+}
+
 function subscribeDevice() {
   state.device?.close();
   state.device = openStream('/api/mobile/v1/events/stream', {
@@ -3202,13 +3299,26 @@ function subscribeDevice() {
     if (mq.addEventListener) mq.addEventListener('change', onMq);
     else if (mq.addListener) mq.addListener(onMq);
   } catch {}
-  if (state.token) { refreshAll(); subscribeDevice(); }
+  if (state.token) {
+    refreshAll(); subscribeDevice();
+    pushHeartbeat();
+    // 从通知点进来会带 ?session=<id>，等列表加载完再跳
+    const wantSid = new URLSearchParams(location.search).get('session');
+    if (wantSid) {
+      setTimeout(() => {
+        const s = state.sessions.find(x => x.sessionId === wantSid);
+        openSession(s || { sessionId: wantSid, title: '(来自通知)' });
+        try { history.replaceState(null, '', location.pathname); } catch {}
+      }, 900);
+    }
+  }
 })();
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && state.token) {
     refreshAll();
     syncBadge();
+    pushHeartbeat();
     if (state.view === 'session') { loadMessages(); subscribeSession(); }
   }
 });
