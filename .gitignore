@@ -1,5 +1,22 @@
-﻿icon-src.png
-*.log
+# 本机/源文件
+icon-src.png
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 依赖与构建产物
 node_modules/
 push/node_modules/
-.DS_Store
+*.log
+
+# 凭据与证书（VAPID 私钥、TLS 证书等一律不进版本库）
+.env
+.env.*
+certs/
+*.pem
+*.key
+*.p12
+
+# 编辑器
+.vscode/
+.idea/
