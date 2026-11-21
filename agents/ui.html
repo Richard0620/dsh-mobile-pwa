@@ -356,7 +356,7 @@
     const box = $('#chat');
     const near = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
     box.replaceChildren();
-    if (!msgs.length) box.append(E('div', { class: 'chatempty' }, '杩樻病鏈夊璇濓紝鍦ㄤ笅闈㈠彂涓€鏉℃秷鎭紑濮?));
+    if (!msgs.length) box.append(E('div', { class: 'chatempty' }, '\u8FD8\u6CA1\u6709\u5BF9\u8BDD\uFF0C\u5728\u4E0B\u9762\u53D1\u4E00\u6761\u6D88\u606F\u5F00\u59CB'));
     for (const m of msgs) {
       if (m.role === 'user') {
         const row = E('div', { class: 'msg user' });
