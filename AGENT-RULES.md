@@ -13,15 +13,15 @@ git 只解决"事后能找回"，不解决"同时写"。真正的隔离靠 **wor
 
 | 目录 | 分支 | 谁用 |
 |---|---|---|
-| `D:\Vibe\CRM\pwa` | `master` | **主 agent 会话**（负责最终合并与部署） |
-| `D:\Vibe\CRM\pwa-b` | `feature/parallel` | **另一个会话**（在此目录工作） |
+| `D:\Vibe\PWA\pwa` | `master` | **主 agent 会话**（负责最终合并与部署） |
+| `D:\Vibe\PWA\pwa-b` | `feature/parallel` | **另一个会话**（在此目录工作） |
 
-另一个会话开工前先 `cd D:\Vibe\CRM\pwa-b`，不要再去改 `pwa/` 下的文件。
+另一个会话开工前先 `cd D:\Vibe\PWA\pwa-b`，不要再去改 `pwa/` 下的文件。
 
 ## 每轮改动的标准动作
 
 ```powershell
-cd D:\Vibe\CRM\pwa            # 或 pwa-b
+cd D:\Vibe\PWA\pwa            # 或 pwa-b
 git pull --rebase origin master   # 当前无远程，跳过
 # 改文件
 node --check 提取出的脚本          # 语法检查（见 DEPLOY.md）
@@ -36,7 +36,7 @@ git commit -m "feat: xxx（vNN）"
 主会话负责：
 
 ```powershell
-cd D:\Vibe\CRM\pwa
+cd D:\Vibe\PWA\pwa
 git merge feature/parallel
 ```
 
