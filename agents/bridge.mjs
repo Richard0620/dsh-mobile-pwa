@@ -3,9 +3,10 @@
 // Binds 127.0.0.1 only. Bearer token (header or ?token=) except / and /health.
 import http from "node:http";
 import { execFile } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, basename } from "node:path";
+import { homedir } from "node:os";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HERDR = process.env.HERDR_BIN || join(process.env.LOCALAPPDATA || "", "Programs", "herdr", "herdr.exe");
@@ -25,6 +26,62 @@ function run(args, timeout = 20000) {
       resolve(out);
     });
   });
+}
+
+const CLAUDE_ROOT = join(process.env.USERPROFILE || homedir(), ".claude", "projects");
+
+function encodeProjectDir(cwd) {
+  return String(cwd || "").replace(/[\\/:]/g, "-");
+}
+
+function findSessionFile(cwd, sid) {
+  if (!sid) return "";
+  const name = sid + ".jsonl";
+  const cands = [];
+  if (cwd) cands.push(join(CLAUDE_ROOT, encodeProjectDir(cwd), name));
+  try {
+    for (const d of readdirSync(CLAUDE_ROOT)) cands.push(join(CLAUDE_ROOT, d, name));
+  } catch {}
+  for (const p of cands) {
+    try { if (existsSync(p)) return p; } catch {}
+  }
+  return "";
+}
+
+function summarizeInput(input) {
+  try {
+    const s = typeof input === "string" ? input : JSON.stringify(input);
+    return s.length > 400 ? s.slice(0, 400) + "\u2026" : s;
+  } catch { return ""; }
+}
+
+function normalizeChat(lines, limit) {
+  const out = [];
+  for (const line of lines) {
+    if (!line) continue;
+    let o;
+    try { o = JSON.parse(line); } catch { continue; }
+    if (o.type !== "user" && o.type !== "assistant") continue;
+    const m = o.message || {};
+    const content = m.content;
+    const time = o.timestamp || "";
+    if (o.type === "user") {
+      if (typeof content === "string") {
+        out.push({ role: "user", text: content, time });
+      } else if (Array.isArray(content)) {
+        const texts = content.filter((b) => b && b.type === "text").map((b) => b.text || "").join("\n").trim();
+        const results = content.filter((b) => b && b.type === "tool_result").length;
+        if (texts) out.push({ role: "user", text: texts, time });
+        else if (results) out.push({ role: "tool", text: "(" + results + " tool result)", time });
+      }
+    } else {
+      const blocks = Array.isArray(content) ? content : [];
+      const texts = blocks.filter((b) => b && b.type === "text").map((b) => b.text || "").join("\n").trim();
+      const tools = blocks.filter((b) => b && b.type === "tool_use").map((b) => ({ name: b.name || "tool", input: summarizeInput(b.input) }));
+      if (texts || tools.length) out.push({ role: "assistant", text: texts, tools, time });
+    }
+  }
+  return out.slice(-limit);
 }
 
 function readBody(req, limit = 65536) {
@@ -172,6 +229,27 @@ const server = http.createServer(async (req, res) => {
         }
       }
       return send(res, 200, JSON.stringify({ ok: true, tabId: tab.tab_id, paneId: pane ? pane.pane_id : "", started, startErr }));
+    }
+    if (req.method === "GET" && url.pathname === "/chat") {
+      const pane = url.searchParams.get("pane");
+      const limit = Math.min(500, Number(url.searchParams.get("limit") || 200));
+      let sid = url.searchParams.get("session") || "";
+      let cwd = url.searchParams.get("cwd") || "";
+      if (!sid && pane) {
+        const snap = JSON.parse(await run(["api", "snapshot"])).result.snapshot;
+        const a = (snap.agents || []).find((x) => x.pane_id === pane);
+        if (!a) return send(res, 404, JSON.stringify({ error: "no agent in this pane" }));
+        sid = (a.agent_session && a.agent_session.value) || "";
+        cwd = a.cwd || cwd;
+      }
+      if (!sid) return send(res, 400, JSON.stringify({ error: "pane or session required" }));
+      const file = findSessionFile(cwd, sid);
+      if (!file) return send(res, 200, JSON.stringify({ sessionId: sid, file: "", messages: [] }));
+      const raw = readFileSync(file, "utf8");
+      const messages = normalizeChat(raw.split(/\r?\n/), limit);
+      let mtime = 0;
+      try { mtime = statSync(file).mtimeMs; } catch {}
+      return send(res, 200, JSON.stringify({ sessionId: sid, file, mtime, messages }));
     }
     return send(res, 404, JSON.stringify({ error: "not found" }));
   } catch (e) {

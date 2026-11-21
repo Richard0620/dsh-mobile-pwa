@@ -111,3 +111,26 @@ ssh root@38.189.61.57 "cat /srv/dsh-mobile/VERSION"
 4. **动 `sw.js` 时特别小心**：它里面的路由豁免列表（`/api/` `/push/` `/agents/` `/__lan_pair`）
    是两边各自加过的，覆盖会让某些请求开始被 SW 拦截缓存。
 5. 冲突检测靠人：提交前 `git diff --stat` 只应该出现你打算改的文件。
+## 版本号单双号约定（2026-11-21 起生效）
+
+两个人同时往同一个 `/srv/dsh-mobile` 部署会互相覆盖，用单双号把"谁发的"区分开：
+
+| 会话 | 分支 | 用号 |
+|---|---|---|
+| 主会话 | `master` | **奇数** v101 / v103 / v105 … |
+| 并行会话 | `feature/parallel` | **偶数** v102 / v104 / v106 … |
+
+**取号方法**（不要按记忆写数字）：
+
+```powershell
+$cur = [regex]::Match((Get-Content index.html -Raw -Encoding UTF8), "const APP_VERSION = '(v\d+)'").Groups[1].Value
+$n = [int]($cur.TrimStart('v')) + 1
+# 主会话：偶数就再 +1
+if ($n % 2 -eq 0) { $n++ }
+# 并行会话：奇数就再 +1
+# if ($n % 2 -eq 1) { $n++ }
+```
+
+`sw.js` 的 `CACHE` 跟随为 `dsh-mobile-v{APP_VERSION+1}`；部署后立刻写 `/srv/dsh-mobile/VERSION`。
+
+**看到线上版本号是偶数 = 并行会话刚发的，奇数 = 主会话发的。**
