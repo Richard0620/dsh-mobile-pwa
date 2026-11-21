@@ -111,7 +111,8 @@
   .agp .msg.assistant{align-items:flex-start}
   .agp .msg .bubble{max-width:88%;padding:9px 13px;border-radius:16px;font-size:15px;line-height:1.62;
     white-space:pre-wrap;word-break:break-word;background:var(--card);border:1px solid var(--line)}
-  .agp .msg.user .bubble{background:var(--accent);border-color:var(--accent);color:#fff;border-bottom-right-radius:5px}
+  .agp .msg.user .bubble{background:var(--bubble);color:var(--fg);border-color:var(--bubble);border-bottom-right-radius:5px}
+  .agp .msg.assistant .md{width:100%;max-width:none;padding:0;background:none;border:0}
   .agp .msg.assistant .bubble{border-bottom-left-radius:5px}
   .agp .msg .bubble.md{white-space:normal}
   .agp .mtime{font-size:10.5px;color:var(--dim);margin:3px 6px 10px}
@@ -151,7 +152,7 @@
       <div class="title">终端</div>
       <div class="sub" id="conn">connecting…</div>
     </div>
-    <span class="ver">v5</span>
+    <span class="ver">v6</span>
     <span class="grow"></span>
     <div class="seg" id="seg"><button id="vChat">对话</button><button id="vTerm">终端</button></div>
     <button class="chip" id="startBtn">＋ claude</button>
@@ -366,7 +367,7 @@
       } else if (m.role === 'assistant') {
         const row = E('div', { class: 'msg assistant' });
         if (m.text) {
-          const b = E('div', { class: 'bubble md' });
+          const b = E('div', { class: 'md' });
           b.innerHTML = mdToHtml(m.text);
           row.appendChild(b);
         }
