@@ -127,8 +127,17 @@
   .md li{margin:3px 0}
   .md code{font:.9em/1.4 ui-monospace,SFMono-Regular,Consolas,monospace;
     background:color-mix(in srgb,var(--fg) 7%,transparent);padding:1.5px 5px;border-radius:5px}
-  .md pre.code{background:#1b1f27;color:#e6e9ef;padding:12px 14px;border-radius:12px;overflow-x:auto;margin:10px 0}
+  .md pre.code{position:relative;background:#1b1f27;color:#e6e9ef;padding:12px 14px;border-radius:12px;overflow-x:auto;margin:10px 0}
   .md pre.code code{background:none;padding:0;color:inherit;font-size:12.5px;line-height:1.55}
+  /* 代码块：外层包一层，右上角复制按钮不随横向滚动跑掉 */
+  .codewrap{position:relative;margin:10px 0}
+  .codewrap pre.code{margin:0}
+  .codewrap .codecopy{position:absolute;top:6px;right:6px;z-index:2;font-size:10.5px;line-height:1.2;
+    padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.14);color:#e6e9ef;
+    border:1px solid rgba(255,255,255,.18);opacity:.8;user-select:none;-webkit-user-select:none}
+  .codewrap .codecopy:active{opacity:1;background:rgba(255,255,255,.26)}
+  /* 「分段复制」模式：每个顶层块点一下复制这一段 */
+  .md.pickcopy > *{outline:1px dashed var(--accent);outline-offset:3px;border-radius:6px;cursor:copy}
   /* 代码高亮 */
   .md pre.code .k{color:#c792ea}
   .md pre.code .s{color:#c3e88d}
@@ -467,7 +476,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v100';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v103';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -3554,20 +3563,85 @@ function renderQueueItem(it) {
   );
 }
 
+async function copyText(text) {
+  const s = String(text == null ? '' : text);
+  try { await navigator.clipboard.writeText(s); return true; }
+  catch {
+    try {
+      const t = document.createElement('textarea');
+      t.value = s; t.style.position = 'fixed'; t.style.opacity = '0';
+      document.body.append(t); t.select();
+      const ok = document.execCommand('copy'); t.remove();
+      return ok;
+    } catch { return false; }
+  }
+}
+
+// 代码块右上角「复制」：只复制 code 内容，不混入按钮文字
+function decorateCodeCopies(mdNode) {
+  for (const pre of [...mdNode.querySelectorAll('pre.code')]) {
+    if (pre.parentElement && pre.parentElement.classList.contains('codewrap')) continue;
+    const wrap = el('div', { class:'codewrap' });
+    pre.replaceWith(wrap);
+    wrap.append(pre);
+    wrap.append(el('button', { class:'codecopy', text:'⧉ 复制', onclick: async (e) => {
+      e.stopPropagation();
+      const code = pre.querySelector('code');
+      const txt = (code ? code.textContent : pre.textContent) || '';
+      if (await copyText(txt)) toast('已复制代码');
+      else toast('复制失败');
+    }}));
+  }
+}
+
+function cancelBlockCopy(mdNode) {
+  if (!mdNode) return;
+  mdNode.classList.remove('pickcopy');
+  if (mdNode._copyHandler) mdNode.removeEventListener('click', mdNode._copyHandler, true);
+  mdNode._copyHandler = null;
+  if (mdNode._copyTimer) clearTimeout(mdNode._copyTimer);
+  mdNode._copyTimer = null;
+}
+
+// 「分段复制」：给每个顶层块（段落/标题/列表/引用/代码/表格）点一下复制本段
+function toggleBlockCopy(btn) {
+  const holder = btn.closest('.mholder');
+  const mdNode = holder && holder.querySelector('.md');
+  if (!mdNode) { toast('这条消息没有可复制的文本'); return; }
+  if (mdNode._copyHandler) { cancelBlockCopy(mdNode); toast('已退出分段复制'); return; }
+  mdNode.classList.add('pickcopy');
+  toast('点要复制的那一段');
+  const handler = async (e) => {
+    if (e.target.closest('.codecopy')) return;   // 代码块自己的复制按钮优先
+    const block = e.target.closest('.md > *');
+    if (!block) return;
+    e.preventDefault(); e.stopPropagation();
+    // 代码块外层有复制按钮，innerText 会把按钮文字带进去；只取 code 内容
+    const code = block.querySelector && block.querySelector('pre.code code');
+    const txt = code ? (code.textContent || '').trim() : (block.innerText || '').trim();
+    if (!txt) return;
+    if (await copyText(txt)) toast('已复制这一段');
+    else toast('复制失败');
+    cancelBlockCopy(mdNode);
+  };
+  mdNode._copyHandler = handler;
+  mdNode.addEventListener('click', handler, true);
+  mdNode._copyTimer = setTimeout(() => cancelBlockCopy(mdNode), 8000);
+}
+
 function msgActions(m, alignRight) {
   const text = (m && m.text) || '';
   const row = el('div', { class: 'mact' + (alignRight ? ' right' : '') });
   if (text) {
     row.append(el('button', { onclick: async (e) => {
       e.stopPropagation();
-      try { await navigator.clipboard.writeText(text); }
-      catch {
-        const t = document.createElement('textarea');
-        t.value = text; document.body.append(t); t.select();
-        document.execCommand('copy'); t.remove();
-      }
-      toast('已复制这条消息');
+      if (await copyText(text)) toast('已复制这条消息');
+      else toast('复制失败');
     }}, '⧉ 复制'));
+    if (!alignRight) row.append(el('button', { onclick: (e) => {
+      e.stopPropagation();
+      toggleBlockCopy(e.currentTarget);
+    }}, '¶ 分段'));
   }
   const seq = Number.isSafeInteger(m && m.seq) ? m.seq : null;
   if (seq !== null && seq > 0) {
@@ -3625,7 +3699,11 @@ function renderMessage(m) {
       msgActions(m, true));
   }
   const wrap = el('div', { class:'msg assistant' });
-  if (body) wrap.append(el('div', { class:'md', html: mdToHtml(body) }));
+  if (body) {
+    const mdNode = el('div', { class:'md', html: mdToHtml(body) });
+    decorateCodeCopies(mdNode);
+    wrap.append(mdNode);
+  }
   if (gallery) wrap.append(gallery);
   if (toolBlocks.length) {
     wrap.append(el('div', { class:'tools' }, toolBlocks.map(b =>
