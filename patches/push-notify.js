@@ -122,6 +122,87 @@ function createPushNotifier(deps) {
     } catch {}
     return webPushCfg;
   }
+  // ---- 角标数字：必须和客户端 syncBadge() 同一公式 ----
+  // App 里算的是「未读会话数 + 待处理的卡数」：
+  //   未读 = lastTurn.endedAt > lastTurn.readAt；
+  //   待处理 = 当前还挂着的审批 / 提问（客户端用 state.cards + state.foreign，宿主用桥里的挂起表）。
+  // 这两样宿主都拿得到：`read-receipts.json` 正是 /sessions 里 lastTurn / readAt 的来源
+  // （见 mobile/session-last-turn.js），挂起表在 approvals.js / questions.js 里。
+  // 读不到就返回 null、这一帧不带 badge：宁可数字先不动，也不要发一个 App 打开后
+  // 立刻被覆盖掉的假数字（那正是「数字跳变」的来源）。
+  function dshHomeDir() {
+    const path = require('node:path');
+    const os = require('node:os');
+    return process.env.DSH_HOME || path.join(os.homedir(), '.dsh');
+  }
+  function readReceiptLedger() {
+    try {
+      const fs = require('node:fs');
+      const path = require('node:path');
+      const j = JSON.parse(fs.readFileSync(path.join(dshHomeDir(), 'read-receipts.json'), 'utf8'));
+      return j && typeof j === 'object' ? j : null;
+    } catch {
+      return null;
+    }
+  }
+  /**
+   * 已归档的会话不在 App 列表里，客户端不会把它们算进角标 —— 宿主这边也要剔掉，
+   * 否则归档后未读的那条会一直让推送数字比 App 多 1。
+   * 归档集合来自 DSH 的 workspace 存储（与插件 workspace.list 同一份）。
+   * 读不到返回 null：不剔除（宁可多一格，也别让在办的会话漏掉）。
+   */
+  function archivedSessionIds() {
+    try {
+      const fs = require('node:fs');
+      const path = require('node:path');
+      const j = JSON.parse(fs.readFileSync(path.join(dshHomeDir(), 'storages', 'workspace.json'), 'utf8'));
+      const list = (j && j.global && j.global.archivedSessionIds) || (j && j.archivedSessionIds) || null;
+      if (!Array.isArray(list)) return null;
+      return new Set(list.filter((id) => typeof id === 'string' && id));
+    } catch {
+      return null;
+    }
+  }
+  /** 与 App 的 isUnread() 同一判据：只有 endedAt、且晚于已读水位才算未读。 */
+  function countUnreadSessions(ledger, archived) {
+    const lastTurn = (ledger && ledger.lastTurn) || {};
+    const readAt = (ledger && ledger.readAt) || {};
+    let n = 0;
+    for (const sessionId of Object.keys(lastTurn)) {
+      if (archived && archived.has(sessionId)) continue;
+      const fact = lastTurn[sessionId];
+      if (!fact || typeof fact.endedAt !== 'number' || !fact.endedAt) continue;
+      const read = Number(readAt[sessionId]) || 0;
+      if (fact.endedAt > read) n++;
+    }
+    return n;
+  }
+  /** 还有卡挂着的会话数。两个桥都是进程内表，读模块失败就当没有（不影响未读那部分）。 */
+  function countPendingSessions(sessionIds, archived) {
+    let approvals = null, questions = null;
+    try { approvals = require('./approvals.js'); } catch { approvals = null; }
+    try { questions = require('./questions.js'); } catch { questions = null; }
+    let n = 0;
+    for (const sessionId of sessionIds) {
+      if (!sessionId) continue;
+      if (archived && archived.has(sessionId)) continue;
+      try {
+        if (approvals && typeof approvals.hasPending === 'function' && approvals.hasPending(sessionId)) { n++; continue; }
+        if (questions && typeof questions.pendingKind === 'function' && questions.pendingKind(sessionId)) { n++; continue; }
+      } catch { /* 单条会话判失败不算数 */ }
+    }
+    return n;
+  }
+  function badgeNumber() {
+    const ledger = readReceiptLedger();
+    if (!ledger) return null;
+    const archived = archivedSessionIds();
+    const sessionIds = Object.keys(ledger.lastTurn || {});
+    const unread = countUnreadSessions(ledger, archived);
+    const pending = countPendingSessions(sessionIds, archived);
+    // Badging API 只显示数字，但超过 99 就没意义了；0 也要发（让 SW 主动清掉角标）
+    return Math.min(unread + pending, 99);
+  }
   function mirrorToWebPush(payload) {
     const target = webPushTarget();
     if (!target) return;
@@ -131,11 +212,13 @@ function createPushNotifier(deps) {
     const sessionId = payload && payload.sessionId;
     const label = kind === 'approval' ? '待审批' : kind === 'question' ? '有问题'
       : kind === 'done' ? '已完成' : '提醒';
+    const badge = badgeNumber();
     const json = JSON.stringify({
       title: 'DSH · ' + label + ' · ' + title,
       body: body.slice(0, 200),
       sessionId,
       kind,
+      ...(badge === null ? {} : { badge }),
       tag: String(kind || 'push') + '-' + String(sessionId || '') + '-' + Date.now(),
     });
     // 有的运行时没有全局 fetch（或版本较老），用 https 兜底，别让提醒静默丢掉

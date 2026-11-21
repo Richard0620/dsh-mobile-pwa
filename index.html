@@ -500,20 +500,60 @@ function readMsgCache(sid) {
 // iOS 16.4+ 的主屏 Web App、以及 Chrome 安装的 PWA 都支持 Badging API：
 //   navigator.setAppBadge(n) / clearAppBadge()
 // 限制：只有 App 进程活着时才更新得掉；冷启动前无法主动点亮（那需要 Web Push）。
+// 角标公式必须和宿主推送那一侧一致：未读会话数 + 待处理会话数。
+// 宿主在 patches/push-notify.js 的 badgeNumber() 里按「read-receipts 的 lastTurn/readAt」
+// 与「审批/提问桥的挂起表」算同一份数；这里就用 /sessions 下发的 lastTurn 与
+// pendingInteraction（同一个来源）算，推送点亮数字、App 打开覆盖数字时就不会互相跳。
 function unreadCount() {
   let n = 0;
+  const pending = new Set();
   for (const s of state.sessions) {
     const lt = (s && s.lastTurn) || {};
-    if (lt.endedAt && lt.endedAt > (lt.readAt || 0)) n++;
+    if (lt.endedAt && lt.endedAt > readFloor(s)) n++;
+    // pendingInteraction 是宿主给的「这条会话有卡挂着」（approval / question / plan-review）
+    if (s && s.pendingInteraction) pending.add(s.sessionId);
   }
-  if (state.foreign && state.foreign.size) n += state.foreign.size;
-  if (state.view !== 'session') n += state.cards.length;
+  // 列表有 30 秒缓存：刚到达的卡先用本地状态兜底，按会话去重（与宿主同口径）
+  for (const c of state.cards) {
+    const d = (c.data && c.data.data) || c.data || {};
+    const sid = d.sessionId || state.sessionId;
+    pending.add(sid || ('card:' + c.id));
+  }
+  // 别的会话的审批/提问（设备流推来、还没进列表）也算一个待处理会话
+  for (const [, sid] of (state.foreign || new Map())) pending.add(sid || 'foreign');
+  n += pending.size;
   return n;
+}
+
+// 本地已读水位：宿主 readAt 有写入延迟/失败时，开机后蓝点会重新亮回来。
+// 本机记下「这条会话读到哪一刻」，判未读时取 host.readAt 与本地水位的较大值。
+// 水位取打开那一刻的 lastTurn.endedAt（而不是 Date.now()），这样不受手机与电脑时钟偏差影响。
+const READ_LS = 'dsh.read';
+let readMarks = (() => {
+  try { const j = JSON.parse(localStorage.getItem(READ_LS) || '{}'); return j && typeof j === 'object' ? j : {}; }
+  catch { return {}; }
+})();
+function readFloor(s) {
+  const lt = (s && s.lastTurn) || {};
+  const local = Number(readMarks[s && s.sessionId]) || 0;
+  return Math.max(Number(lt.readAt) || 0, local);
+}
+function markOpened(sessionId, at) {
+  if (!sessionId) return;
+  const mark = Number(at) || (state.sessions.find(x => x.sessionId === sessionId)?.lastTurn?.endedAt) || Date.now();
+  if ((Number(readMarks[sessionId]) || 0) >= mark) return;
+  readMarks[sessionId] = mark;
+  const keys = Object.keys(readMarks);
+  if (keys.length > 60) {
+    keys.sort((a, b) => (readMarks[a] || 0) - (readMarks[b] || 0));
+    for (const k of keys.slice(0, keys.length - 60)) delete readMarks[k];
+  }
+  try { localStorage.setItem(READ_LS, JSON.stringify(readMarks)); } catch {}
 }
 
 const isUnread = (s) => {
   const lt = (s && s.lastTurn) || {};
-  return !!(lt.endedAt && lt.endedAt > (lt.readAt || 0));
+  return !!(lt.endedAt && lt.endedAt > readFloor(s));
 };
 
 let badgeTimer = null;
@@ -537,6 +577,8 @@ async function markRead(sessionId) {
   // 本地先把这一条标成已读：/sessions 有 30 秒缓存，不这样要等半分钟蓝点才消
   const s = state.sessions.find(x => x.sessionId === sessionId);
   if (s) { s.lastTurn = s.lastTurn || {}; s.lastTurn.readAt = Date.now(); }
+  // 本地水位是第二层保险：宿主 readAt 写入失败/延迟时，重开 App 也不会把点又点亮
+  markOpened(sessionId);
   syncBadge();
 }
 
@@ -712,7 +754,7 @@ const state = {
   pending: [],
   debug: false,
   unseen: 0,
-  foreign: new Set(),
+  foreign: new Map(),
   attn: 0,
   searchQ: '',
   searchItems: null,
@@ -3320,6 +3362,14 @@ async function refreshAll(force=false) {
     state.sessions = s.items || [];
     state.workspaces = w.items || [];
     saveListCache(state.sessions);
+    // 设备流里记下的「别的会话待处理」：强制刷新拿到的最新列表说没有了就撤掉
+    // （缓存响应可能滞后，所以只在 force 时清）
+    if (force && state.foreign && state.foreign.size) {
+      for (const [id, sid] of state.foreign) {
+        const sess = state.sessions.find(x => x.sessionId === sid);
+        if (!sess || !sess.pendingInteraction) state.foreign.delete(id);
+      }
+    }
     syncBadge();
     if (state.view === 'list') render();
     else if (isWide()) {
@@ -3375,6 +3425,8 @@ function openSession(s) {
   state.queue = [];
   state.modelGroups = []; state.modelMeta = null;
   state.sessionCwd = s.cwd || '';
+  // 本地已读水位：进来的这一刻就消点，不等宿主 readAt 落盘
+  markOpened(s.sessionId, s.lastTurn && s.lastTurn.endedAt);
   render();
   // 先拿本地缓存把内容画出来（秒开 / 离线也能看），再用网络结果覆盖
   const cachedMsgs = readMsgCache(s.sessionId);
@@ -3550,11 +3602,14 @@ function subscribeDevice() {
       if (t === 'approval/requested' || t === 'approval/asked' || t === 'question/requested') {
         const sid = p.sessionId || (p.data && p.data.sessionId);
         const id = p.approvalId || p.questionId || (p.data && p.data.id);
-        if (sid && state.sessionId && sid !== state.sessionId && id) {
-          state.foreign = state.foreign || new Set();
-          state.foreign.add(id);
+        if (sid && id) {
+          state.foreign = state.foreign || new Map();
+          state.foreign.set(id, sid);
           syncBadge();
         }
+      } else if (t === 'approval/resolved' || t === 'approval/decided' || t === 'question/resolved') {
+        const id = p.approvalId || p.questionId || (p.data && (p.data.id || p.data.approvalId));
+        if (id && state.foreign && state.foreign.delete(id)) syncBadge();
       }
     },
   });
