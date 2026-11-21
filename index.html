@@ -2163,16 +2163,25 @@ async function unarchiveSession(s) {
   } catch (e) { toast('取消归档失败：' + (e.message || e)); }
 }
 
-// 归档集合 = archived=1（该宿主返回全量）− 默认列表（只含未归档）
+// 归档列表：新版宿主（含当前版本 sessions.js）对 archived=1 只返回已归档子集，直接用；
+// 旧版宿主会返回全量，这时用「全量 − 默认列表」做差集兜底。
+// 判据：返回里出现了默认列表中的会话 → 说明它给的是全量。
+// 两边都带 fresh=1，避免 30 秒缓存让差集把「刚取消归档的」又算回归档里。
 async function loadArchived() {
   try {
     const [all, act] = await Promise.all([
       api('/api/mobile/v1/sessions?archived=1&fresh=1'),
       api('/api/mobile/v1/sessions?fresh=1'),
     ]);
-    const activeIds = new Set((act.items || []).map(x => x.sessionId));
-    state.archived = (all.items || []).filter(x => !activeIds.has(x.sessionId));
+    const allItems = Array.isArray(all.items) ? all.items : [];
+    const gotActive = Array.isArray(act.items);
+    const activeItems = gotActive ? act.items : [];
+    const activeIds = new Set(activeItems.map(x => x.sessionId));
+    const looksFullList = allItems.some(x => activeIds.has(x.sessionId));
+    state.archived = looksFullList ? allItems.filter(x => !activeIds.has(x.sessionId)) : allItems;
     state.archivedError = '';
+    // 顺带把列表数据对齐（取消归档 / 在别处归档后），但不重绘当前归档视图
+    if (gotActive) { state.sessions = activeItems; saveListCache(activeItems); }
   } catch (e) {
     state.archived = [];
     state.archivedError = '取归档列表失败：' + (e.message || e);
@@ -2344,8 +2353,8 @@ function renderList(wrap, opts = {}) {
   if (!opts.noHeader) wrap.append(headerEl('会话', menu, plus));
 
   const main = el('main');
-  // 「已归档」= 全量列表(archived=1，该宿主返回全部) 减去 默认列表(只有未归档)，
-  // 两边现成，差集就是归档集合（实测：归档一条后 默认 13→12，archived=1 仍 13）。
+  // 「已归档」页的数据来自 archived=1；当前宿主只返回归档子集，
+  // 老宿主返回全量，loadArchived() 会按「是否出现默认列表里的会话」判断并做差集兜底。
   const tabs = el('div', { class:'tabs' },
     el('b', { class: state.tab === 'archived' ? '' : 'on', text:'全部会话', onclick: () => { state.tab = 'all'; render(); } }),
     el('b', { class: state.tab === 'archived' ? 'on' : '', text:'已归档', onclick: () => {
