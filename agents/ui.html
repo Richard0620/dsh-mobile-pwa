@@ -167,7 +167,7 @@
       <div class="title">终端</div>
       <div class="sub" id="conn">connecting…</div>
     </div>
-    <span class="ver">v8</span>
+    <span class="ver">v9</span>
     <span class="grow"></span>
     <div class="seg" id="seg"><button id="vChat">对话</button><button id="vTerm">终端</button></div>
     <button class="chip" id="startBtn">＋ claude</button>
@@ -447,8 +447,8 @@
 
   function renderView() {
     const isChat = viewMode === 'chat';
-    $('#termwrap').style.display = isChat ? 'none' : '';
-    $('#chat').hidden = !isChat;
+    $('#termwrap').style.display = isChat ? 'none' : 'flex';
+    $('#chat').style.display = isChat ? 'flex' : 'none';
     $('#vChat').classList.toggle('on', isChat);
     $('#vTerm').classList.toggle('on', !isChat);
     $('#txt').placeholder = isChat ? '发消息给 agent，Enter 发送' : '输入命令，Enter 发送';
