@@ -15,9 +15,21 @@ $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 Set-Location $root
 
-if (-not (Test-Path $TokenFile)) { throw "找不到 token 文件：$TokenFile" }
-$token = (Get-Content $TokenFile -Raw).Trim()
-if ($token.Length -lt 20) { throw 'token 看起来不对（太短）' }
+if (Test-Path $TokenFile) {
+  $token = (Get-Content $TokenFile -Raw).Trim()
+  if ($token.Length -lt 20) { throw 'token 看起来不对（太短）' }
+  Write-Host '凭据来源：token 文件'
+} else {
+  # 没给 token 文件时，用系统凭据管理器里已经登录的 GitHub 账号（git push 用的是同一份）
+  $gcm = 'C:\Program Files\Git\mingw64\bin\git-credential-manager.exe'
+  if (-not (Test-Path $gcm)) { throw "既没有 $TokenFile，也找不到 git-credential-manager" }
+  $out = "protocol=https`nhost=github.com`n`n" | & $gcm get 2>$null
+  $token = (($out | Where-Object { $_ -like 'password=*' }) -replace '^password=', '')
+  $login = (($out | Where-Object { $_ -like 'username=*' }) -replace '^username=', '')
+  if (-not $token) { throw '凭据管理器里没有 github.com 的凭据，先在浏览器登录一次 GitHub（或存 token 文件）' }
+  if (-not $Owner) { $Owner = $login }
+  Write-Host "凭据来源：系统凭据管理器（账号 $login）"
+}
 
 $headers = @{ Authorization = "Bearer $token"; 'User-Agent' = 'dsh-push'; Accept = 'application/vnd.github+json' }
 
