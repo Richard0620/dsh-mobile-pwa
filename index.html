@@ -3547,6 +3547,10 @@ function renderCard(c) {
         answer: { answers: [...picks].map(([id, set]) => ({ id, selected: [...set] })) },
       }});
       state.cards = state.cards.filter(x => x !== c); paint();
+      // 角标把「挂着的卡」算进待处理数：答完要立刻重算，并拉一次 fresh 列表
+      // 让 pendingInteraction 同步掉（/sessions 有 30 秒缓存）
+      syncBadge();
+      void refreshAll(true);
     } catch (e) { toast('提交失败：' + String(e.message || e)); }
   }}, '提交')));
   return card;
@@ -3561,6 +3565,9 @@ async function respondApproval(d, outcome, c) {
       outcome,
     }});
     state.cards = state.cards.filter(x => x !== c); paint();
+    // 同提问卡：答完立刻重算角标，并 fresh 一次让 pendingInteraction 跟上
+    syncBadge();
+    void refreshAll(true);
   } catch (e) { toast(String(e.message || e)); }
 }
 
@@ -3698,7 +3705,10 @@ function pushCard(kind, frame) {
 }
 function pruneCards() {
   const now = Date.now();
+  const before = state.cards.length;
   state.cards = state.cards.filter(c => !c.at || now - c.at < 5 * 60 * 1000);
+  // 过期的卡不再算「待处理」，角标跟着掉
+  if (state.cards.length !== before) syncBadge();
 }
 
 function openSession(s) {
@@ -3840,11 +3850,15 @@ function onFrame(frame) {
   }
   else if (t === 'approval/resolved' || t === 'approval/decided') {
     const rid = frame.approvalId || (frame.data && frame.data.id);
+    const before = state.cards.length;
     state.cards = state.cards.filter(c => c.id !== rid);
+    if (state.cards.length !== before) syncBadge();
   }
   else if (t === 'question/resolved') {
     const rid = frame.questionId || frame.rpcId || (frame.data && frame.data.id);
+    const before = state.cards.length;
     state.cards = state.cards.filter(c => c.id !== rid);
+    if (state.cards.length !== before) syncBadge();
   }
   else if (t === 'session/event') {
     const ev = frame.event || {};
