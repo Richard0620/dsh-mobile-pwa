@@ -88,7 +88,11 @@
   /* 文件夹里没有可显示的会话时（都被置顶/归档）给一句说明，别让分组像丢了 */
   .ghint{font-size:12px;color:var(--dim);padding:2px 10px 10px}
   .dot{width:7px;height:7px;border-radius:50%;background:var(--dim);opacity:.45;flex:none;margin-top:7px}
+  /* 状态灯：绿=处理中，黄=待你审批/回答，红=失败未读，蓝=完成未读，灰=空闲 */
   .dot.run{background:var(--ok);opacity:1;box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 18%,transparent)}
+  .dot.pending{background:var(--warn);opacity:1;box-shadow:0 0 0 3px color-mix(in srgb,var(--warn) 20%,transparent)}
+  .dot.failed{background:var(--bad);opacity:1;box-shadow:0 0 0 3px color-mix(in srgb,var(--bad) 18%,transparent)}
+  .dot.done{background:var(--accent);opacity:1;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
 
   /* ---------- 会话详情 ---------- */
   .msg{margin:14px 0}
@@ -260,10 +264,15 @@
 
   .row .unread{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:none;margin-left:2px}
   .row.hot .title{font-weight:650}
-  /* 顶部图标上的"有待查看"小红点 */
+  /* 顶部 ☰ 的提醒角标：颜色 = 最该处理的一类（黄待处理 / 红失败 / 蓝完成 / 绿进行中），数字是该类会话数 */
   .has-attn{position:relative}
-  .has-attn::after{content:'';position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;
-    background:#ff3b30;box-shadow:0 0 0 2px var(--bg)}
+  .has-attn::after{content:attr(data-attn-n);position:absolute;top:0;right:-2px;min-width:15px;height:15px;
+    padding:0 3px;border-radius:8px;display:grid;place-items:center;font-size:9px;font-weight:700;line-height:1;
+    color:#fff;background:var(--accent);box-shadow:0 0 0 2px var(--bg);letter-spacing:0}
+  .has-attn.attn-pending::after{background:var(--warn);color:#1a1a1a}
+  .has-attn.attn-failed::after{background:var(--bad)}
+  .has-attn.attn-done::after{background:var(--accent)}
+  .has-attn.attn-running::after{background:var(--ok)}
   /* 会话行右侧的三点菜单 */
   .row .rowmore{flex:none;width:30px;height:30px;border-radius:50%;color:var(--dim);font-size:16px;
     display:grid;place-items:center;margin-right:-4px}
@@ -456,7 +465,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v92';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v93';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -592,11 +601,45 @@ const isUnread = (s) => {
   return !!(lt.endedAt && lt.endedAt > readFloor(s));
 };
 
+// 一条会话当前对外展示的状态（颜色优先级：待处理 > 处理中 > 失败未读 > 完成未读 > 空闲）
+const DOT_CLASS = { pending:'pending', running:'run', failed:'failed', done:'done', idle:'' };
+const STATE_LABEL = {
+  pending:'待你审批 / 回答', running:'处理中', failed:'上一轮失败，未读',
+  done:'已完成，未读', idle:'空闲',
+};
+function sessionState(s) {
+  if (!s) return 'idle';
+  if (s.pendingInteraction) return 'pending';
+  if (s.running) return 'running';
+  if (!isUnread(s)) return 'idle';
+  return ((s.lastTurn && s.lastTurn.status) === 'failed') ? 'failed' : 'done';
+}
+// 顶部 ☰ 角标用：按「最需要处理」的那类选颜色，数字是该类会话数
+function attentionStats() {
+  const pending = new Set();
+  for (const s of state.sessions) if (s && s.pendingInteraction) pending.add(s.sessionId);
+  // 列表有 30 秒缓存：刚到达的卡、别的会话推来的卡先按本地状态兜底
+  for (const c of state.cards) {
+    const d = (c.data && c.data.data) || c.data || {};
+    pending.add(d.sessionId || state.sessionId || ('card:' + c.id));
+  }
+  for (const [, sid] of (state.foreign || new Map())) pending.add(sid || 'foreign');
+  let running = 0, done = 0, failed = 0;
+  for (const s of state.sessions) {
+    if (s.pendingInteraction) continue;
+    if (s.running) { running++; continue; }
+    if (!isUnread(s)) continue;
+    if ((s.lastTurn && s.lastTurn.status) === 'failed') failed++; else done++;
+  }
+  return { pending: pending.size, running, done, failed };
+}
+
 let badgeTimer = null;
 function syncBadge() {
   clearTimeout(badgeTimer);
   badgeTimer = setTimeout(async () => {
     const n = unreadCount();
+    const stats = attentionStats();
     state.attn = n;
     try {
       if (n > 0 && navigator.setAppBadge) await navigator.setAppBadge(n);
@@ -604,7 +647,24 @@ function syncBadge() {
     } catch {}
     const title = n > 0 ? `(${n}) DSH` : 'DSH';
     if (document.title !== title) document.title = title;
-    for (const node of document.querySelectorAll('[data-bell]')) node.classList.toggle('has-attn', n > 0);
+    // 黄 = 有待审批/提问；红 = 有失败未读；蓝 = 有完成未读；绿 = 有任务在跑；都没有就不亮
+    const top = stats.pending ? ['pending', stats.pending]
+      : stats.failed ? ['failed', stats.failed]
+      : stats.done ? ['done', stats.done]
+      : stats.running ? ['running', stats.running] : null;
+    const hint = `待处理 ${stats.pending} · 未读完成 ${stats.done} · 失败未读 ${stats.failed} · 进行中 ${stats.running}`;
+    for (const node of document.querySelectorAll('[data-bell]')) {
+      node.classList.remove('attn-pending', 'attn-failed', 'attn-done', 'attn-running');
+      node.classList.toggle('has-attn', !!top);
+      if (top) {
+        node.classList.add('attn-' + top[0]);
+        node.dataset.attnN = String(top[1]);
+        node.title = hint;
+      } else {
+        delete node.dataset.attnN;
+        node.removeAttribute('title');
+      }
+    }
   }, 120);
 }
 
@@ -2467,13 +2527,14 @@ function renderList(wrap, opts = {}) {
       e.stopPropagation();
       openSessionMenu(s);
     }});
-    const row = el('div', { class: isUnread(s) ? 'row hot' : 'row', onclick: () => { if (row.__lp) { row.__lp = false; return; } openSession(s); } },
-      el('span', { class: s.running ? 'dot run' : 'dot' }),
+    const st = sessionState(s);
+    const dotCls = DOT_CLASS[st] ? 'dot ' + DOT_CLASS[st] : 'dot';
+    const row = el('div', { class: (st === 'pending' || isUnread(s)) ? 'row hot' : 'row', onclick: () => { if (row.__lp) { row.__lp = false; return; } openSession(s); } },
+      el('span', { class: dotCls, title: STATE_LABEL[st] || '' }),
       el('div', { class:'body' },
         el('div', { class:'t' },
           s.pinned && !opts.hidePin ? el('span', { class:'pinmark', text:'📌' }) : null,
           el('span', { class:'title', text: s.title || '(无标题)' }),
-          isUnread(s) ? el('span', { class:'unread', title:'有未查看的新回复' }) : null,
           el('span', { class:'time', text: fmtTime(s.updatedAt) })),
       ),
       more);
