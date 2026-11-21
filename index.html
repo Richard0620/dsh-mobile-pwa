@@ -178,6 +178,8 @@
     font-size:15px;width:100%;margin-bottom:8px}
   .rpcount{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--dim);padding:4px 2px 6px}
   .rplist .frow{padding:12px 4px;border-radius:10px;font-size:14.5px}
+  .rplist .frow.sel{background:var(--bubble)}
+  .rplist .frow .fico{width:22px;text-align:center;flex:none}
   .rplist .chev{color:var(--dim);font-size:14px;flex:none}
   .rpsect{font-size:11.5px;color:var(--dim);padding:8px 2px 2px}
 
@@ -424,7 +426,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v64';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v66';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1297,7 +1299,8 @@ async function openFileDrawer(path) {
   closeRPanel();
   const mask = el('div', { class:'rpanel-mask', onclick: (e) => { if (e.target === mask) closeRPanel(); } });
   const panel = el('div', { class:'rpanel' });
-  const st = { path: path || state.sessionCwd || '', listing: null, filter: '', showHidden: false, err: '' };
+  const st = { path: path || state.sessionCwd || '', listing: null, filter: '', showHidden: false, err: '',
+    sort: 'name', selecting: false, selected: new Set() };
   const body = el('div', { class:'rpbody' });
 
   const nav = async (p) => {
@@ -1331,45 +1334,89 @@ async function openFileDrawer(path) {
     function paintList() {
       const q = st.filter.trim().toLowerCase();
       const all = (L.entries || []).filter(e => st.showHidden || !e.hidden);
-      const dirs = all.filter(e => e.kind === 'folder' && e.name.toLowerCase().includes(q));
-      const files = all.filter(e => e.kind !== 'folder' && e.name.toLowerCase().includes(q));
+      const byName = (a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN', { numeric: true });
+      const byTime = (a, b) => (b.modified || 0) - (a.modified || 0);
+      const dirs = all.filter(e => e.kind === 'folder' && e.name.toLowerCase().includes(q)).sort(byName);
+      const files = all.filter(e => e.kind !== 'folder' && e.name.toLowerCase().includes(q))
+        .sort(st.sort === 'time' ? byTime : byName);
       counts.replaceChildren(
         el('span', { text: `${dirs.length} 个文件夹 · ${files.length} 个文件` }),
         el('span', { style:'flex:1' }),
-        el('button', { class:'ico', text:'⟳', onclick: () => nav(st.path) }),
+        el('button', { class:'ico', text: st.sort === 'time' ? '🕒' : '⇅',
+          title: st.sort === 'time' ? '按修改时间排序' : '按名称排序',
+          onclick: () => { st.sort = st.sort === 'time' ? 'name' : 'time'; paintList(); } }),
+        el('button', { class:'ico', text: st.selecting ? '☑' : '☐', title:'多选引用',
+          onclick: () => { st.selecting = !st.selecting; if (!st.selecting) st.selected.clear(); paintList(); paintFoot(); } }),
+        el('button', { class:'ico', text:'⟳', title:'刷新', onclick: () => nav(st.path) }),
       );
       listBox.replaceChildren();
-      for (const e of dirs) {
-        listBox.append(el('div', { class:'frow', onclick: () => nav(e.path) },
-          el('span', { class:'fico', text:'📁' }),
+      const rowOf = (e, isDir) => {
+        const sel = st.selected.has(e.path);
+        return el('div', { class:'frow' + (sel ? ' sel' : ''), onclick: () => {
+          if (st.selecting) {
+            if (st.selected.has(e.path)) st.selected.delete(e.path); else st.selected.add(e.path);
+            paintList(); paintFoot();
+            return;
+          }
+          if (isDir) nav(e.path); else openViewer(e.path, e.name);
+        }},
+          el('span', { class:'fico',
+            text: st.selecting ? (sel ? '☑' : '☐') : (isDir ? '📁' : fileIcon(e.kind, e.name)) }),
           el('span', { class:'fname', text: e.name }),
-          el('span', { class:'chev', text:'›' })));
-      }
+          st.selecting ? null : el('span', { class:'chev', text:'›' }));
+      };
+      for (const e of dirs) listBox.append(rowOf(e, true));
       if (files.length) listBox.append(el('div', { class:'rpsect', text:'文件' }));
-      for (const e of files) {
-        listBox.append(el('div', { class:'frow', onclick: () => openViewer(e.path, e.name) },
-          el('span', { class:'fico', text: fileIcon(e.kind, e.name) }),
-          el('span', { class:'fname', text: e.name }),
-          el('span', { class:'chev', text:'›' })));
-      }
+      for (const e of files) listBox.append(rowOf(e, false));
       if (!dirs.length && !files.length) listBox.append(el('div', { class:'empty', text:'这一层是空的' }));
     }
     paintList();
   }
 
-  // 底部操作栏：与左侧抽屉的 .drfoot 一致
-  const foot = el('div', { class:'drfoot' },
-    el('button', { class:'drbtn', onclick: () => pickUploadToDir(st.path, () => nav(st.path)) }, '⬆ 上传'),
-    el('button', { class:'drbtn', onclick: async () => {
-      const name = prompt('新文件夹名字');
-      if (!name || !name.trim()) return;
-      try {
-        await api('/api/mobile/v1/directory/create', { method:'POST', body: { path: st.path, name: name.trim() } });
-        nav(st.path);
-      } catch (e) { toast('新建失败：' + (e.message || e)); }
-    } }, '📁 新建文件夹'),
-    el('button', { class:'drbtn', onclick: () => { st.showHidden = !st.showHidden; nav(st.path); } }, '👁 隐藏文件'),
-  );
+  // 底部操作栏：平时是上传/新建/隐藏；多选模式下变成「引用到对话」
+  const foot = el('div', { class:'drfoot' });
+
+  function applyRefs() {
+    const paths = [...st.selected];
+    if (!paths.length) { toast('先选几个文件'); return; }
+    const ta = ui && ui.ta;
+    if (!ta) { toast('不在会话里，没法引用'); return; }
+    const base = (ta.innerText || '').replace(/\u00a0/g, '');
+    const refs = paths.map(p => (/\s/.test(p) ? `"${p}"` : p)).join(' ');
+    ta.textContent = (base.trim() ? base.replace(/\s*$/, '') + ' ' : '') + refs;
+    try { saveDraft(state.sessionId, ta.textContent); } catch {}
+    ta.focus();
+    closeRPanel();
+    toast(`已引用 ${paths.length} 个文件`);
+  }
+
+  function paintFoot() {
+    foot.replaceChildren();
+    if (st.selecting) {
+      foot.append(
+        el('button', { class:'drbtn', onclick: () => { st.selecting = false; st.selected.clear(); paint(); } }, '取消'),
+        el('span', { class:'drbtn', style:'opacity:.75;pointer-events:none', text:`已选 ${st.selected.size}` }),
+        el('button', { class:'drbtn', style: st.selected.size
+            ? 'color:#fff;background:var(--accent);border-color:var(--accent)'
+            : 'opacity:.5',
+          onclick: () => { if (st.selected.size) applyRefs(); } }, '引用到对话'),
+      );
+      return;
+    }
+    foot.append(
+      el('button', { class:'drbtn', onclick: () => pickUploadToDir(st.path, () => nav(st.path)) }, '⬆ 上传'),
+      el('button', { class:'drbtn', onclick: async () => {
+        const name = prompt('新文件夹名字');
+        if (!name || !name.trim()) return;
+        try {
+          await api('/api/mobile/v1/directory/create', { method:'POST', body: { path: st.path, name: name.trim() } });
+          nav(st.path);
+        } catch (e) { toast('新建失败：' + (e.message || e)); }
+      } }, '📁 新建文件夹'),
+      el('button', { class:'drbtn', onclick: () => { st.showHidden = !st.showHidden; nav(st.path); } }, '👁 隐藏文件'),
+    );
+  }
+  paintFoot();
 
   panel.append(head, body, foot);
   // 面板内右滑关闭

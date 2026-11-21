@@ -1,7 +1,7 @@
 /* DSH Mobile 的 service worker。
    只做两件事：让页面可安装（Android 上 WebAPK 需要 SW + fetch handler），
    以及对静态外壳做离线兜底。API 与 SSE 一律不缓存、不拦截。 */
-const CACHE = 'dsh-mobile-v65';
+const CACHE = 'dsh-mobile-v67';
 const SHELL = ['./', './index.html', './manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {
