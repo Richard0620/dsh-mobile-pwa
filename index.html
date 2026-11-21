@@ -504,7 +504,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v117';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v119';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -2260,6 +2260,14 @@ async function disablePush() {
 const ALWAYS_DONE_KEY = 'dsh.push.alwaysDone';
 function alwaysDone() { try { return localStorage.getItem(ALWAYS_DONE_KEY) === '1'; } catch { return false; } }
 function setAlwaysDone(v) { try { localStorage.setItem(ALWAYS_DONE_KEY, v ? '1' : '0'); } catch {} }
+
+let pushHeartbeatTimer = null;
+function pushHeartbeatLoop() {
+  if (pushHeartbeatTimer) return;
+  pushHeartbeatTimer = setInterval(() => {
+    if (document.visibilityState === 'visible') pushHeartbeat();
+  }, 20000);
+}
 
 function pushHeartbeat() {
   try {
@@ -4535,6 +4543,7 @@ function subscribeDevice() {
     subscribeDevice();
     if (state.mode === 'auto') applyNetMode({ silent: true }).catch(() => {});
     pushHeartbeat();
+    pushHeartbeatLoop();   // 前台每 20 秒续一次，避免"开着 App 却被判成离开了"
     // 从通知点进来会带 ?session=<id>（浏览器场景），等列表加载完再跳
     const wantSid = new URLSearchParams(location.search).get('session');
     if (wantSid) {

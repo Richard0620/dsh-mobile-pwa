@@ -156,13 +156,17 @@ const server = http.createServer(async (req, res) => {
       tag: b.tag || undefined,
       kind: b.kind || undefined,
     };
-    // 「已完成 / 失败」这类：你刚还在 App 里（60 秒内有心跳）就别打扰
-    if (payload.kind && /^(completed|failed|done|turn-end)$/.test(String(payload.kind))) {
-      const quietMs = Number(process.env.DONE_QUIET_MS || 60000);
+    // 所有类型的推送都受在场门控：你在 App 里就别推（页面里本来就看得见）。
+    // 例外：开了「完成时总是推送」的设备，完成类照推。
+    {
+      const quietMs = Number(process.env.QUIET_MS || 60000);
+      const kind = String(payload.kind || '');
+      const isDone = /^(completed|failed|done|turn-end)$/.test(kind);
       const anyAlways = Object.values(prefs).some((p) => p && p.alwaysDone);
       const last = Object.values(active).reduce((a, b) => Math.max(a, Number(b) || 0), 0);
-      if (!anyAlways && last && Date.now() - last < quietMs) {
-        return json(res, 200, { ok: true, skipped: 'active', sent: 0, dropped: 0, failed: 0 });
+      const inApp = last && Date.now() - last < quietMs;
+      if (inApp && !(isDone && anyAlways)) {
+        return json(res, 200, { ok: true, skipped: 'in-app', sent: 0, dropped: 0, failed: 0 });
       }
     }
     console.log('[notify]', payload.kind || '-', JSON.stringify(payload.title || ''), 'badge=' + (payload.badge === undefined ? '-' : payload.badge));
