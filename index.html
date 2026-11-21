@@ -115,13 +115,19 @@
   /* 消息行不再用 content-visibility：它按 140px 估高，进入会话/键盘弹起时
      真实高度逐步替换估高，会让对话流高度来回抖。长会话仍靠 120 条分窗控制 DOM。 */
   .mholder{display:flex;flex-direction:column}
-  /* 排队中的消息 */
-  .qlist{display:flex;flex-direction:column;gap:8px;margin:12px 0 4px}
-  .qitem{border:1px dashed var(--line);border-radius:14px;padding:9px 12px;background:var(--card);opacity:.92}
-  .qhead{display:flex;align-items:center;gap:6px;margin-bottom:5px}
-  .qtag{font-size:10.5px;color:var(--warn);border:1px solid var(--warn);border-radius:999px;padding:1px 7px}
+  /* 排队中的消息：挂在输入框上方（dock 内），默认折叠成一行 */
+  .qdock{display:none;flex-direction:column;gap:6px;padding:2px 0 4px;max-height:220px;overflow-y:auto}
+  .qlist{display:flex;flex-direction:column;gap:6px}
+  .qitem{border:1px dashed var(--line);border-radius:14px;padding:7px 10px;background:var(--card);opacity:.92}
+  .qitem.open{padding:9px 12px}
+  .qhead{display:flex;align-items:center;gap:6px;cursor:pointer;min-width:0}
+  .qitem.open .qhead{margin-bottom:5px}
+  .qtag{font-size:10.5px;color:var(--warn);border:1px solid var(--warn);border-radius:999px;padding:1px 7px;flex:none}
+  .qprev{flex:1;min-width:0;font-size:13px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .qchev{flex:none;font-size:11px;color:var(--dim)}
   .qmini{font-size:11.5px;color:var(--dim);padding:3px 8px;border-radius:999px;border:1px solid var(--line);background:var(--bg)}
   .qmini.primary{color:#fff;background:var(--accent);border-color:var(--accent)}
+  .qacts{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px}
   .qtext{font-size:14.5px;color:var(--fg);white-space:pre-wrap;word-break:break-word;opacity:.9}
 
   /* 每条消息下方的操作行（复制 / 分支） */
@@ -498,7 +504,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v111';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v113';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -3046,11 +3052,8 @@ function paintSession({ scroll = 'auto' } = {}) {
       : renderMessage(it.m);
     // 手机上没地方悬停：点一下分隔条把精确时间 toast 出来
     if (it.type === 'sep' && it.ts) node.addEventListener('click', () => toast(fmtExactTime(it.ts)));
-    // 有"深度求索中"或排队条时插在它们前面，保证顺序是 消息 → 排队 → 运行中
-    const anchor = (ui.qBox && ui.qBox.isConnected) ? ui.qBox
-      : (ui.typingNode && ui.typingNode.isConnected) ? ui.typingNode : null;
-    if (anchor) ui.listWrap.insertBefore(node, anchor);
-    else ui.listWrap.append(node);
+    // 消息只进对话流；排队卡片固定在 dock（输入框上方），不再插进消息里
+    ui.listWrap.append(node);
     ui.nodes.push(node);
     ui.keys.push(it.key);
   }
@@ -3090,31 +3093,24 @@ function paintSession({ scroll = 'auto' } = {}) {
       ui.cardsWrap.append(c._node);
     }
   }
-  // 排队中的消息：主机把「正在跑的时候发的消息」放在 inbox 里排队
-  if (!ui.qBox) ui.qBox = el('div', { class:'qlist' });
-  if (state.queue && state.queue.length) {
-    ui.qBox.replaceChildren();
-    for (const it of state.queue) ui.qBox.append(renderQueueItem(it));
-    const anchor = (ui.typingNode && ui.typingNode.isConnected) ? ui.typingNode : null;
-    if (!ui.qBox.isConnected) {
-      if (anchor) ui.listWrap.insertBefore(ui.qBox, anchor);
-      else ui.listWrap.append(ui.qBox);
-    } else if (anchor && ui.qBox.nextSibling !== anchor) {
-      ui.listWrap.insertBefore(ui.qBox, anchor);
+  // 排队中的消息：固定在输入框上方的 dock 里，默认折叠；不再插进消息流
+  if (ui.qDock) {
+    const q = state.queue || [];
+    if (q.length) {
+      ui.qDock.style.display = 'flex';
+      ui.qDock.replaceChildren();
+      for (const it of q) ui.qDock.append(renderQueueItem(it));
+      for (const id of [...queueOpen]) if (!q.some(x => x.id === id)) queueOpen.delete(id);
+    } else {
+      ui.qDock.style.display = 'none';
+      ui.qDock.replaceChildren();
     }
-  } else if (ui.qBox.isConnected) {
-    ui.qBox.remove();
   }
-
-  // 运行状态放在对话流末尾（像 AI-HUB 的"深度求索中"），不再挂在输入框下面
-  if (state.busy) {
-    if (!ui.typingNode || !ui.typingNode.isConnected) {
-      ui.typingNode = el('div', { class:'typing' }, el('i'), el('i'), el('i'), el('span', { text:'深度求索中…' }));
-      ui.listWrap.append(ui.typingNode);
-    }
-  } else if (ui.typingNode) {
-    if (ui.typingNode.isConnected) ui.typingNode.remove();
-    ui.typingNode = null;
+  // 运行状态只保留 dock 里这一份；对话流末尾不再重复一次
+  if (ui.strip) {
+    ui.strip.textContent = state.stream === 'open'
+      ? (state.busy ? '深度求索中…' : '')
+      : (state.stream ? '实时连接断开，重连中…' : '');
   }
   if (scroll === 'bottom' || atBottom) {
     ui.atBottom = true;
@@ -3488,10 +3484,12 @@ function renderSession(wrap) {
       state.busy = false; paintSession();
     } catch (e) { toast('取消失败：' + (e.message || e)); }
   }});
+  const qDock = el('div', { class:'qdock' });
   const dock = el('div', { class:'dock' },
-    strip,
     slashBox,
     attach,
+    qDock,
+    strip,
     el('div', { class:'composer' }, ta,
       el('div', { class:'crow' },
         el('button', { class:'plus', text:'+', onclick: () => fileInput.click() }),
@@ -3531,7 +3529,7 @@ function renderSession(wrap) {
   }
 
   ui = { sessionId: state.sessionId, body, listWrap, cardsWrap, ta, sendBtn, stopBtn, strip, dot, modelEl: modelRow,
-    jump, updateJump, loadStats: loadSessionStats, keys: [], nodes: [], cardsKey: '', prevCount: undefined, atBottom: true };
+    qDock, jump, updateJump, loadStats: loadSessionStats, keys: [], nodes: [], cardsKey: '', prevCount: undefined, atBottom: true };
   paintSession({ scroll:'bottom' });
   // 进会话直接定位到底部 + 聚焦输入框（iOS 上焦点可能被系统拦，忽略即可）
   requestAnimationFrame(() => { body.scrollTop = body.scrollHeight; });
@@ -3675,18 +3673,35 @@ async function queueEdit(it, old) {
   toast('已撤回，改完直接发送');
 }
 
+const queueOpen = new Set();
+function toggleQueueItem(id) {
+  if (queueOpen.has(id)) queueOpen.delete(id);
+  else queueOpen.add(id);
+  paintSession();
+}
+
 function renderQueueItem(it) {
   const text = queueText(it);
-  return el('div', { class:'qitem' },
-    el('div', { class:'qhead' },
-      el('span', { class:'qtag', text:'排队中' }),
-      el('span', { style:'flex:1' }),
+  const open = queueOpen.has(it.id);
+  const preview = text.replace(/\s+/g, ' ').trim().slice(0, 60) || '(空消息)';
+  const item = el('div', { class:'qitem' + (open ? ' open' : '') });
+  item.append(el('div', { class:'qhead', onclick: (e) => {
+    if (e.target.closest('button')) return;
+    toggleQueueItem(it.id);
+  }},
+    el('span', { class:'qtag', text:'排队中' }),
+    el('span', { class:'qprev', text:preview }),
+    el('span', { class:'qchev', text:open ? '▾' : '▸' }),
+  ));
+  if (open) {
+    item.append(el('div', { class:'qacts' },
       el('button', { class:'qmini', text:'删除', onclick: () => queueAct(it, { kind:'remove' }, '已删除') }),
       el('button', { class:'qmini', text:'编辑', onclick: () => queueEdit(it, text) }),
       el('button', { class:'qmini primary', text:'立刻发送', onclick: () => queueAct(it, { kind:'steer' }, '已插话，马上处理') }),
-    ),
-    el('div', { class:'qtext', text }),
-  );
+    ));
+    item.append(el('div', { class:'qtext', text }));
+  }
+  return item;
 }
 
 async function copyText(text) {
