@@ -11,6 +11,13 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="AI-HUB">
 <title>AI-HUB</title>
+<script>
+  // 手动主题要在首屏绘制前应用，避免闪一下；auto 时不设属性，走系统配色
+  try {
+    var t = localStorage.getItem('dsh.theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch (e) {}
+</script>
 <style>
   :root{
     --bg:#f7f7f8; --card:#ffffff; --fg:#111318; --dim:#8a8f98; --line:#e9e9ee;
@@ -23,6 +30,15 @@
       --bg:#0e1014; --card:#171a20; --fg:#e8eaee; --dim:#8d94a0; --line:#242933;
       --bubble:#22262e; --accent:#4f8cff; --accent-2:#6ea4ff; --ok:#3fb950; --bad:#f85149; --warn:#d29922;
     }
+  }
+  /* 手动主题：覆盖系统配色；auto 时不设 data-theme，仍走上面的媒体查询 */
+  :root[data-theme="dark"]{
+    --bg:#0e1014; --card:#171a20; --fg:#e8eaee; --dim:#8d94a0; --line:#242933;
+    --bubble:#22262e; --accent:#4f8cff; --accent-2:#6ea4ff; --ok:#3fb950; --bad:#f85149; --warn:#d29922;
+  }
+  :root[data-theme="light"]{
+    --bg:#f7f7f8; --card:#ffffff; --fg:#111318; --dim:#8a8f98; --line:#e9e9ee;
+    --bubble:#ededf0; --accent:#2f6bff; --accent-2:#5b8cff; --ok:#2ea043; --bad:#e5484d; --warn:#b58100;
   }
   /* 大屏手机（16 Pro Max 这类 430pt+）：正文字号与内边距略微放大，行宽不至于太松 */
   @media (min-width: 430px){
@@ -482,11 +498,28 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v109';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v111';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
 const CACHE_KEYS = { list:'dsh.cache.list', msgs:'dsh.cache.msgs' };
+// 缓存 schema：结构不兼容时只清列表/消息缓存，已读水位和主题等偏好保留
+const CACHE_SCHEMA = 1;
+try {
+  if (localStorage.getItem('dsh.cache.schema') !== String(CACHE_SCHEMA)) {
+    localStorage.removeItem(CACHE_KEYS.list);
+    localStorage.removeItem(CACHE_KEYS.msgs);
+    localStorage.setItem('dsh.cache.schema', String(CACHE_SCHEMA));
+  }
+} catch {}
+
+const THEME_KEY = 'dsh.theme';
+function applyTheme(mode) {
+  const v = mode === 'light' || mode === 'dark' ? mode : '';
+  if (v) document.documentElement.dataset.theme = v;
+  else delete document.documentElement.dataset.theme;
+  try { localStorage.setItem(THEME_KEY, v); } catch {}
+}
 
 function saveListCache(sessions) {
   try {
@@ -2102,6 +2135,43 @@ function pushHeartbeat() {
   } catch {}
 }
 
+function openThemeSheet() {
+  const cur = (() => { try { return localStorage.getItem(THEME_KEY) || ''; } catch { return ''; } })();
+  const mark = k => cur === k ? '✓ ' : '';
+  openSheet([
+    { label: mark('') + '跟随系统', icon:'🌓', run: () => { applyTheme(''); toast('主题：跟随系统'); } },
+    { label: mark('light') + '浅色', icon:'☀️', run: () => { applyTheme('light'); toast('主题：浅色'); } },
+    { label: mark('dark') + '深色', icon:'🌙', run: () => { applyTheme('dark'); toast('主题：深色'); } },
+  ], '主题');
+}
+
+// 版本自检：本地 APP_VERSION / SW 缓存 vs 线上 /VERSION（Caddy 静态目录里那份）
+async function openVersionCheck() {
+  const rows = [['本地 APP', APP_VERSION]];
+  try {
+    const sw = await fetch('./sw.js', { cache:'no-store' }).then(r => r.text());
+    const m = /const CACHE = '([^']+)'/.exec(sw);
+    rows.push(['本地 SW 缓存', m ? m[1] : '?']);
+  } catch { rows.push(['本地 SW 缓存', '读不到']); }
+  try {
+    const r = await fetch('./VERSION', { cache:'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const txt = await r.text();
+    // dev-proxy 没有 VERSION 时会 SPA 兜底回 index.html，不能把 HTML 当版本戳解析
+    if (txt.trim().startsWith('<')) throw new Error('不是 VERSION 文件（本地开发正常）');
+    const appM = /^app=(v\d+)/m.exec(txt);
+    if (!appM) throw new Error('VERSION 内容不合法');
+    const app = appM[1];
+    const swv = (/^sw=([^\n]+)/m.exec(txt) || [])[1] || '?';
+    const commit = (/^commit=([^\n]+)/m.exec(txt) || [])[1] || '?';
+    rows.push(['线上 VERSION', `${app} / ${swv} / ${commit}`]);
+    rows.push(['是否一致', app === APP_VERSION ? '✅ 一致' : `⚠️ 本地 ${APP_VERSION}，线上 ${app}`]);
+  } catch (e) {
+    rows.push(['线上 VERSION', '读不到：' + (e.message || e)]);
+  }
+  openInfoBox('版本自检', rows);
+}
+
 async function openAbout() {
   let devices = '';
   try {
@@ -2112,6 +2182,8 @@ async function openAbout() {
   const host = location.host;
   const inst = (state.instanceId || '').slice(0, 8);
   openSheet([
+    { label:'主题', icon:'🎨', run: openThemeSheet },
+    { label:'版本自检', icon:'🩺', run: openVersionCheck },
     { label:'通知提醒', icon:'🔔', run: openPushSettings },
     { label:'推送诊断', icon:'🩺', run: openPushDiag },
     { label:'重新加载', icon:'↻', run: reloadApp },
@@ -2182,6 +2254,24 @@ async function openStats() {
     const billed = models.reduce((a, m) => a + (m.billedTokens || 0), 0);
     const billedNote = (r.overview && (r.overview.historyBilled || r.overview.untrackedBilled))
       ? '已启用' : '该部署未启用计费统计';
+    const detail = el('div', { style:'padding-top:4px' });
+    if (models.length) {
+      detail.append(el('div', { class:'cmeta', style:'margin-top:10px', text:'按模型' }));
+      for (const m of models.slice(0, 6)) {
+        detail.append(el('div', { class:'kvrow' },
+          el('span', { class:'kk', text:(m.modelName || m.model || '?') + (m.providerName ? ' · ' + m.providerName : '') }),
+          el('span', { class:'vv', text:`输出 ${fmtTok(m.outputTokens)} · ${m.turns || 0} 轮 · ${m.requests || 0} 次` })));
+      }
+    }
+    if (days.length) {
+      detail.append(el('div', { class:'cmeta', style:'margin-top:10px', text:'按天（最近 7 天）' }));
+      for (const d of days.slice(-7)) {
+        detail.append(el('div', { class:'kvrow' },
+          el('span', { class:'kk', text:d.day || '?' }),
+          el('span', { class:'vv', text:`输出 ${fmtTok(d.outputTokens)} · ${d.requests || 0} 次` })));
+      }
+    }
+    const extra = el('div', {}, chart, detail);
     openInfoBox(`统计 · 最近 ${(r.overview && r.overview.range) || '7d'}`, [
       ['会话', k.sessions ?? '-'],
       ['轮次 / 步数', `${k.turns ?? '-'} / ${k.steps ?? '-'}`],
@@ -2193,7 +2283,7 @@ async function openStats() {
       ['活跃时长', fmtDur(k.activeMs)],
       ['模型耗时', fmtDur(k.llmMs)],
       ['工具耗时', fmtDur(k.toolMs)],
-    ], null, chart);
+    ], null, extra);
   } catch (e) {
     toast('取统计失败：' + (e.message || e));
   }
