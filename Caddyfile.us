@@ -1,21 +1,18 @@
 # ============================================================================
-# 美西 VPS（38.189.61.57）上的 Caddy —— DSH Mobile PWA + 自建中转
+# 缇庤タ VPS锛?8.189.61.57锛変笂鐨?Caddy 鈥斺€?DSH Mobile PWA + 鑷缓涓浆 + Web Push
 #
-# 为什么是 8443 不是 443：这台机器 443 归 sing-box（VLESS Reality），不能动。
-#
-# 必须反代给中转的四类路径：
-#   /api/*    移动 API + SSE
-#   /tunnel   宿主插件的 WSS 隧道（漏了它，握手会拿到 200 而不是 101）
-#   /healthz  健康检查
-#   /status   节点状态
-# ============================================================================
+# 涓轰粈涔堟槸 8443 涓嶆槸 443锛氳繖鍙版満鍣?443 褰?sing-box锛圴LESS Reality锛夛紝涓嶈兘鍔ㄣ€?#
+# 蹇呴』鍙嶄唬鐨勪簲绫昏矾寰勶細
+#   /api/*    绉诲姩 API + SSE
+#   /tunnel   瀹夸富鎻掍欢鐨?WSS 闅ч亾锛堟紡浜嗗畠锛屾彙鎵嬩細鎷垮埌 200 鑰屼笉鏄?101锛?#   /push/*   鎺ㄩ€佹湇鍔★紙璁㈤槄 / 鍙戦€侊級
+#   /healthz  鍋ュ悍妫€鏌?#   /status   鑺傜偣鐘舵€?# ============================================================================
 
 {
 	email admin@easymana.online
 }
 
 dsh.easymana.online:8443 {
-	# ---- 移动 API / SSE ----
+	# ---- 绉诲姩 API / SSE ----
 	handle /api/* {
 		reverse_proxy 127.0.0.1:18788 {
 			flush_interval -1
@@ -26,13 +23,23 @@ dsh.easymana.online:8443 {
 		}
 	}
 
-	# ---- 宿主隧道（WebSocket 升级）----
+	# ---- 瀹夸富闅ч亾锛圵ebSocket 鍗囩骇锛?---
 	handle /tunnel {
 		reverse_proxy 127.0.0.1:18788 {
 			flush_interval -1
 			transport http {
 				read_timeout  24h
 				write_timeout 24h
+			}
+		}
+	}
+
+	# ---- Web Push锛堣闃?/ 鍙戦€侊級----
+	handle /push/* {
+		reverse_proxy 127.0.0.1:18789 {
+			transport http {
+				read_timeout  30s
+				write_timeout 30s
 			}
 		}
 	}
@@ -45,7 +52,7 @@ dsh.easymana.online:8443 {
 		reverse_proxy 127.0.0.1:18788
 	}
 
-	# ---- 静态 PWA ----
+	# ---- 闈欐€?PWA ----
 	handle {
 		root * /srv/dsh-mobile
 		try_files {path} /index.html
