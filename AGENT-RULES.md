@@ -134,3 +134,16 @@ if ($n % 2 -eq 0) { $n++ }
 `sw.js` 的 `CACHE` 跟随为 `dsh-mobile-v{APP_VERSION+1}`；部署后立刻写 `/srv/dsh-mobile/VERSION`。
 
 **看到线上版本号是偶数 = 并行会话刚发的，奇数 = 主会话发的。**
+## 禁止 `git add -A`（2026-11-21 补充）
+
+多个会话共用 `pwa/` 这个工作树时，`git add -A` 会把**别人正在改的文件**一起卷进你的提交。
+
+已经发生过：主会话提交"版本号约定"时，顺手把并行会话未提交的 `agents/bridge.mjs`（80 行）带进了自己的 commit。
+
+**规则**：
+
+```powershell
+git add index.html sw.js AGENT-RULES.md     # 只写你改过的文件
+```
+
+提交前 `git status --porcelain`，确认列出来的都是你打算改的。
