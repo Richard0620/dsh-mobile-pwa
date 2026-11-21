@@ -156,16 +156,14 @@ const server = http.createServer(async (req, res) => {
       tag: b.tag || undefined,
       kind: b.kind || undefined,
     };
-    // 所有类型的推送都受在场门控：你在 App 里就别推（页面里本来就看得见）。
-    // 例外：开了「完成时总是推送」的设备，完成类照推。
+    // 门控：审批与完成永远响；其他类型（提问等）你在 App 里就静默
     {
       const quietMs = Number(process.env.QUIET_MS || 60000);
       const kind = String(payload.kind || '');
-      const isDone = /^(completed|failed|done|turn-end)$/.test(kind);
-      const anyAlways = Object.values(prefs).some((p) => p && p.alwaysDone);
+      const alwaysRing = /^(approval|completed|failed|done|turn-end)$/.test(kind);
       const last = Object.values(active).reduce((a, b) => Math.max(a, Number(b) || 0), 0);
       const inApp = last && Date.now() - last < quietMs;
-      if (inApp && !(isDone && anyAlways)) {
+      if (inApp && !alwaysRing) {
         return json(res, 200, { ok: true, skipped: 'in-app', sent: 0, dropped: 0, failed: 0 });
       }
     }
