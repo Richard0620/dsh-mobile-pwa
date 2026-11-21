@@ -2380,7 +2380,8 @@ function renderList(wrap, opts = {}) {
   if (state.tab !== 'archived') main.append(el('div', { class:'searchrow' }, searchInput));
 
   if (state.tab === 'archived') {
-    const items = state.archived;    if (items === null) {
+    const items = state.archived;
+    if (items === null) {
       main.append(el('div', { class:'empty', text:'加载中…' }));
     } else if (!items.length) {
       main.append(el('div', { class:'empty', text: state.archivedError || '没有归档的会话' }));
@@ -3887,7 +3888,8 @@ function subscribeDevice() {
       if (t === 'approval/requested' || t === 'approval/asked' || t === 'question/requested') {
         const sid = p.sessionId || (p.data && p.data.sessionId);
         const id = p.approvalId || p.questionId || (p.data && p.data.id);
-        if (sid && id) {
+        // 当前会话的卡由 state.cards 负责，这里只记别的会话的
+        if (sid && id && sid !== state.sessionId) {
           state.foreign = state.foreign || new Map();
           state.foreign.set(id, sid);
           syncBadge();

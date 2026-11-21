@@ -193,11 +193,14 @@ function createPushNotifier(deps) {
     }
     return n;
   }
-  function badgeNumber() {
+  function badgeNumber(eventSessionId) {
     const ledger = readReceiptLedger();
     if (!ledger) return null;
     const archived = archivedSessionIds();
     const sessionIds = Object.keys(ledger.lastTurn || {});
+    // 台账里只有「收尾过至少一轮」的会话；刚开的会话第一轮里弹审批时还没落账，
+    // 把这一帧的会话补进来，别让这张卡漏出角标。
+    if (eventSessionId && !sessionIds.includes(eventSessionId)) sessionIds.push(eventSessionId);
     const unread = countUnreadSessions(ledger, archived);
     const pending = countPendingSessions(sessionIds, archived);
     // Badging API 只显示数字，但超过 99 就没意义了；0 也要发（让 SW 主动清掉角标）
@@ -212,7 +215,7 @@ function createPushNotifier(deps) {
     const sessionId = payload && payload.sessionId;
     const label = kind === 'approval' ? '待审批' : kind === 'question' ? '有问题'
       : kind === 'done' ? '已完成' : '提醒';
-    const badge = badgeNumber();
+    const badge = badgeNumber(sessionId);
     const json = JSON.stringify({
       title: 'DSH · ' + label + ' · ' + title,
       body: body.slice(0, 200),
