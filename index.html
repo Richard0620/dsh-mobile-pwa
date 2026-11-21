@@ -426,8 +426,8 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v69';   // 每次发版改这里，菜单底部会显示
-const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft' };
+const APP_VERSION = 'v71';   // 每次发版改这里，菜单底部会显示
+const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
 const CACHE_KEYS = { list:'dsh.cache.list', msgs:'dsh.cache.msgs' };
@@ -675,6 +675,13 @@ function mdToHtml(src){
 const state = {
   token: localStorage.getItem(LS.token) || '',
   instanceId: localStorage.getItem(LS.inst) || '',
+  // 连接方式：auto = 先探局域网、不通就回中转；relay = 只走中转；lan = 只走局域网
+  mode: localStorage.getItem(LS.mode) || 'auto',
+  lanBase: localStorage.getItem(LS.lanBase) || '',   // 手填的局域网入口，空则自动发现
+  lanPort: localStorage.getItem(LS.lanPort) || '8443',
+  apiBase: '',        // 当前生效的请求前缀，'' 表示与页面同源（中转）
+  netInfo: null,      // 最近一次探测结果
+  booted: false,
   view: 'list',
   sessions: [],
   workspaces: [],
@@ -756,9 +763,111 @@ async function copyText(text) {
   } catch { return false; }
 }
 
+// ---------------------------------------------------------------- 连接方式（中转 / 局域网）
+// 页面原点只有一个（线上那个 https 域名），但「API 打到哪」可以换：把每条请求前缀换成
+// 探测到的局域网入口，页面、SW、缓存、凭据全都不用动。这样才有真正的自动/手动切换。
+// 注意：页面是 https 时，局域网入口也必须是 https，否则浏览器按混合内容直接拦。
+function apiUrl(path) {
+  return state.apiBase ? state.apiBase.replace(/\/+$/, '') + path : path;
+}
+
+// 探一发健康接口：能连通说明这条通道可用，顺便量延迟。
+// 跨域靠 lan-server 的 CORS；证书没被手机信任时这里会是 Failed to fetch，正好当作「不可用」。
+async function probeHealth(base, timeout = 1500) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeout);
+  const t0 = performance.now();
+  try {
+    const r = await fetch(base.replace(/\/+$/, '') + '/api/mobile/v1/health', { cache:'no-store', signal: ctl.signal });
+    if (!r.ok) return { ok: false, error: `HTTP ${r.status}` };
+    const j = await r.json().catch(() => null);
+    if (!j || j.ok !== true) return { ok: false, error: '不是插件健康响应' };
+    return { ok: true, ms: Math.round(performance.now() - t0), instanceId: j.instanceId || '' };
+  } catch (e) {
+    const m = String((e && e.message) || e);
+    return { ok: false, error: /abort/i.test(m) ? '超时' : (/failed to fetch|networkerror/i.test(m) ? '连不上（证书未信任或不在同一网段）' : m) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// 局域网候选从宿主嘴里拿：/connection-info 返回的 lanCandidates 就是它此刻的网卡地址。
+// 端口换成 lan-server 自己监听的（默认 8443），因为插件报的是它自己的 18787。
+async function lanCandidates() {
+  const list = [];
+  const push = (u) => {
+    try {
+      const x = new URL(u);
+      if (x.protocol !== 'https:' && x.protocol !== 'http:') return;
+      const origin = x.origin;
+      if (!list.includes(origin)) list.push(origin);
+    } catch {}
+  };
+  if (state.lanBase) push(state.lanBase);   // 手填的排第一个
+  try {
+    const info = await api('/api/mobile/v1/connection-info');
+    const port = String(state.lanPort || '8443');
+    for (const c of (info.lanCandidates || info.lanUrls || [])) {
+      const raw = typeof c === 'string' ? c : (c && c.url);
+      try {
+        const host = new URL(raw).hostname;
+        push(`https://${host.includes(':') ? '[' + host + ']' : host}:${port}`);
+      } catch {}
+    }
+  } catch {}
+  return list;
+}
+
+async function resolveNetMode() {
+  if (state.mode === 'relay') return { base:'', channel:'relay' };
+  if (state.mode === 'lan') {
+    if (!state.lanBase) return { base:'', channel:'relay', error:'还没填局域网地址' };
+    const p = await probeHealth(state.lanBase);
+    return p.ok
+      ? { base: state.lanBase, channel:'lan', ms:p.ms, instanceId:p.instanceId }
+      : { base:'', channel:'relay', error:p.error };
+  }
+  const list = await lanCandidates();
+  let lastError = '';
+  for (const b of list) {
+    const p = await probeHealth(b);
+    if (p.ok) return { base: b, channel:'lan', ms:p.ms, instanceId:p.instanceId };
+    lastError = p.error;
+  }
+  return { base:'', channel:'relay', error: list.length ? (lastError || '局域网不可达') : '没有局域网候选' };
+}
+
+// 换道：关掉旧的长连接 → 用新基址重连并刷新数据。启动阶段由启动流程自己拉，不在这里重来。
+async function applyNetMode({ silent = false } = {}) {
+  if (!state.token) return;
+  const before = state.apiBase;
+  const r = await resolveNetMode();
+  state.netInfo = { ...r, at: Date.now() };
+  state.apiBase = r.base;
+  if (r.base === before) return r;
+  if (!state.booted) return r;
+  if (!silent) toast(r.base ? `已切到局域网直连${r.ms ? ' · ' + r.ms + 'ms' : ''}` : '已切回中转');
+  try { state.live?.close(); } catch {}
+  try { state.device?.close(); } catch {}
+  subscribeDevice();
+  refreshAll(true);
+  if (state.view === 'session') loadMessages();
+  return r;
+}
+
+function setNetMode(mode, lanBase) {
+  state.mode = mode;
+  try { localStorage.setItem(LS.mode, mode); } catch {}
+  if (lanBase !== undefined) {
+    state.lanBase = String(lanBase || '').trim().replace(/\/+$/, '');
+    try { localStorage.setItem(LS.lanBase, state.lanBase); } catch {}
+  }
+  applyNetMode().catch(() => {});
+}
+
 // ---------------------------------------------------------------- API
 async function api(path, { method='GET', body, auth=true } = {}) {
-  const res = await fetch(path, {
+  const res = await fetch(apiUrl(path), {
     method,
     headers: {
       ...(body ? { 'content-type':'application/json' } : {}),
@@ -796,7 +905,7 @@ function openStream(path, { onFrame, onState }) {
   (async () => {
     while (!stopped) {
       try {
-        const res = await fetch(path, {
+        const res = await fetch(apiUrl(path), {
           headers: {
             authorization: `Bearer ${state.token}`,
             accept: 'text/event-stream',
@@ -1204,7 +1313,7 @@ async function openConnInfo() {
 
 // 文件读取：这个接口直接回原文，不是 JSON 信封，所以单独走 raw
 async function rawText(path, { method='GET', body } = {}) {
-  const res = await fetch(path, {
+  const res = await fetch(apiUrl(path), {
     method,
     headers: {
       ...(body ? { 'content-type':'application/json' } : {}),
@@ -1752,7 +1861,11 @@ async function openAbout() {
   } catch {}
   const host = location.host;
   const inst = (state.instanceId || '').slice(0, 8);
+  const chan = state.netInfo && state.netInfo.channel === 'lan'
+    ? `局域网${state.netInfo.ms ? ' ' + state.netInfo.ms + 'ms' : ''}`
+    : '中转';
   openSheet([
+    { label:'连接方式', icon:'⇄', run: openConnectionSheet },
     { label:'通知提醒', icon:'🔔', run: openPushSettings },
     { label:'重新加载', icon:'↻', run: reloadApp },
     { label:'恢复链接', icon:'🔗', run: openRecovery },
@@ -1766,7 +1879,46 @@ async function openAbout() {
       location.reload();
     } },
     { label:'退出登录', icon:'⏏', run: () => { localStorage.clear(); state.token=''; state.view='list'; render(); } },
-  ], `${APP_VERSION} · 宿主 ${inst || '?'}${devices}\n${host}`);
+  ], `${APP_VERSION} · ${chan} · 宿主 ${inst || '?'}${devices}\n${state.apiBase || host}`);
+}
+
+// 连接方式面板：当前通道 + 自动/仅中转/仅局域网三档 + 手填局域网入口
+function openConnectionSheet() {
+  const info = state.netInfo || {};
+  const label = state.mode === 'auto' ? '自动' : state.mode === 'lan' ? '仅局域网' : '仅中转';
+  const cur = info.channel === 'lan' ? `局域网${info.ms ? ' · ' + info.ms + 'ms' : ''}` : '中转（公网）';
+  const probe = info.at
+    ? `${new Date(info.at).toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit' })} · ${info.error ? '不可用：' + info.error : '正常'}`
+    : '还没探测';
+  const inputStyle = 'width:100%;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:14px;margin-top:6px';
+  const addr = el('input', { value: state.lanBase || '', placeholder:'https://192.168.1.23:8443（留空 = 自动发现）',
+    autocapitalize:'off', autocorrect:'off', spellcheck:'false', style: inputStyle });
+  const port = el('input', { value: state.lanPort || '8443', inputmode:'numeric', placeholder:'8443', style: inputStyle });
+  const save = el('button', { class:'btn', style:'margin-top:10px', onclick: () => {
+    state.lanPort = String(port.value || '8443').trim();
+    try { localStorage.setItem(LS.lanPort, state.lanPort); } catch {}
+    setNetMode(state.mode, addr.value);
+    try { document.querySelector('.mask')?.remove(); } catch {}
+    toast('已保存，正在重新探测');
+  } }, '保存并重新探测');
+  const extra = el('div', { style:'padding:2px 6px 0' },
+    el('div', { style:'font-size:12px;color:var(--dim);margin-top:10px;line-height:1.6', text:'局域网入口（必须是 https；自动发现能拿到 IP 的话这里可以留空）' }),
+    addr,
+    el('div', { style:'font-size:12px;color:var(--dim);margin-top:10px', text:'局域网端口（lan-server 监听的那个，默认 8443）' }),
+    port,
+    save,
+    el('div', { style:'font-size:11.5px;color:var(--dim);margin-top:8px;line-height:1.6',
+      text:'自动档：每次打开、回到前台、以及每分钟探一次 —— 通了就切局域网，断了自动回中转。' }),
+  );
+  openInfoBox(`连接方式 · ${label}`, [
+    ['当前通道', cur],
+    ['请求发往', state.apiBase || `${location.origin}（同源中转）`],
+    ['上次探测', probe],
+  ], [
+    { label:'自动', run: () => setNetMode('auto') },
+    { label:'仅中转', run: () => setNetMode('relay') },
+    { label:'仅局域网', run: () => setNetMode('lan') },
+  ], extra);
 }
 
 // ---------------- 通用信息面板（label/value 两列） ----------------
@@ -3341,7 +3493,16 @@ function subscribeDevice() {
     else if (mq.addListener) mq.addListener(onMq);
   } catch {}
   if (state.token) {
+    // ?lanbase=https://x:8443 强制走某条局域网入口（排障、换 SSID 时用）
+    try {
+      const lb = new URLSearchParams(location.search).get('lanbase');
+      if (lb) { state.lanBase = lb.replace(/\/+$/, ''); state.mode = 'lan'; }
+    } catch {}
+    // 锁了「仅局域网」就先定通道再拉数据；自动档放到后台探，别拖慢首屏
+    if (state.mode === 'lan') await applyNetMode({ silent: true });
+    state.booted = true;
     refreshAll(); subscribeDevice();
+    if (state.mode === 'auto') applyNetMode({ silent: true }).catch(() => {});
     pushHeartbeat();
     // 从通知点进来会带 ?session=<id>，等列表加载完再跳
     const wantSid = new URLSearchParams(location.search).get('session');
@@ -3357,12 +3518,23 @@ function subscribeDevice() {
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && state.token) {
-    refreshAll();
-    syncBadge();
-    pushHeartbeat();
-    if (state.view === 'session') { loadMessages(); subscribeSession(); }
+    (async () => {
+      // 回前台先确认通道：从公司网络回到家、或手机刚连上 Wi-Fi，都靠这一下切过去
+      try { await applyNetMode(); } catch {}
+      refreshAll();
+      syncBadge();
+      pushHeartbeat();
+      if (state.view === 'session') { loadMessages(); subscribeSession(); }
+    })();
   }
 });
+
+// 自动档下每分钟探一次：局域网恢复了就切回来，断了就回中转
+setInterval(() => {
+  if (!state.token || state.mode !== 'auto') return;
+  if (document.visibilityState !== 'visible') return;
+  applyNetMode().catch(() => {});
+}, 60000);
 </script>
 </body>
 </html>

@@ -161,9 +161,44 @@ function send(res, code, text) {
   res.end(text);
 }
 
+// ---------------------------------------------------------------- CORS
+// 为什么需要：页面装在中转域名上（https://dsh.easymana.online:8443），切到局域网时
+// API 要打到 https://<内网IP>:8443 —— 这是跨源，没有 CORS 头浏览器一律拦掉。
+// 只放行「内网/本机来源 + 中转域名」，其余一律不回 CORS 头（不构成放行）。
+// 注意这层不替代鉴权：每条 API 仍旧要 Bearer 凭据。
+const CORS_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(:\d+)?$/;
+const CORS_EXTRA = (process.env.LAN_CORS_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
+const CORS_ALLOW_HEADERS = 'authorization, content-type, x-dsh-instance, x-dsh-fresh, accept';
+const CORS_ALLOW_METHODS = 'GET, POST, PUT, PATCH, DELETE, OPTIONS';
+
+function applyCors(req, res) {
+  const origin = req.headers.origin;
+  if (!origin) return false;
+  if (!CORS_EXTRA.includes(origin) && !CORS_ORIGIN.test(origin) && origin !== 'https://dsh.easymana.online:8443') {
+    // 明确不加头，浏览器自会拦
+    return false;
+  }
+  res.setHeader('access-control-allow-origin', origin);
+  res.setHeader('vary', 'origin');
+  res.setHeader('access-control-allow-headers', CORS_ALLOW_HEADERS);
+  res.setHeader('access-control-allow-methods', CORS_ALLOW_METHODS);
+  res.setHeader('access-control-max-age', '600');
+  // Chrome 的「私有网络访问」预检要这个头才放行 https 页面 → 内网地址
+  if (req.headers['access-control-request-private-network'] === 'true') {
+    res.setHeader('access-control-allow-private-network', 'true');
+  }
+  return true;
+}
+
 // ---------------------------------------------------------------- 启动
 const handler = (req, res) => {
   const path = (req.url || '/').split('?')[0];
+  const cors = applyCors(req, res);
+  if (req.method === 'OPTIONS' && cors) {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
   if (API_PREFIXES.some((p) => path === p || path.startsWith(p))) return proxy(req, res);
   serveStatic(req, res).catch((err) => {
     if (!res.headersSent) send(res, 500, `internal error: ${err && err.message}`);
