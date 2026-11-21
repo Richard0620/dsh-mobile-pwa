@@ -416,6 +416,10 @@
   .pair .btn{flex:none;width:100%}
   .pair input{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;
     font-size:20px;letter-spacing:6px;text-align:center}
+  /* 缁堢 overlay */
+  .termoverlay{position:fixed;inset:0;z-index:1200;background:var(--bg);display:flex;flex-direction:column}
+  .termbar{display:flex;align-items:center;gap:8px;padding:calc(8px + env(safe-area-inset-top)) 10px 8px;border-bottom:1px solid var(--line);background:var(--card);flex:0 0 auto}
+  .termframe{flex:1;width:100%;border:0;background:var(--bg)}
 </style>
 </head>
 <body>
@@ -428,7 +432,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v72';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v73';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1957,7 +1961,80 @@ async function loadArchived() {
   if (state.view === 'list' && state.tab === 'archived') render();
 }
 
+// ---------------------------------------------------------------- 缁堢鍒嗙粍锛坔erdr bridge锛?let termAgents = { items: [], at: 0, loading: false };
+function termToken() { return localStorage.getItem('bridge_token') || ''; }
+function loadTermAgents() {
+  const tk = termToken();
+  if (!tk || termAgents.loading) return;
+  termAgents.loading = true;
+  fetch('/agents/snapshot', { headers: { Authorization: 'Bearer ' + tk } })
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
+    .then((j) => {
+      const snap = j && j.result && j.result.snapshot;
+      if (!snap) throw new Error('bad snapshot');
+      const panes = snap.panes || [];
+      const tabs = snap.tabs || [];
+      const agents = snap.agents || [];
+      const items = tabs.map((t) => {
+        const p = panes.find((x) => x.tab_id === t.tab_id) || {};
+        const a = agents.find((x) => x.pane_id === p.pane_id);
+        return {
+          tabId: t.tab_id,
+          label: t.label || (p.cwd ? String(p.cwd).split(/[\\/]/).pop() : 'tab'),
+          paneId: p.pane_id || '',
+          cwd: p.cwd || '',
+          status: (a && a.agent_status) || p.agent_status || 'unknown',
+          agent: a ? (a.name || a.agent || '') : '',
+        };
+      });
+      termAgents.items = items;
+      termAgents.loading = false;
+      termAgents.at = Date.now();
+      if (state.view === 'list') render();
+    })
+    .catch(() => { termAgents.loading = false; termAgents.at = Date.now(); });
+}
+function appendTermGroup(main) {
+  if (!termToken()) return;
+  const closed = localStorage.getItem('term.collapsed') === '1';
+  const items = termAgents.items || [];
+  const head = el('div', { class: 'ghead' + (closed ? ' closed' : ''), onclick: () => {
+    localStorage.setItem('term.collapsed', closed ? '0' : '1');
+    render();
+  }},
+    el('span', { class: 'chev', text: '\u25BC' }),
+    el('span', { text: '\u2318' }),
+    el('span', { class: 'gname', text: '\u7EC8\u7AEF' }),
+    el('span', { class: 'count', style: 'margin-left:auto', text: String(items.length) }),
+  );
+  const box = el('div', { class: 'group' }, head);
+  if (!closed) {
+    if (!items.length) box.append(el('div', { class: 'empty', text: '\u6CA1\u6709\u7EC8\u7AEF' }));
+    for (const it of items) {
+      box.append(el('div', { class: 'row', onclick: () => openTerminal(it.paneId) },
+        el('span', { class: 'dot' + (it.status === 'working' ? ' run' : '') }),
+        el('div', { class: 'body' },
+          el('div', { class: 't' },
+            el('span', { class: 'title', text: it.label }),
+            it.status === 'blocked' ? el('span', { class: 'unread', title: '\u7B49\u4F60' }) : null,
+            el('span', { class: 'time', text: it.status })))));
+    }
+  }
+  main.append(box);
+}
+function openTerminal(paneId) {
+  const mask = el('div', { class: 'termoverlay' });
+  const bar = el('div', { class: 'termbar' },
+    el('button', { class: 'ico', text: '\u2039', onclick: () => mask.remove() }),
+    el('b', { text: '\u7EC8\u7AEF' }),
+    el('span', { style: 'flex:1' }),
+    el('button', { class: 'ico', text: '\u2715', onclick: () => mask.remove() }));
+  const frame = el('iframe', { class: 'termframe', src: '/agents/?embed=1&pane=' + encodeURIComponent(paneId || '') });
+  mask.append(bar, frame);
+  document.body.append(mask);
+}
 function renderList(wrap, opts = {}) {
+  if (Date.now() - termAgents.at > 15000) loadTermAgents();
   const menu = el('button', { class:'ico', text:'☰', 'data-bell':'', onclick: () => openSheet([
     { label:'刷新', icon:'⟳', run: () => refreshAll(true) },
     { label:'新建工作区', icon:'📁', run: newWorkspace },
@@ -2108,6 +2185,7 @@ function renderList(wrap, opts = {}) {
     }
     main.append(box);
   }
+  appendTermGroup(main);
   if (!opts.noPull) installPullToRefresh(main);
   wrap.append(main);
 }

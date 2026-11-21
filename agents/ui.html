@@ -83,6 +83,10 @@
   .agp .toast.on{opacity:1}
   .agp .empty{padding:10px;color:var(--dim);font-size:12.5px}
   .agp .ver{font-size:10px;color:var(--dim);opacity:.65;margin-left:2px;align-self:flex-start;padding-top:2px}
+  .agp.embed .hdr{display:none}
+  .agp.embed .nav{display:none}
+  .agp.embed .mobar{display:none}
+  .agp.embed .termwrap{padding-top:8px}
   @media (max-width:699px){
     .agp .nav{display:none}
     .agp .mobar{display:flex}
@@ -164,6 +168,8 @@
   let token = localStorage.getItem('bridge_token') || '';
   const q = new URLSearchParams(location.search);
   if (q.get('token')) { token = q.get('token'); localStorage.setItem('bridge_token', token); history.replaceState(null, '', location.pathname); }
+  const prefPane = q.get('pane') || '';
+  if (q.get('embed')) document.getElementById('agp').classList.add('embed');
 
   let pane = null;
   let snap = null;
@@ -192,6 +198,7 @@
     const j = await r.json();
     snap = (j.result && j.result.snapshot) || null;
     if (!snap) throw new Error('snapshot 解析失败');
+    if (!pane && prefPane && panes().some((p) => p.pane_id === prefPane)) pane = prefPane;
     if (!pane && panes().length) pane = panes()[0].pane_id;
     renderNav();
     const me = panes().find((p) => p.pane_id === pane);
