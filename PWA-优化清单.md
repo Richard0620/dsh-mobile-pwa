@@ -2,7 +2,7 @@
 
 > **所有会话、子代理都只改这一份。** 开工前先读；完成一项或发版后立刻更新状态，不要另建清单，也不要只把进度写在聊天里。
 >
-> 最后更新：2026-11-21 · 线上 **v83 / sw v84**（以 `ssh root@38.189.61.57 cat /srv/dsh-mobile/VERSION` 为准）
+> 最后更新：2026-11-20 23:19 · 线上 **v83 / sw v84**（以 `ssh root@38.189.61.57 cat /srv/dsh-mobile/VERSION` 为准）
 > 代码主目录：`D:\Vibe\PWA\pwa`（master，主会话负责合并与部署）
 
 ---
@@ -128,7 +128,7 @@
 
 ---
 
-## 6. 推送系统现状（2026-11-21）
+## 6. 推送系统现状（2026-11-20）
 
 ```
 DSH 插件 sendFrame() ──► ~/.dsh/webpush.json ──► https://dsh.easymana.online:8443/push/notify
