@@ -2378,8 +2378,7 @@ function renderList(wrap, opts = {}) {
   main.append(el('div', { class:'searchrow' }, searchInput));
 
   if (state.tab === 'archived') {
-    const items = state.archived;
-    if (items === null) {
+    const items = state.archived;    if (items === null) {
       main.append(el('div', { class:'empty', text:'加载中…' }));
     } else if (!items.length) {
       main.append(el('div', { class:'empty', text: state.archivedError || '没有归档的会话' }));
@@ -2733,7 +2732,9 @@ function paintSession({ scroll = 'auto' } = {}) {
     const ts = it.m && it.m.time;
     const day = ts ? dayKeyOf(ts) : '';
     if (day && day !== lastDay) {
-      items.push({ type:'sep', key:`S:${day}`, text: fmtDayLabel(ts), ts });
+      const label = fmtDayLabel(ts);
+      // key 带上 label：App 跨过午夜还开着时，「今天」要能变成「昨天」
+      items.push({ type:'sep', key:`S:${day}:${label}`, text: label, ts });
       lastDay = day;
     }
     const txt = (it.m && it.m.text) || '';
