@@ -224,7 +224,13 @@ $('#startClaude').onclick = async () => {
     toast('claude 已启动');
     await refreshPanes();
     await tick();
-  } catch (e) { toast(e.message); }
+  } catch (e) {
+    if (/agent_not_ready/.test(e.message || '')) {
+      toast('claude 已启动，正在等待输入');
+      refreshPanes().catch(() => {});
+      tick();
+    } else { toast(e.message); }
+  }
 };
 $('#txt').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
 document.querySelectorAll('.keys button').forEach((b) => { b.onclick = () => key(b.dataset.key); });
