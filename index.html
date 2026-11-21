@@ -241,6 +241,12 @@
     border-top:1px solid var(--line);flex:none}
   .drbtn{font-size:12px;color:var(--dim);background:var(--card);border:1px solid var(--line);
     border-radius:999px;padding:6px 10px}
+  /* 抽屉底部：图标按钮一行放下（通知入口收进「设置」里，不再占一格） */
+  .drfoot.icons{flex-wrap:nowrap;justify-content:space-around;align-items:center;gap:4px;
+    padding:8px 10px calc(8px + var(--safe-b))}
+  .drfoot.icons .drbtn{width:46px;height:42px;padding:0;border-radius:12px;font-size:19px;
+    display:grid;place-items:center;color:var(--fg);background:var(--card)}
+  .drfoot.icons .drbtn:active{background:var(--bubble)}
 
   /* 标题行：连接点 + 标题 */
   header h1{display:flex;align-items:center;justify-content:center;gap:6px;min-width:0;max-width:100%;
@@ -476,7 +482,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v105';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v107';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1914,13 +1920,16 @@ function openDrawer() {
   const listBox = el('div', { class:'drlist' });
   renderList(listBox, { noHeader: true, noPull: true });
 
-  const foot = el('div', { class:'drfoot' },
-    el('button', { class:'drbtn', onclick: () => { closeDrawer(); openAbout(); } },
-    el('button', { class:'drbtn', onclick: () => { closeDrawer(); openPushSettings(); } }, '🔔 通知'), '⚙ 设置'),
-    el('button', { class:'drbtn', onclick: () => { closeDrawer(); openStats(); } }, '📊 统计'),
-    el('button', { class:'drbtn', onclick: () => { closeDrawer(); openFileDrawer(state.sessionCwd || ''); } }, '📂 文件'),
-    el('button', { class:'drbtn', onclick: () => { closeDrawer(); location.href = '/agents/'; } }, '⌘ 终端'),
-    el('button', { class:'drbtn', onclick: () => { closeDrawer(); reloadApp(); } }, '↻ 重载'),
+  // 图标化的一行底部操作。通知入口并入「设置」里的「通知提醒」，不再单独占位。
+  const iconBtn = (icon, label, run) => el('button', {
+    class:'drbtn', title:label, 'aria-label':label, onclick: run,
+  }, icon);
+  const foot = el('div', { class:'drfoot icons' },
+    iconBtn('⚙', '设置', () => { closeDrawer(); openAbout(); }),
+    iconBtn('📊', '统计', () => { closeDrawer(); openStats(); }),
+    iconBtn('📂', '文件', () => { closeDrawer(); openFileDrawer(state.sessionCwd || ''); }),
+    iconBtn('⌘', '终端', () => { closeDrawer(); location.href = '/agents/'; }),
+    iconBtn('↻', '重载', () => { closeDrawer(); reloadApp(); }),
   );
 
   panel.append(head, listBox, foot);
