@@ -467,7 +467,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v99';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v100';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -3914,8 +3914,12 @@ function openSession(s) {
     paintSession({ scroll:'bottom' });
   }
   // 先取完消息拿到正确的 lastSeq，再订阅流：否则 lastSeq=0 会把历史帧（含旧审批）整体回放一遍
-  loadMessages().then(() => {
+  // force=true：打开会话（包括从通知点进来）一律落到最新一条，别停在历史位置
+  loadMessages(true).then(() => {
     loadModel(); subscribeSession();
+    // 图片/代码块加载后高度会变，再补两次贴底
+    requestAnimationFrame(() => { if (ui.body && ui.body.isConnected) ui.body.scrollTop = ui.body.scrollHeight; });
+    setTimeout(() => { if (ui.body && ui.body.isConnected) ui.body.scrollTop = ui.body.scrollHeight; }, 350);
     // 打开即视为已读（宿主侧有 readAt，图标角标也就跟着掉一个）
     markRead(state.sessionId).then(() => { refreshAll(true); syncBadge(); });
   });
