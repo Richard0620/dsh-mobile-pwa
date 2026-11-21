@@ -75,6 +75,19 @@ node agents/bridge.mjs                   # 默认 127.0.0.1:18888
 
 **安全**：这个地址是公网可达的（HTTPS + 128 位 token）。token 不要外发；要换就直接改 `BRIDGE_TOKEN` 重启 bridge，旧 token 立即失效。正式化前不要再往上加"无鉴权"的能力。
 
+## 自启（2026-11-20）
+
+已经做成登录自启，电脑重启/注销后不用手动起：
+
+- **启动项**：`%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\agents-bridge.lnk`
+  → `powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File D:\Vibe\PWA\pwa\agents\start.ps1`
+- **start.ps1**：幂等——18888 已在监听就跳过 bridge；已有 `tunnel.ps1` 进程就跳过隧道；
+- **token**：优先读用户环境变量 `BRIDGE_TOKEN`，没有则读 `%LOCALAPPDATA%\agents-bridge\token.txt`；
+- **日志**：`%LOCALAPPDATA%\agents-bridge\` 下 `start.log` / `bridge.out.log` / `bridge.err.log` / `tunnel.log`；
+- **换 token**：`setx BRIDGE_TOKEN <新值>`，改 `token.txt`，然后重启 bridge（杀 18888 的进程，再跑一次 `start.ps1`）。
+
+herdr server 和 moshi-hook 也各有自己的启动项（`herdr server.lnk`、`moshi-hook serve.lnk`），所以登录后整条链会自己起来。
+
 ## 还没做（Phase 3）
 
 1. 鉴权换成 PWA 设备凭据（现在是共享 token）；
