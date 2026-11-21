@@ -20,7 +20,8 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      // 只清旧外壳缓存；dsh-open 里存的是「点通知要打开的会话」便条，不能一起删
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE && k !== OPEN_CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
