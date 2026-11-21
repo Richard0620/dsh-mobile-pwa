@@ -65,6 +65,15 @@
   .agp .kbtn{min-width:44px;height:38px;padding:0 12px;border-radius:11px;border:1px solid var(--line);background:var(--card);font-size:13.5px}
   .agp .kbtn:active{background:var(--bg)}
   .agp .kbtn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  .agp .seg{display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:10px;background:var(--bg);flex:none}
+  .agp .seg button{padding:4px 9px;border-radius:8px;font-size:12px;color:var(--dim)}
+  .agp .seg button.on{background:var(--card);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .agp .chat{flex:1;min-height:0;overflow:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px;-webkit-overflow-scrolling:touch}
+  .agp .bubble{max-width:88%;padding:9px 12px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+  .agp .bubble.user{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:5px}
+  .agp .bubble.assistant{align-self:flex-start;background:var(--card);border:1px solid var(--line);border-bottom-left-radius:5px}
+  .agp .bubble.tool{align-self:flex-start;background:var(--bg);border:1px dashed var(--line);color:var(--dim);font:11.5px/1.45 ui-monospace,Consolas,monospace;max-width:94%;border-radius:10px}
+  .agp .chatempty{align-self:center;color:var(--dim);font-size:13px;padding:24px 10px;text-align:center}
   .agp .keys{display:flex;gap:7px;padding:9px 12px 0;overflow-x:auto;flex:0 0 auto;scrollbar-width:none}
   .agp .keys::-webkit-scrollbar{display:none}
   .agp .keys .kbtn{flex:none;height:36px;min-width:42px;font-size:13px;color:var(--dim)}
@@ -106,8 +115,9 @@
       <div class="title">终端</div>
       <div class="sub" id="conn">connecting…</div>
     </div>
-    <span class="ver">v3</span>
+    <span class="ver">v4</span>
     <span class="grow"></span>
+    <div class="seg" id="seg"><button id="vChat">对话</button><button id="vTerm">终端</button></div>
     <button class="chip" id="startBtn">＋ claude</button>
     <button class="iconbtn" id="tokenBtn" title="token">⚙</button>
   </header>
@@ -124,7 +134,8 @@
       <div class="mobar">
         <select id="sel" aria-label="选择 pane 或 agent"></select>
       </div>
-      <div class="termwrap"><pre class="term" id="out">…</pre></div>
+      <div class="termwrap" id="termwrap"><pre class="term" id="out">…</pre></div>
+      <div class="chat" id="chat" hidden></div>
       <div class="blockedbar" id="blockedBar">
         <div class="bt"><b>●</b> agent 在等你 <span class="grow"></span><span class="sub" id="blockedWho"></span></div>
         <div class="ex" id="blockedEx"></div>
@@ -175,6 +186,19 @@
   let snap = null;
   let lastText = '';
   let busy = false;
+  let viewMode = localStorage.getItem('agents.view') || 'chat';
+  let chatSig = '';
+
+  function E(tag, props = {}, text = '') {
+    const n = document.createElement(tag);
+    for (const k of Object.keys(props)) {
+      if (k === 'class') n.className = props[k];
+      else n[k] = props[k];
+    }
+    if (text) n.textContent = text;
+    return n;
+  }
+  function chatAgent() { return agents().find((a) => a.pane_id === pane); }
 
   function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 1900); }
   function gate(v) { $('#gate').hidden = !v; }
@@ -247,7 +271,7 @@
     if (pane) sel.value = pane;
   }
 
-  function select(id) { if (!id) return; pane = id; lastText = ''; load().catch(() => {}); tick(); }
+  function select(id) { if (!id) return; pane = id; lastText = ''; chatSig = ''; load().catch(() => {}); tick(); if (viewMode === 'chat') chatTick(); }
 
   function renderBlocked(me) {
     const a = currentAgent();
@@ -285,10 +309,69 @@
     } catch (e) { conn(false, e.message); }
   }
 
+  function renderChat(msgs) {
+    const box = $('#chat');
+    const near = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+    box.replaceChildren();
+    if (!msgs.length) box.append(E('div', { class: 'chatempty' }, '还没有对话，在下面发一条消息开始'));
+    for (const m of msgs) {
+      if (m.role === 'user') box.append(E('div', { class: 'bubble user' }, m.text));
+      else if (m.role === 'assistant') {
+        if (m.text) box.append(E('div', { class: 'bubble assistant' }, m.text));
+        for (const t of (m.tools || [])) box.append(E('div', { class: 'bubble tool' }, '\u2699 ' + t.name + '\n' + t.input));
+      } else if (m.role === 'tool') {
+        box.append(E('div', { class: 'bubble tool' }, m.text));
+      }
+    }
+    if (near) box.scrollTop = box.scrollHeight;
+  }
+
+  async function chatTick() {
+    if (!pane || viewMode !== 'chat') return;
+    const a = chatAgent();
+    const box = $('#chat');
+    if (!a) {
+      box.replaceChildren(E('div', { class: 'chatempty' }, '这个 pane 还没有 agent，点右上 ＋ claude'));
+      chatSig = '';
+      return;
+    }
+    try {
+      const r = await api('/chat?pane=' + encodeURIComponent(pane) + '&limit=200');
+      const j = await r.json();
+      const msgs = j.messages || [];
+      const last = msgs[msgs.length - 1] || {};
+      const sig = msgs.length + ':' + (last.time || '') + ':' + String(last.text || '').length;
+      if (sig !== chatSig) { chatSig = sig; renderChat(msgs); }
+      conn(true, '已连接 · ' + (a.name || a.agent || pane));
+    } catch (e) {
+      if (/401/.test(String(e.message))) return;
+      box.replaceChildren(E('div', { class: 'chatempty' }, '读取对话失败：' + e.message));
+    }
+  }
+
+  function renderView() {
+    const isChat = viewMode === 'chat';
+    $('#termwrap').style.display = isChat ? 'none' : '';
+    $('#chat').hidden = !isChat;
+    $('#vChat').classList.toggle('on', isChat);
+    $('#vTerm').classList.toggle('on', !isChat);
+    $('#txt').placeholder = isChat ? '发消息给 agent，Enter 发送' : '输入命令，Enter 发送';
+    if (isChat) chatTick();
+  }
+
   async function send() {
     const el = $('#txt'); const text = el.value;
     if (!text || !pane) return;
     el.value = '';
+    if (viewMode === 'chat') {
+      const a = chatAgent();
+      if (!a) { toast('这个 pane 还没有 agent'); el.value = text; return; }
+      try {
+        await api('/prompt', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ target: a.name || a.agent, text }) });
+        await chatTick();
+      } catch (e) { toast(e.message); el.value = text; }
+      return;
+    }
     try {
       await api('/send', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane, text, enter: true }) });
       await tick();
@@ -312,9 +395,13 @@
     }
     await load().catch(() => {});
     await tick();
+    chatSig = '';
+    if (viewMode === 'chat') chatTick();
   }
 
   $('#send').onclick = send;
+  $('#vChat').onclick = () => { viewMode = 'chat'; localStorage.setItem('agents.view', 'chat'); renderView(); };
+  $('#vTerm').onclick = () => { viewMode = 'term'; localStorage.setItem('agents.view', 'term'); renderView(); };
   $('#txt').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
   document.querySelectorAll('.keys .kbtn').forEach((b) => { b.onclick = () => key(b.dataset.key); });
   $('#startBtn').onclick = startClaude;
@@ -325,9 +412,11 @@
   function boot() {
     if (!token) { gate(true); return; }
     gate(false);
+    renderView();
     load().catch((e) => conn(false, e.message));
     tick();
     setInterval(tick, 1500);
+    setInterval(() => { if (viewMode === 'chat') chatTick(); }, 2000);
     setInterval(() => load().catch(() => {}), 4000);
   }
 
