@@ -181,7 +181,20 @@ git add index.html sw.js AGENT-RULES.md     # 只写你改过的文件
 - 只 `git add <具体文件>`，**禁止 `git add -A`**
 - 提交信息格式：`type(scope): 摘要（vNN）`
 
-### 6. 编辑 `.ps1` 的编码坑
+### 6. 远端（GitHub）：`main` 是唯一主线，本地叫 `master`
+
+- GitHub 上的默认分支叫 **`main`**；本地主线仍叫 `master`，两者**必须始终指向同一个提交**
+- 主会话每次把分支合进 `master` 后，**立刻**推送对齐：
+  ```powershell
+  git push origin master:main        # 本地 master → 远端 main
+  git fetch origin && git rev-parse master origin/main   # 两个哈希必须相同
+  ```
+- **其他会话（含并行、子会话）一律不准动 `master` / `main`**：只在自己的 feature 分支提交，
+  由主会话合并。要发布就报告，不要自己 push 到 main
+- 部署前若 `master` 与 `origin/main` 不一致，**先对齐再部署**，避免线上版本和仓库对不上
+- 远端分支策略：feature 分支可以推（备份/协作），但**只有 `main` 能对应线上**
+
+### 7. 编辑 `.ps1` 的编码坑
 
 带中文的 PowerShell 脚本**必须存成 UTF-8 with BOM**：Windows PowerShell 5.1 把无 BOM 的
 UTF-8 当 ANSI 读，中文字节会把下一行语法一起带坏（实测 11 个 parse error）。用工具改完
