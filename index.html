@@ -4035,7 +4035,8 @@ function subscribeDevice() {
   installViewportSync();
   installOfflineBar();
   if (state.token) {
-    refreshAll().then(() => { consumePendingOpen(); });
+    consumePendingOpen();                          // 先按本地缓存的列表直接跳，别等网络
+  refreshAll().catch(() => {}).then(() => { consumePendingOpen(); });
     subscribeDevice();
     pushHeartbeat();
     // 从通知点进来会带 ?session=<id>（浏览器场景），等列表加载完再跳
@@ -4052,7 +4053,8 @@ function subscribeDevice() {
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && state.token) {
-    refreshAll().then(() => { consumePendingOpen(); });
+    consumePendingOpen();                          // 先按本地缓存的列表直接跳，别等网络
+  refreshAll().catch(() => {}).then(() => { consumePendingOpen(); });
     syncBadge();
     pushHeartbeat();
     if (state.view === 'session') { loadMessages(); subscribeSession(); }
