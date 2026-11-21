@@ -16,11 +16,17 @@ param(
   [string]$Ip = '',
   # 换 Wi-Fi 前先把常去的地址一起签进去（家里/公司/热点），之后不用重签
   [string[]]$AlsoIps = @(),
+  # 稳定名字（mDNS）：IP 会随网络变，这个名字不变，所以证书签它就等于一劳永逸
+  [string]$DnsName = '',
   [string]$Out = (Join-Path $PSScriptRoot 'certs'),
   [string]$Passphrase = 'dsh-lan'
 )
 
 $ErrorActionPreference = 'Stop'
+
+if (-not $DnsName) {
+  $DnsName = ([System.Net.Dns]::GetHostName().ToLower() -split '\.')[0] + '.local'
+}
 
 # 默认把本机当前所有内网 IPv4 都签进去：多网卡（网线 + Wi-Fi）、多网段一次覆盖
 $ips = @()
@@ -61,7 +67,8 @@ if (-not $ca) {
 }
 
 # 2) 服务端证书：SAN 里放 IP，iOS 只认 SAN，不看 CN
-$sanParts = @($ips | ForEach-Object { "IPAddress=$_" }) + @('DNS=localhost')
+$dnsNames = @($DnsName, 'localhost') | Where-Object { $_ } | Select-Object -Unique
+$sanParts = @($ips | ForEach-Object { "IPAddress=$_" }) + @($dnsNames | ForEach-Object { "DNS=$_" })
 $san = "2.5.29.17={text}" + ($sanParts -join '&')
 $leaf = New-SelfSignedCertificate `
   -Subject "CN=$Ip" `
@@ -88,6 +95,11 @@ foreach ($one in $ips) {
     throw "证书 SAN 里没有 $one（实际：$sanText）"
   }
 }
+foreach ($dn in $dnsNames) {
+  if ($sanText -notmatch [regex]::Escape("DNS Name=$dn")) {
+    throw "证书 SAN 里没有 $dn（实际：$sanText）"
+  }
+}
 
 # 本机自己也要信任这张 CA，否则电脑上 curl/Chrome 也会拦。
 # 装根证书时 Windows 会弹一次确认框；被拒绝也不影响手机那条路，所以只提示不失败。
@@ -106,11 +118,14 @@ if ($env:DSH_LAN_NO_TRUST -ne '1') {
 
 Write-Host ''
 Write-Host "内网 IP      $($ips -join ', ')"
+Write-Host "稳定名字     $DnsName"
 Write-Host "服务端证书   $pfxPath   口令 $Passphrase"
 Write-Host "手机要装的   $(Join-Path $Out 'lan-ca.cer')（只需装一次，换网络不用重装）"
 Write-Host ''
 Write-Host '下一步：'
-Write-Host "  node lan-server.mjs --port 8443 --pfx `"$pfxPath`" --passphrase $Passphrase"
+Write-Host "  node lan-server.mjs --port 8443 --pfx `"$pfxPath`" --passphrase $Passphrase --name $DnsName"
+Write-Host ''
+Write-Host "手机上的稳定地址（换 Wi-Fi 不变）：  https://${DnsName}:8443/"
 Write-Host ''
 Write-Host '手机（iPhone，一次性）：'
 Write-Host '  1. 把 lan-ca.cer 用隔空投送/微信/邮件发到手机，点开 → 允许下载描述文件'

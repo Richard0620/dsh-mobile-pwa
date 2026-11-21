@@ -22,6 +22,7 @@
 import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
+import dgram from 'node:dgram';
 import os from 'node:os';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve } from 'node:path';
@@ -35,10 +36,23 @@ const HELP = `局域网直连服务
   node lan-server.mjs [端口] [--host 0.0.0.0] [--upstream 127.0.0.1:18787]
                       [--cert 证书.pem --key 私钥.pem]
                       [--pfx 证书.pfx --passphrase 口令]
+                      [--name laptop.local --no-mdns]
                       [--root 静态目录]`;
 
 const argv = process.argv.slice(2);
-const flags = { host: '0.0.0.0', port: 8080, upstream: '127.0.0.1:18787', cert: '', key: '', pfx: '', passphrase: '', root: HERE };
+const flags = {
+  host: '0.0.0.0',
+  port: 8080,
+  upstream: '127.0.0.1:18787',
+  cert: '',
+  key: '',
+  pfx: '',
+  passphrase: '',
+  // 稳定的名字：换 Wi-Fi 内网 IP 会变，<机器名>.local 不变，证书按名字签一次就够
+  name: `${os.hostname().toLowerCase().split('.')[0]}.local`,
+  mdns: true,
+  root: HERE,
+};
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
   if (a === '--host') flags.host = argv[++i];
@@ -48,6 +62,8 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--key') flags.key = argv[++i];
   else if (a === '--pfx') flags.pfx = argv[++i];
   else if (a === '--passphrase') flags.passphrase = argv[++i];
+  else if (a === '--name') flags.name = String(argv[++i] || '').toLowerCase();
+  else if (a === '--no-mdns') flags.mdns = false;
   else if (a === '--root') flags.root = resolve(argv[++i]);
   else if (/^\d+$/.test(a)) flags.port = Number(a);
   else if (a === '-h' || a === '--help') { console.log(HELP); process.exit(0); }
@@ -190,6 +206,99 @@ function applyCors(req, res) {
   return true;
 }
 
+// ---------------------------------------------------------------- mDNS（<机器名>.local）
+// 为什么要它：换 Wi-Fi 内网 IP 就变，IP 一变证书就对不上。名字不变，证书签一次就够。
+// Windows 自己不回应 mDNS 查询，所以这里当一个小应答器：只答 A 记录，地址每次现算
+// （join 之后 IP 变了也不用重启），手机侧 iOS 原生支持 .local 解析。
+// 注意：开的端口就是 mDNS 的 5353，多播被网络拦掉时（访客网络/企业网）这条路不通，
+// 那种网络下客户端隔离本身就直连不了，不是这里的锅。
+function encodeName(name) {
+  const parts = name.replace(/\.$/, '').split('.').filter(Boolean);
+  const bufs = parts.map((p) => {
+    const b = Buffer.alloc(1 + Buffer.byteLength(p));
+    b[0] = Buffer.byteLength(p);
+    b.write(p, 1, 'ascii');
+    return b;
+  });
+  return Buffer.concat([...bufs, Buffer.from([0])]);
+}
+
+function buildMdnsResponse(name, ips) {
+  const header = Buffer.alloc(12);
+  header.writeUInt16BE(0, 0);        // id = 0（mDNS 响应固定 0）
+  header.writeUInt16BE(0x8400, 2);   // 响应 + AA
+  header.writeUInt16BE(0, 4);
+  header.writeUInt16BE(ips.length, 6);  // ancount
+  header.writeUInt16BE(0, 8);
+  header.writeUInt16BE(0, 10);
+  const answers = ips.map((ip) => {
+    const rr = Buffer.alloc(14);
+    rr.writeUInt16BE(1, 0);          // type A
+    rr.writeUInt16BE(0x8001, 2);     // class IN + cache-flush
+    rr.writeUInt32BE(120, 4);        // ttl 120s：换网后最多两分钟就学到新地址
+    rr.writeUInt16BE(4, 8);
+    ip.split('.').forEach((oct, i) => rr.writeUInt8(Number(oct) & 0xff, 10 + i));
+    return Buffer.concat([encodeName(name), rr]);
+  });
+  return Buffer.concat([header, ...answers]);
+}
+
+function parseMdnsQuestions(buf) {
+  if (buf.length < 12) return [];
+  const qd = buf.readUInt16BE(4);
+  const out = [];
+  let off = 12;
+  for (let i = 0; i < qd && off < buf.length; i++) {
+    const labels = [];
+    while (off < buf.length) {
+      const len = buf[off];
+      if (len === 0) { off += 1; break; }
+      if (len & 0xc0) { off += 2; break; }  // 压缩指针：问题区里很少见，直接放弃这条
+      labels.push(buf.slice(off + 1, off + 1 + len).toString('ascii'));
+      off += 1 + len;
+    }
+    if (off + 4 > buf.length) break;
+    const qtype = buf.readUInt16BE(off);
+    const qclass = buf.readUInt16BE(off + 2);
+    off += 4;
+    // qclass 最高位是「希望单播回应」（QU），取值时掩掉
+    out.push({ name: labels.join('.').toLowerCase(), qtype, unicast: Boolean(qclass & 0x8000) });
+  }
+  return out;
+}
+
+function startMdns({ name, ips }) {
+  const socket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+  const target = name.toLowerCase();
+  socket.on('error', (err) => {
+    console.warn(`  ! mDNS 起不来（${err.code || err.message}）—— 不影响 IP 直连，只是 .local 名字不可用`);
+    try { socket.close(); } catch {}
+  });
+  socket.on('message', (msg, rinfo) => {
+    let questions;
+    try { questions = parseMdnsQuestions(msg); } catch { return; }
+    if (!questions.some((q) => q.name === target && (q.qtype === 1 || q.qtype === 255))) return;
+    let list;
+    try { list = ips(); } catch { return; }
+    if (!list.length) return;
+    const packet = buildMdnsResponse(name, list);
+    // 标准做法是多播回应；请求方要了单播（QU）就再单发一份，两种解析器都照顾到
+    try { socket.send(packet, 5353, '224.0.0.251'); } catch {}
+    if (questions.some((q) => q.unicast)) {
+      try { socket.send(packet, rinfo.port, rinfo.address); } catch {}
+    }
+  });
+  socket.bind(5353, () => {
+    try { socket.setMulticastTTL(255); } catch {}
+    const join = (addr) => { try { socket.addMembership('224.0.0.251', addr); } catch {} };
+    join();  // 默认出口
+    for (const list of Object.values(os.networkInterfaces())) {
+      for (const i of list || []) if (i.family === 'IPv4' && !i.internal) join(i.address);
+    }
+  });
+  return socket;
+}
+
 // ---------------------------------------------------------------- 启动
 const handler = (req, res) => {
   const path = (req.url || '/').split('?')[0];
@@ -238,6 +347,14 @@ server.listen(flags.port, flags.host, () => {
   console.log('');
   if (!lan.length) console.log('  ! 没有找到内网地址，检查 Wi-Fi / 网线是否连上');
   for (const ip of lan) console.log(`  手机上打开  ${scheme}://${ip}:${flags.port}/`);
+  // 名字入口：换 Wi-Fi、IP 变了它也不变，证书按这个名字签一次就够
+  if (flags.mdns) {
+    console.log(`  换网不变的名字  ${scheme}://${flags.name}:${flags.port}/`);
+    try { startMdns({ name: flags.name, ips: lanAddresses }); }
+    catch (err) { console.log(`  ! mDNS 没起来：${err.message}`); }
+  } else {
+    console.log(`  （mDNS 已关闭：--no-mdns）`);
+  }
   console.log('');
   if (!tlsOn) {
     console.log('  提示：http 下浏览器不算安全上下文 —— 能用，但没有离线缓存、主屏安装、通知。');

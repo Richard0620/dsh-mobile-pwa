@@ -427,7 +427,7 @@
 <script type="module">
 // ---------------------------------------------------------------- 基础
 const APP_VERSION = 'v71';   // 每次发版改这里，菜单底部会显示
-const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort' };
+const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
 const CACHE_KEYS = { list:'dsh.cache.list', msgs:'dsh.cache.msgs' };
@@ -679,6 +679,7 @@ const state = {
   mode: localStorage.getItem(LS.mode) || 'auto',
   lanBase: localStorage.getItem(LS.lanBase) || '',   // 手填的局域网入口，空则自动发现
   lanPort: localStorage.getItem(LS.lanPort) || '8443',
+  lanName: localStorage.getItem(LS.lanName) || '',   // 稳定的 .local 名字：换 Wi-Fi 也不用改
   apiBase: '',        // 当前生效的请求前缀，'' 表示与页面同源（中转）
   netInfo: null,      // 最近一次探测结果
   booted: false,
@@ -803,10 +804,12 @@ async function lanCandidates() {
       if (!list.includes(origin)) list.push(origin);
     } catch {}
   };
-  if (state.lanBase) push(state.lanBase);   // 手填的排第一个
+  const port = String(state.lanPort || '8443');
+  if (state.lanBase) push(state.lanBase);                              // 手填的排第一个
+  // 稳定名字（<机器名>.local）：换 Wi-Fi 也不用改，所以有就优先试
+  if (state.lanName) push(`https://${state.lanName.replace(/^https?:\/\//, '').replace(/\/.*$/, '')}`);
   try {
     const info = await api('/api/mobile/v1/connection-info');
-    const port = String(state.lanPort || '8443');
     for (const c of (info.lanCandidates || info.lanUrls || [])) {
       const raw = typeof c === 'string' ? c : (c && c.url);
       try {
@@ -814,6 +817,9 @@ async function lanCandidates() {
         push(`https://${host.includes(':') ? '[' + host + ']' : host}:${port}`);
       } catch {}
     }
+    // 宿主名字像主机名时才拼 .local（换网后 IP 候选必然失效，这条还活着）
+    const nm = String(info.name || '').trim().toLowerCase();
+    if (!state.lanName && /^[a-z0-9][a-z0-9-]{1,62}$/.test(nm)) push(`https://${nm}.local:${port}`);
   } catch {}
   return list;
 }
@@ -1891,18 +1897,24 @@ function openConnectionSheet() {
     ? `${new Date(info.at).toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit' })} · ${info.error ? '不可用：' + info.error : '正常'}`
     : '还没探测';
   const inputStyle = 'width:100%;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:14px;margin-top:6px';
+  const nameIn = el('input', { value: state.lanName || '', placeholder:'laptop-oc45injj.local（lan-server 启动时会打印）',
+    autocapitalize:'off', autocorrect:'off', spellcheck:'false', style: inputStyle });
   const addr = el('input', { value: state.lanBase || '', placeholder:'https://192.168.1.23:8443（留空 = 自动发现）',
     autocapitalize:'off', autocorrect:'off', spellcheck:'false', style: inputStyle });
   const port = el('input', { value: state.lanPort || '8443', inputmode:'numeric', placeholder:'8443', style: inputStyle });
   const save = el('button', { class:'btn', style:'margin-top:10px', onclick: () => {
     state.lanPort = String(port.value || '8443').trim();
     try { localStorage.setItem(LS.lanPort, state.lanPort); } catch {}
+    state.lanName = String(nameIn.value || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    try { localStorage.setItem(LS.lanName, state.lanName); } catch {}
     setNetMode(state.mode, addr.value);
     try { document.querySelector('.mask')?.remove(); } catch {}
     toast('已保存，正在重新探测');
   } }, '保存并重新探测');
   const extra = el('div', { style:'padding:2px 6px 0' },
-    el('div', { style:'font-size:12px;color:var(--dim);margin-top:10px;line-height:1.6', text:'局域网入口（必须是 https；自动发现能拿到 IP 的话这里可以留空）' }),
+    el('div', { style:'font-size:12px;color:var(--dim);margin-top:10px;line-height:1.6', text:'稳定名字（换 Wi-Fi、换路由器都不用改，推荐）' }),
+    nameIn,
+    el('div', { style:'font-size:12px;color:var(--dim);margin-top:10px;line-height:1.6', text:'局域网入口（必须是 https；上面填了名字这里可以留空）' }),
     addr,
     el('div', { style:'font-size:12px;color:var(--dim);margin-top:10px', text:'局域网端口（lan-server 监听的那个，默认 8443）' }),
     port,
@@ -1913,6 +1925,7 @@ function openConnectionSheet() {
   openInfoBox(`连接方式 · ${label}`, [
     ['当前通道', cur],
     ['请求发往', state.apiBase || `${location.origin}（同源中转）`],
+    ['稳定名字', state.lanName || '（未设置，靠 IP 候选）'],
     ['上次探测', probe],
   ], [
     { label:'自动', run: () => setNetMode('auto') },
