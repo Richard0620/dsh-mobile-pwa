@@ -426,7 +426,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v67';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v68';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1641,14 +1641,38 @@ function b64urlToU8(b64) {
   return out;
 }
 
+const withTimeout = (p, ms, fallback) =>
+  Promise.race([p, new Promise(r => setTimeout(() => r(fallback), ms))]);
+
 async function pushStatus() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return 'unsupported';
   try {
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.getSubscription();
+    // 注意：serviceWorker.ready 在没有活动 SW 时永不 resolve，必须限时
+    const reg = await withTimeout(navigator.serviceWorker.ready, 1500, null);
+    if (!reg) return 'nosw';
+    const sub = await withTimeout(reg.pushManager.getSubscription(), 1500, null);
     if (sub) return 'on';
     return (typeof Notification !== 'undefined' && Notification.permission === 'denied') ? 'denied' : 'off';
   } catch { return 'off'; }
+}
+
+// 单独的「通知提醒」面板：不依赖任何可能挂起的 await
+async function openPushSettings() {
+  const st = await pushStatus();
+  const label = {
+    on: '已开启（这台设备会收到推送）',
+    off: '未开启',
+    denied: '系统里被拒绝，请去 设置 → 通知 里打开',
+    unsupported: '这个浏览器不支持 Web Push（需要 iOS 16.4+ 且已添加到主屏）',
+    nosw: 'Service Worker 还没就绪，杀进程重开一次再试',
+  }[st] || st;
+
+  const items = [];
+  if (st === 'off') items.push({ label:'开启通知提醒', icon:'🔔', run: enablePush });
+  if (st === 'on') items.push({ label:'关闭通知提醒', icon:'🔕', run: disablePush });
+  items.push({ label:'重新加载', icon:'↻', run: reloadApp });
+
+  openSheet(items, `通知提醒 · ${label}`);
 }
 
 async function enablePush() {
@@ -1702,17 +1726,8 @@ async function openAbout() {
   } catch {}
   const host = location.host;
   const inst = (state.instanceId || '').slice(0, 8);
-  const ps = await pushStatus();
-  const pushLabel = ps === 'on' ? '关闭通知提醒'
-    : ps === 'denied' ? '通知已被拒绝（去系统设置里改）'
-    : ps === 'unsupported' ? '这个浏览器不支持通知'
-    : '开启通知提醒';
   openSheet([
-    { label: pushLabel, icon: '🔔', run: async () => {
-      if (ps === 'on') return disablePush();
-      if (ps === 'unsupported' || ps === 'denied') return;
-      await enablePush();
-    } },
+    { label:'通知提醒', icon:'🔔', run: openPushSettings },
     { label:'重新加载', icon:'↻', run: reloadApp },
     { label:'恢复链接', icon:'🔗', run: openRecovery },
     { label:'清除缓存并重载', icon:'🧹', run: async () => {
