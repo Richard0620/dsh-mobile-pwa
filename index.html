@@ -522,6 +522,10 @@ function syncBadge() {
 
 async function markRead(sessionId) {
   try { await api('/api/mobile/v1/session/read', { method:'POST', body: { sessionId } }); } catch {}
+  // 本地先把这一条标成已读：/sessions 有 30 秒缓存，不这样要等半分钟蓝点才消
+  const s = state.sessions.find(x => x.sessionId === sessionId);
+  if (s) { s.lastTurn = s.lastTurn || {}; s.lastTurn.readAt = Date.now(); }
+  syncBadge();
 }
 
 function toast(msg) {
@@ -3170,7 +3174,7 @@ function openSession(s) {
   loadMessages().then(() => {
     loadModel(); subscribeSession();
     // 打开即视为已读（宿主侧有 readAt，图标角标也就跟着掉一个）
-    markRead(state.sessionId).then(() => { refreshAll(); syncBadge(); });
+    markRead(state.sessionId).then(() => { refreshAll(true); syncBadge(); });
   });
   // 兜底轮询：SSE 走不通时这条就是主通道，1.5 秒一次，保证"发完马上能看到"。
   // SSE 通的时候它会先到，轮询只是补漏（1.5s 内没有新内容就不会重绘，开销很小）。

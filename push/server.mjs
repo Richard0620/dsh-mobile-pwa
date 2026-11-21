@@ -152,6 +152,14 @@ const server = http.createServer(async (req, res) => {
       tag: b.tag || undefined,
       kind: b.kind || undefined,
     };
+    // 「已完成 / 失败」这类：你刚还在 App 里（60 秒内有心跳）就别打扰
+    if (payload.kind && /^(completed|failed|done|turn-end)$/.test(String(payload.kind))) {
+      const quietMs = Number(process.env.DONE_QUIET_MS || 60000);
+      const last = Object.values(active).reduce((a, b) => Math.max(a, Number(b) || 0), 0);
+      if (last && Date.now() - last < quietMs) {
+        return json(res, 200, { ok: true, skipped: 'active', sent: 0, dropped: 0, failed: 0 });
+      }
+    }
     const results = await broadcast(payload);
     return json(res, 200, { ok: true, ...results });
   }
