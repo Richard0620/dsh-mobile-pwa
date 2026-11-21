@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Agents · local bridge</title>
+<style>
+  :root { color-scheme: dark; --bg:#0b1020; --panel:#121933; --line:#243056; --ink:#e6edf7; --muted:#8fa0c0; --accent:#38bdf8; --ok:#34d399; --warn:#fbbf24; --bad:#f87171; }
+  * { box-sizing: border-box; }
+  html,body { height:100%; margin:0; background:var(--bg); color:var(--ink); font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif; }
+  body { display:flex; flex-direction:column; overflow:hidden; }
+  header { display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--line); background:#0e1530; flex:0 0 auto; }
+  header .dot { width:8px; height:8px; border-radius:50%; background:var(--bad); flex:0 0 auto; }
+  header .dot.on { background:var(--ok); }
+  header .title { font-weight:600; letter-spacing:.2px; }
+  header .muted { color:var(--muted); font-size:12px; }
+  header .spacer { flex:1; }
+  header button, .btn { background:#1b2648; color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:5px 10px; font:inherit; cursor:pointer; }
+  header button:hover, .btn:hover { border-color:var(--accent); }
+  main { flex:1; display:flex; min-height:0; }
+  nav { width:210px; flex:0 0 auto; border-right:1px solid var(--line); overflow:auto; padding:8px; background:#0d1428; }
+  nav h3 { margin:8px 6px 4px; font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+  .pane-item { display:block; width:100%; text-align:left; margin:2px 0; padding:7px 8px; border-radius:8px; border:1px solid transparent; background:transparent; color:var(--ink); cursor:pointer; }
+  .pane-item:hover { background:#141d3a; }
+  .pane-item.sel { background:#16224a; border-color:var(--accent); }
+  .pane-item .id { font-family:ui-monospace,Consolas,monospace; font-size:12px; }
+  .pane-item .cwd { display:block; color:var(--muted); font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .st { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--muted); margin-right:5px; }
+  .st.working { background:var(--warn); } .st.idle, .st.done { background:var(--ok); } .st.blocked { background:var(--bad); }
+  section.view { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .bar { display:flex; gap:8px; align-items:center; padding:6px 10px; border-bottom:1px solid var(--line); color:var(--muted); font-size:12px; flex:0 0 auto; }
+  .bar code { color:var(--ink); background:#0a1126; padding:2px 6px; border-radius:6px; }
+  #out { flex:1; margin:0; padding:10px 12px; overflow:auto; white-space:pre-wrap; word-break:break-word; font:12.5px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace; color:#d6e2f5; background:#0a0f22; }
+  .keys { display:flex; gap:6px; flex-wrap:wrap; padding:6px 10px 0; flex:0 0 auto; }
+  .keys button { padding:4px 9px; font-size:12px; }
+  .composer { display:flex; gap:8px; padding:8px 10px 10px; flex:0 0 auto; }
+  .composer input[type=text] { flex:1; min-width:0; padding:9px 10px; border-radius:9px; border:1px solid var(--line); background:#0a1126; color:var(--ink); font:inherit; }
+  .composer input[type=text]:focus { outline:none; border-color:var(--accent); }
+  .composer label { display:flex; align-items:center; gap:4px; color:var(--muted); font-size:12px; }
+  .composer button { padding:9px 14px; border-radius:9px; background:var(--accent); border-color:var(--accent); color:#04121e; font-weight:600; }
+  .toast { position:fixed; left:50%; bottom:70px; transform:translateX(-50%); background:#1b2648; border:1px solid var(--line); padding:8px 12px; border-radius:9px; font-size:12px; opacity:0; pointer-events:none; transition:opacity .2s; }
+  .toast.show { opacity:1; }
+  .gate { position:fixed; inset:0; background:#0b1020ee; display:flex; align-items:center; justify-content:center; padding:20px; z-index:9; }
+  .gate[hidden] { display:none; }
+  .gate div { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px; width:min(360px,100%); }
+  .gate h2 { margin:0 0 8px; font-size:16px; }
+  .gate p { margin:0 0 12px; color:var(--muted); font-size:12px; }
+  .gate input { width:100%; padding:9px 10px; border-radius:9px; border:1px solid var(--line); background:#0a1126; color:var(--ink); font:inherit; }
+  .gate button { width:100%; margin-top:10px; padding:10px; border-radius:9px; background:var(--accent); border:0; color:#04121e; font-weight:600; }
+  @media (max-width:720px) { nav { width:150px; } }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot" id="dot"></span>
+  <span class="title">Agents</span>
+  <span class="muted">local bridge · herdr</span>
+  <span class="spacer"></span>
+  <span class="muted" id="conn">connecting…</span>
+  <button id="btnToken" title="改 token">token</button>
+</header>
+<main>
+  <nav>
+    <h3>panes</h3>
+    <div id="panes"></div>
+  </nav>
+  <section class="view">
+    <div class="bar"><code id="paneId">—</code><span id="agentState"></span><span class="spacer" style="flex:1"></span><span id="hint"></span></div>
+    <pre id="out">…</pre>
+    <div class="keys">
+      <button data-key="enter">Enter</button>
+      <button data-key="esc">Esc</button>
+      <button data-key="tab">Tab</button>
+      <button data-key="up">↑</button>
+      <button data-key="down">↓</button>
+      <button data-key="ctrl-c">Ctrl-C</button>
+    </div>
+    <div class="composer">
+      <input id="txt" type="text" placeholder="输入命令 / 消息，Enter 发送" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <label><input id="enter" type="checkbox" checked>Enter</label>
+      <button id="send">发送</button>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+<div class="gate" id="gate" hidden>
+  <div>
+    <h2>Bridge token</h2>
+    <p>这个页面直接连 127.0.0.1:18888，需要本地桥接的 Bearer token。</p>
+    <input id="token" type="password" placeholder="Bearer token" autocomplete="off">
+    <button id="saveToken">保存并连接</button>
+  </div>
+</div>
+<script>
+const $ = (s) => document.querySelector(s);
+let token = localStorage.getItem('bridge_token') || '';
+const q = new URLSearchParams(location.search);
+if (q.get('token')) { token = q.get('token'); localStorage.setItem('bridge_token', token); history.replaceState(null, '', '/'); }
+let pane = null;
+let timer = null;
+let lastText = '';
+
+function api(path, opt = {}) {
+  const o = { ...opt, headers: { ...(opt.headers || {}), Authorization: 'Bearer ' + token } };
+  return fetch(path, o).then(async (r) => {
+    if (r.status === 401) { showGate(true); throw new Error('401 unauthorized'); }
+    if (!r.ok) throw new Error((await r.text()).slice(0, 300) || ('HTTP ' + r.status));
+    return r;
+  });
+}
+
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 1800); }
+function showGate(v) { $('#gate').hidden = !v; }
+function setConn(ok, text) { $('#dot').classList.toggle('on', !!ok); $('#conn').textContent = text; }
+
+async function refreshPanes() {
+  const r = await api('/snapshot');
+  const j = await r.json();
+  const snap = j.result && j.result.snapshot;
+  if (!snap) throw new Error('bad snapshot');
+  const box = $('#panes');
+  box.innerHTML = '';
+  (snap.panes || []).forEach((p) => {
+    const b = document.createElement('button');
+    b.className = 'pane-item' + (p.pane_id === pane ? ' sel' : '');
+    const st = document.createElement('span');
+    st.className = 'st ' + (p.agent_status || '');
+    b.appendChild(st);
+    const id = document.createElement('span');
+    id.className = 'id';
+    id.textContent = p.pane_id;
+    b.appendChild(id);
+    const cwd = document.createElement('span');
+    cwd.className = 'cwd';
+    cwd.textContent = (p.cwd || '').replace(/^.*[\\\/]/, '') || p.cwd || '';
+    b.appendChild(cwd);
+    b.onclick = () => { pane = p.pane_id; lastText = ''; refreshPanes().catch(() => {}); tick(); };
+    box.appendChild(b);
+  });
+  if (!pane && snap.panes && snap.panes.length) pane = snap.panes[0].pane_id;
+  const me = (snap.panes || []).find((p) => p.pane_id === pane);
+  $('#paneId').textContent = pane || '—';
+  $('#agentState').textContent = me ? ('agent: ' + (me.agent_status || 'unknown')) : '';
+  $('#agentState').className = me ? ('st ' + (me.agent_status || '')) : '';
+}
+
+async function tick() {
+  if (!pane) return;
+  try {
+    const r = await api('/pane?id=' + encodeURIComponent(pane) + '&lines=200');
+    const t = await r.text();
+    const out = $('#out');
+    const nearBottom = out.scrollHeight - out.scrollTop - out.clientHeight < 60;
+    out.textContent = t;
+    if (nearBottom || t !== lastText) out.scrollTop = out.scrollHeight;
+    lastText = t;
+    setConn(true, 'ok');
+  } catch (e) {
+    setConn(false, e.message);
+  }
+}
+
+async function send() {
+  const el = $('#txt');
+  const text = el.value;
+  if (!text || !pane) return;
+  el.value = '';
+  try {
+    await api('/send', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane, text, enter: $('#enter').checked }) });
+    await tick();
+  } catch (e) { toast(e.message); }
+}
+
+async function key(k) {
+  if (!pane) return;
+  try { await api('/keys', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane, keys: [k] }) }); await tick(); }
+  catch (e) { toast(e.message); }
+}
+
+$('#send').onclick = send;
+$('#txt').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
+document.querySelectorAll('.keys button').forEach((b) => { b.onclick = () => key(b.dataset.key); });
+$('#btnToken').onclick = () => showGate(true);
+$('#saveToken').onclick = () => { token = $('#token').value.trim(); localStorage.setItem('bridge_token', token); showGate(false); start(); };
+
+function start() {
+  if (!token) { showGate(true); return; }
+  showGate(false);
+  refreshPanes().catch((e) => setConn(false, e.message));
+  tick();
+  if (timer) clearInterval(timer);
+  timer = setInterval(() => { tick(); }, 1500);
+  setInterval(() => { refreshPanes().catch(() => {}); }, 3000);
+}
+
+start();
+</script>
+</body>
+</html>
