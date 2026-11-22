@@ -646,7 +646,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v160';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v162';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -3005,17 +3005,27 @@ function renderTerminalTab(main) {
     main.append(el('div', { class:'empty', text:'还没有终端会话' }));
     return;
   }
+  // 按 agent（claude / codex / dsh …）分组，一眼能看出这个终端在跑什么
+  const groups = new Map();
   for (const it of items) {
-    const stTxt = it.status === 'working' ? '运行中' : it.status === 'blocked' ? '等你确认' : '空闲';
-    const dotCls = 'dot' + (it.status === 'working' ? ' run' : it.status === 'blocked' ? ' pending' : '');
-    main.append(el('div', { class:'row', onclick: () => openTerminal(it.paneId) },
-      el('span', { class: dotCls }),
-      el('div', { class:'body' },
-        el('div', { class:'t' },
-          el('span', { class:'title', text: it.label || 'tab' }),
-          el('span', { class:'time', text: stTxt })),
-        it.cwd ? el('div', { class:'p', text: it.cwd }) : null),
-      el('button', { class:'rowmore', text:'×', title:'关闭终端', onclick: (ev) => { ev.stopPropagation(); askCloseTerminal(it); } })));
+    const k = (it.agent || '未标注').trim();
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(it);
+  }
+  for (const [name, list] of groups) {
+    main.append(el('div', { class:'fsect' }, el('b', { text:name }), el('span', { text:String(list.length) })));
+    for (const it of list) {
+      const stTxt = it.status === 'working' ? '运行中' : it.status === 'blocked' ? '等你确认' : '空闲';
+      const dotCls = 'dot' + (it.status === 'working' ? ' run' : it.status === 'blocked' ? ' pending' : '');
+      main.append(el('div', { class:'row', onclick: () => openTerminal(it.paneId) },
+        el('span', { class: dotCls }),
+        el('div', { class:'body' },
+          el('div', { class:'t' },
+            el('span', { class:'title', text: it.label || 'tab' }),
+            el('span', { class:'time', text: stTxt })),
+          it.cwd ? el('div', { class:'p', text: it.cwd }) : null),
+        el('button', { class:'rowmore', text:'×', title:'关闭终端', onclick: (ev) => { ev.stopPropagation(); askCloseTerminal(it); } })));
+    }
   }
 }
 function askCloseTerminal(it) {
