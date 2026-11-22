@@ -587,17 +587,27 @@
   .ptr.on{opacity:1}
 
   /* ---------- sheet ---------- */
-  .mask{position:fixed;inset:0;background:rgba(0,0,0,.32);display:flex;align-items:flex-end;
-    justify-content:center;z-index:2000;animation:fade .16s ease}
+  .mask{position:fixed;inset:0;background:rgba(16,14,8,.34);backdrop-filter:blur(2px);
+    display:flex;align-items:flex-end;justify-content:center;z-index:2000;animation:fade .16s ease}
   @keyframes fade{from{opacity:0}to{opacity:1}}
-  .sheet{width:100%;max-width:560px;background:var(--card);border-radius:22px 22px 0 0;
-    padding:14px 12px calc(20px + var(--safe-b));animation:up .2s cubic-bezier(.22,1,.36,1)}
-  @keyframes up{from{transform:translateY(24px)}to{transform:translateY(0)}}
-  .sheet .item{display:flex;align-items:center;gap:12px;padding:14px 12px;border-radius:12px;font-size:15px}
-  .sheet .item:active{background:var(--bubble)}
-  .sheet .cancel{margin-top:8px;text-align:center;padding:13px;color:var(--dim);font-size:15px;
+  .sheet{width:100%;max-width:560px;background:var(--card);border-radius:26px 26px 0 0;
+    padding:8px 16px calc(12px + var(--safe-b));border-top:1px solid var(--line);
+    box-shadow:0 -20px 50px -20px rgba(30,24,10,.45);
+    animation:up .22s cubic-bezier(.22,1,.36,1)}
+  @keyframes up{from{transform:translateY(26px)}to{transform:translateY(0)}}
+  .sheet .grab{width:36px;height:4px;border-radius:2px;background:var(--line-2,var(--line));
+    margin:2px auto 14px}
+  .sheet .shead{font-size:18px;font-weight:650;letter-spacing:-.02em;padding:0 4px 10px}
+  .sheet .item{display:flex;align-items:center;gap:12px;padding:13px 4px;font-size:15px;
     border-top:1px solid var(--line)}
-  .sheet .ver{text-align:center;font-size:11.5px;color:var(--dim);opacity:.75;padding:7px 0 0}
+  .sheet .item:active{background:var(--bubble)}
+  .sheet .sic{width:30px;height:30px;border-radius:9px;background:var(--bubble);flex:none;
+    display:grid;place-items:center;font-size:14px;color:var(--dim);line-height:1}
+  .sheet .slabel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sheet .cancel{margin-top:10px;text-align:center;padding:12px;border-radius:12px;
+    border:1px solid var(--line);color:var(--dim);font-size:14px}
+  .sheet .ver{text-align:center;font-size:11px;color:var(--dim);opacity:.7;padding:6px 0 0;
+    font-family:ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.04em}
   .pair{min-height:100dvh;display:flex;flex-direction:column;justify-content:center;gap:12px;
     padding:28px;max-width:420px;margin:0 auto}
   .pair .btn{flex:none;width:100%}
@@ -619,7 +629,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v142';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v144';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -4611,12 +4621,16 @@ function installPullToRefresh(scroller) {
 function openSheet(items, footerText) {
   const mask = el('div', { class:'mask', onclick: (e) => { if (e.target === mask) close(); } });
   const sheet = el('div', { class:'sheet' });
+  sheet.append(el('div', { class:'grab' }));
+  const txt = String(footerText || '');
+  const isVer = !txt || /^版本\s/.test(txt);
+  if (!isVer) sheet.append(el('div', { class:'shead', text: txt }));
   for (const it of items) {
     sheet.append(el('div', { class:'item', onclick: () => { close(); it.run(); } },
-      el('span', { style:'width:22px;text-align:center;color:var(--dim)', text: it.icon || '' }),
-      el('span', { text: it.label })));
+      it.icon ? el('span', { class:'sic', text: it.icon }) : null,
+      el('span', { class:'slabel', text: it.label })));
   }
-  sheet.append(el('div', { class:'ver', text: footerText || `版本 ${APP_VERSION}` }));
+  if (isVer) sheet.append(el('div', { class:'ver', text: txt || `版本 ${APP_VERSION}` }));
   sheet.append(el('div', { class:'cancel', text:'取消', onclick: close }));
   function close() { mask.remove(); }
   mask.append(sheet);
