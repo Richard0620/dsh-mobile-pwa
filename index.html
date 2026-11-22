@@ -629,7 +629,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v148';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v150';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -4482,7 +4482,7 @@ function renderCard(c) {
     }
     if (d.command) card.append(el('pre', { text: d.command }));
     const acts = el('div', { class:'acts' },
-      el('button', { class:'btn ok', onclick: () => respondApproval(d, 'allowed-once', c) }, '允许一次'));
+      el('button', { class:'btn primary', onclick: () => respondApproval(d, 'allowed-once', c) }, '允许一次'));
     if (d.rememberable) {
       // 第三颗按钮上直接写清"对什么不再问"（Ovis 的做法），别让人猜"这一类"是哪一类
       acts.append(el('button', { class:'btn', style:'font-size:13px;line-height:1.25;padding:8px',
