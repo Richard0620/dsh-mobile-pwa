@@ -11,6 +11,7 @@ param(
   [string]$Branch = '',
   [string]$Slug = '',
   [switch]$Hub,
+  [switch]$Prune,
   [string]$Repo = 'D:\Vibe\PWA\pwa',
   [string]$Key = 'D:\Vibe\.ssh\keys\id_rsa_relay',
   [string]$Remote = 'root@38.189.61.57',
@@ -23,6 +24,35 @@ $opt = @('-i', $Key, '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-
 function Invoke-Remote([string]$cmd) { & ssh @opt $Remote $cmd }
 function Invoke-Copy([string]$src, [string]$dst) { & scp @opt $src $dst | Out-Null }
 
+# 清理已经合入 origin/main 的分支预览（合并后分支不再需要占着 /preview/）
+function Prune-Merged {
+  $raw = ''
+  try { $raw = (Invoke-Remote "cat $Root/branches.json 2>/dev/null") -join "`n" } catch { $raw = '' }
+  if (-not $raw.Trim()) { Write-Host '没有 preview/branches.json'; return }
+  $parsed = $raw | ConvertFrom-Json
+  $items = @($parsed | ForEach-Object { $_ })
+  $keep = @()
+  foreach ($it in $items) {
+    $b = [string]$it.branch
+    $slug = [string]$it.slug
+    if (-not $b -or $slug -notmatch '^[a-z0-9][a-z0-9._-]{0,60}$') { $keep += $it; continue }
+    $exists = & git -C $Repo rev-parse --verify --quiet $b 2>$null
+    if (-not $exists) { Write-Warning "分支不存在，保留预览：$b"; $keep += $it; continue }
+    & git -C $Repo merge-base --is-ancestor $b origin/main 2>$null
+    if ($LASTEXITCODE -eq 0) {
+      Invoke-Remote "rm -rf $Root/$slug"
+      Write-Host "removed merged preview: $b ($slug)"
+    } else {
+      $keep += $it
+    }
+  }
+  $json = "[`n" + (($keep | ForEach-Object { $_ | ConvertTo-Json -Depth 5 -Compress }) -join ",`n") + "`n]"
+  $tmp = Join-Path $env:TEMP 'dsh-preview-pruned.json'
+  [IO.File]::WriteAllText($tmp, $json, (New-Object Text.UTF8Encoding($false)))
+  Invoke-Copy $tmp "$Remote`:$Root/branches.json"
+  Write-Host "pruned; remaining=$($keep.Count)"
+}
+
 function Update-Branches([object]$entry, [switch]$Remove) {
   $raw = ''
   try { $raw = (Invoke-Remote "cat $Root/branches.json 2>/dev/null") -join "`n" } catch { $raw = '' }
@@ -30,7 +60,7 @@ function Update-Branches([object]$entry, [switch]$Remove) {
   if ($raw.Trim()) {
     try {
       $parsed = $raw | ConvertFrom-Json
-      $items = @($parsed)
+      $items = @($parsed | ForEach-Object { $_ })
     } catch { $items = @() }
   }
   $items = @($items | Where-Object { $_ -and $_.slug -ne $entry.slug })
@@ -56,6 +86,7 @@ function Deploy-Hub {
   Write-Host "Hub: https://dsh.easymana.online:8443/preview/"
 }
 
+if ($Prune) { Prune-Merged; exit 0 }
 if ($Hub) { Deploy-Hub; exit 0 }
 if (-not $Branch) { throw '需要 -Branch，或使用 -Hub 只更新选择页' }
 

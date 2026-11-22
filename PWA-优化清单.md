@@ -213,6 +213,7 @@
   - Caddy 增加 `/preview/*` 目录索引处理（仓库 `Caddyfile.us` 已同步）。
 - **限制**：同源共享 localStorage；预览不开推送（避免抢主 PWA 订阅）；主站以后清缓存可能顺带清预览离线缓存，不影响在线。
 - **状态**：预览 hub、main、feature/agents-dsh-chat、feature/session-perms 已部署；代码在 `feature/preview-env` 分支，尚未合入 main。
+- **清理**：新增 `-Prune`，只保留未合入 `origin/main` 的分支预览；2026-11-22 已清掉 6 个合并后的过期预览（session-perms、session-polish、agents-dsh-chat、ui-paper-carbon、ui-drawer-panel、master），当前预览列表为空，等有新分支再部署。
 
 ---
 

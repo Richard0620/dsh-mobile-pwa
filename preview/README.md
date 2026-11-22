@@ -22,6 +22,9 @@ powershell -ExecutionPolicy Bypass -File .\preview\deploy-preview.ps1 -Branch fe
 
 # 自定义 slug（默认 feature/session-perms -> feature-session-perms）
 powershell -ExecutionPolicy Bypass -File .\preview\deploy-preview.ps1 -Branch master -Slug main
+
+# 清理已经合入 origin/main 的分支预览（目录 + branches.json 一起删）
+powershell -ExecutionPolicy Bypass -File .\preview\deploy-preview.ps1 -Prune
 ```
 
 脚本会更新 `/srv/dsh-mobile/preview/branches.json`，选择页自动出现新分支。
