@@ -251,6 +251,7 @@ $e=$null; [void][System.Management.Automation.Language.Parser]::ParseFile((Resol
    用户同意后：`git switch master; git merge <branch>`，冲突按"功能都保留"手工解，跑 `node --check`。
 
 4. **本地 master → GitHub main**
+   **2026-11-22 已确认采用 A 方案：保留 `main` 保护，一律走 PR，不关闭保护。**
    `main` 有保护（必须 PR、禁 force-push）：推 feature 分支 → 开 PR（base=main）→ 合并 →
    本地 `git fetch origin && git merge --ff-only origin/main`，确认 `master` 与 `origin/main` 同一提交。
    **不要为了省事去改仓库保护设置**，除非用户在当次明确同意。
