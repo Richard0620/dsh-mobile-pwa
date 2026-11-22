@@ -221,6 +221,11 @@
   .agp .composer{padding:8px 14px calc(10px + env(safe-area-inset-bottom));background:var(--bg);gap:8px;align-items:center;border:0}
   .agp .composer input{height:46px;border-radius:22px;border:1px solid var(--line);background:var(--card);
     padding:0 16px;font-size:16px;letter-spacing:-.01em}
+  .agp .composer .ta{flex:1;min-width:0;min-height:46px;max-height:120px;overflow-y:auto;padding:11px 16px;
+    border-radius:22px;border:1px solid var(--line);background:var(--card);font-size:16px;line-height:1.45;
+    white-space:pre-wrap;word-break:break-word;outline:none;letter-spacing:-.01em;-webkit-user-select:text;user-select:text}
+  .agp .composer .ta:empty::before{content:attr(data-ph);color:var(--dim);pointer-events:none}
+  .agp .composer .ta:focus{border-color:var(--accent)}
   .agp .composer .send{width:38px;height:38px;min-width:38px;border-radius:50%;font-size:17px;padding:0;
     display:grid;place-items:center;background:var(--accent);color:var(--accent-fg);font-weight:600}
   .agp .composer .send.stop{background:var(--bad);color:#fff}
@@ -251,7 +256,7 @@
     <button class="iconbtn" id="resetBtn" style="display:none" title="新会话">＋</button>
     <button class="iconbtn" id="startBtn" style="display:none" title="启动 claude">C</button>
     <button class="iconbtn" id="tokenBtn" title="设置">⋯</button>
-    <span id="agpVer" class="ver">v19</span>
+    <span id="agpVer" class="ver">v20</span>
   </header>
 
   <div class="body">
@@ -287,7 +292,7 @@
         <button class="kbtn" data-key="n">n</button>
       </div>
       <div class="composer">
-        <input id="txt" type="text" placeholder="继续追问，Enter 发送" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <div id="txt" class="ta" contenteditable="true" role="textbox" aria-label="消息" data-ph="继续追问，Enter 发送" autocapitalize="sentences" spellcheck="false"></div>
         <button class="send stop" id="stopBtn" style="display:none" title="停止">■</button>
         <button class="send" id="send" title="发送">↑</button>
       </div>
@@ -340,6 +345,32 @@
     if (text) n.textContent = text;
     return n;
   }
+  function taText() {
+    const el = $('#txt');
+    return el ? (el.innerText || '').replace(/\u00a0/g, ' ').trim() : '';
+  }
+  function taClear() {
+    const el = $('#txt');
+    if (!el) return;
+    el.textContent = '';
+    el.style.height = '';
+  }
+  function taSet(text) {
+    const el = $('#txt');
+    if (!el) return;
+    el.textContent = text;
+    autoGrow();
+  }
+  function taSetPh(ph) {
+    const el = $('#txt');
+    if (el) el.setAttribute('data-ph', ph);
+  }
+  function autoGrow() {
+    const el = $('#txt');
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(120, Math.max(46, el.scrollHeight)) + 'px';
+  }
   function chatAgent() { return agents().find((a) => a.pane_id === pane); }
   function dshActive() { return !!(dshState && dshState.exists); }
   function dshMsgs() { return (dshState && dshState.messages) || []; }
@@ -379,7 +410,7 @@
     }
     $('#startBtn').style.display = 'none';
     if (viewMode === 'chat') {
-      $('#txt').placeholder = dshActive() ? '继续追问，Enter 发送' : (currentAgent() ? '发消息给 agent，Enter 发送' : '先选择启动方式');
+      taSetPh(dshActive() ? '继续追问，Enter 发送' : (currentAgent() ? '发消息给 agent，Enter 发送' : '先选择启动方式'));
     }
     $('#resetBtn').style.display = dshActive() ? '' : 'none';
     $('#blockedWho').textContent = pane || '';
@@ -781,7 +812,7 @@
     $('#vChat').classList.toggle('on', isChat);
     $('#vTerm').classList.toggle('on', !isChat);
     if (!dshActive()) { $('#stopBtn').style.display = 'none'; $('#send').disabled = false; }
-    $('#txt').placeholder = isChat ? (dshActive() ? '继续追问，Enter 发送' : (currentAgent() ? '发消息给 agent，Enter 发送' : '先选择启动方式')) : '输入命令，Enter 发送';
+    taSetPh(isChat ? (dshActive() ? '继续追问，Enter 发送' : (currentAgent() ? '发消息给 agent，Enter 发送' : '先选择启动方式')) : '输入命令，Enter 发送');
     const ttl = dshActive() ? 'DSH' : (currentAgent() ? 'Claude' : '终端');
     const tEl = document.querySelector('.hdr .title');
     if (tEl) tEl.textContent = ttl;
@@ -789,29 +820,29 @@
   }
 
   async function send() {
-    const el = $('#txt'); const text = el.value;
+    const text = taText();
     if (!text || !pane) return;
-    el.value = '';
+    taClear();
     if (viewMode === 'chat') {
       if (dshActive()) {
         try {
           await api('/dsh/send', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane, text }) });
           startDshStream();
-        } catch (e) { toast(e.message); el.value = text; }
+        } catch (e) { toast(e.message); taSet(text); }
         return;
       }
       const a = chatAgent();
-      if (!a) { toast('这个 pane 还没有 agent'); el.value = text; return; }
+      if (!a) { toast('这个 pane 还没有 agent'); taSet(text); return; }
       try {
         await api('/prompt', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ target: a.name || a.agent, text }) });
         await chatTick();
-      } catch (e) { toast(e.message); el.value = text; }
+      } catch (e) { toast(e.message); taSet(text); }
       return;
     }
     try {
       await api('/send', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane, text, enter: true }) });
       await tick();
-    } catch (e) { toast(e.message); el.value = text; }
+    } catch (e) { toast(e.message); taSet(text); }
   }
 
   async function key(k) {
@@ -839,7 +870,15 @@
   $('#stopBtn').onclick = () => stopDsh();
   $('#vChat').onclick = () => { viewMode = 'chat'; localStorage.setItem('agents.view', 'chat'); renderView(); };
   $('#vTerm').onclick = () => { viewMode = 'term'; localStorage.setItem('agents.view', 'term'); renderView(); };
-  $('#txt').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
+  const ta = $('#txt');
+  ta.addEventListener('keydown', (e) => { if (e.isComposing) return; if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+  ta.addEventListener('input', autoGrow);
+  ta.addEventListener('paste', (e) => {
+    e.preventDefault();
+    const t = (e.clipboardData || window.clipboardData).getData('text/plain');
+    document.execCommand('insertText', false, t);
+    autoGrow();
+  });
   document.querySelectorAll('.keys .kbtn').forEach((b) => { b.onclick = () => key(b.dataset.key); });
   $('#startBtn').onclick = startClaude;
   $('#resetBtn').onclick = async () => {
@@ -929,7 +968,15 @@
 
   function fitViewport() {
     const vv = window.visualViewport;
-    const h = vv ? Math.round(vv.height) : window.innerHeight;
+    let h = vv ? Math.round(vv.height) : window.innerHeight;
+    try {
+      const fe = window.frameElement;
+      const pv = window.parent && window.parent !== window ? window.parent.visualViewport : null;
+      if (fe && pv) {
+        const top = Math.round(fe.getBoundingClientRect().top);
+        h = Math.min(h, Math.round(pv.height - top));
+      }
+    } catch {}
     const agp = document.getElementById('agp');
     if (agp && h > 200) agp.style.height = h + 'px';
   }
@@ -937,6 +984,12 @@
     window.visualViewport.addEventListener('resize', fitViewport);
     window.visualViewport.addEventListener('scroll', fitViewport);
   }
+  try {
+    if (window.parent && window.parent !== window && window.parent.visualViewport) {
+      window.parent.visualViewport.addEventListener('resize', fitViewport);
+      window.parent.visualViewport.addEventListener('scroll', fitViewport);
+    }
+  } catch {}
   window.addEventListener('resize', fitViewport);
 
   // --- minimal markdown renderer, same rules as the PWA ---
