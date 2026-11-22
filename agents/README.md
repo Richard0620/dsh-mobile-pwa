@@ -102,3 +102,10 @@ herdr server 和 moshi-hook 也各有自己的启动项（`herdr server.lnk`、`
 - 公网入口 `https://dsh.easymana.online:8443/agents/` 打开正常，发 `echo PUBLIC-OK` 回显（browser → Caddy → ssh -R → bridge → herdr）；
 - 无 token / 错 token → 401；
 - 关掉启动它的 PowerShell 窗口后，后台服务仍在（用 `Start-Process ... -WindowStyle Hidden` 启动时）。
+
+## 开发工作区（2026-11-21 起）
+
+- agents 相关改动只在 `D:\Vibe\PWA\pwa-e`（分支 `feature/agents-dsh-chat`）进行；`D:\Vibe\PWA\pwa`（master）保持干净。
+- 桥接与开机自启已指向 `pwa-e\agents\start.ps1`（Startup 里的 `agents-bridge.lnk`），不要随意删除这个 worktree。
+- 每次提交前跑：`powershell -NoProfile -ExecutionPolicy Bypass -File agents\smoke.ps1`（检查 health、`/dsh/state`、UI 版本、launcher）。
+- 提交用正常 `git commit`，不要用 `git commit-tree`（会留下 staged 假象，且曾丢过 bridge 改动）。

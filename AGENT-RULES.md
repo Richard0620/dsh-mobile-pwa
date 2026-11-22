@@ -167,8 +167,11 @@ git add index.html sw.js AGENT-RULES.md     # 只写你改过的文件
 ### 3. 部署必须经用户同意
 
 - **任何人不得自行 `scp` 到 `/srv/dsh-mobile`**
+- **只允许部署 `origin/main`**：`deploy.ps1` 会拒绝 `-Ref` 非 main 和 `-Force`；VPS 上的 `deploy-remote.sh` 也会拒绝非 `origin/main` 的 ref
+- feature 分支/未合并改动只能用 `/preview/` 测试环境，绝不能进线上
 - 部署前必须给出四项：**版本号 / 改动摘要 / 影响面 / 回滚方法**
 - 用户同意后才部署；部署后立刻写 `/srv/dsh-mobile/VERSION`
+- 部署后 `VERSION` 必须满足 **`ref=origin/main` 且 `commit` = `origin/main` 的短哈希**；不满足就是异常部署，要立刻查
 
 ### 4. 版本记录与更新日志
 

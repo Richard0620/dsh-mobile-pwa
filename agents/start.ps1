@@ -12,6 +12,15 @@ if (-not $env:BRIDGE_TOKEN) {
 }
 if (-not $env:BRIDGE_TOKEN) { L 'no BRIDGE_TOKEN; abort'; exit 1 }
 
+# Keep token.txt in sync with the effective token, so env-less processes agree.
+$tfSync = Join-Path $logDir 'token.txt'
+$tfCur = ''
+if (Test-Path $tfSync) { $tfCur = (Get-Content $tfSync -Raw).Trim() }
+if ($tfCur -ne $env:BRIDGE_TOKEN) {
+  Set-Content -Path $tfSync -Value $env:BRIDGE_TOKEN -NoNewline -Encoding ascii
+  L 'token.txt synced'
+}
+
 $node = 'C:\Program Files\nodejs\node.exe'
 $bridge = Join-Path $here 'bridge.mjs'
 $tunnel = Join-Path $here 'tunnel.ps1'

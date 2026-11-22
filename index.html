@@ -504,10 +504,17 @@
     flex:none;max-width:46%}
   .chip2:active{opacity:.7}
   .chip2 b{font-weight:600;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .chip2 .ci{display:grid;place-items:center;color:var(--dim)}
+  .chip2.danger{background:var(--bad-bg);color:var(--bad)}
+  .chip2.danger .ci{color:var(--bad)}
+  .chip2.danger b{color:var(--bad)}  .chip2 .ci{display:grid;place-items:center;color:var(--dim)}
   .chip2 .ci svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.6;
     stroke-linecap:round;stroke-linejoin:round}
   .plus{width:30px;height:30px;border-radius:50%;background:var(--bubble);display:grid;place-items:center;font-size:17px;color:var(--dim);flex:none}
+  .perm{height:30px;padding:0 9px;border-radius:999px;background:var(--bubble);border:1px solid var(--line);
+    color:var(--dim);font-size:11.5px;display:inline-flex;align-items:center;gap:3px;flex:none;white-space:nowrap}
+  .perm.danger{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,var(--line));
+    background:color-mix(in srgb,var(--bad) 9%,var(--card))}
+  .perm:active{background:var(--card)}
   .model{font-size:12.5px;color:var(--dim);display:flex;align-items:center;gap:6px;min-width:0;flex:1;
     overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
   .sendgroup{display:flex;align-items:center;gap:8px;flex:none}
@@ -568,7 +575,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v128';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v130';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1062,6 +1069,7 @@ const state = {
   collapsed: new Set(JSON.parse(localStorage.getItem(LS.collapsed) || '[]')),
   expandedGroups: new Set(),
   model: null,
+  permCurrent: '',
   busy: false,
   stream: 'idle',
   poll: null,
@@ -1335,6 +1343,8 @@ const NAV_ICONS = {
   folder: '<svg viewBox="0 0 24 24"><path d="M3.5 7.5A1.5 1.5 0 015 6h4l2 2.5h8A1.5 1.5 0 0120.5 10v7A1.5 1.5 0 0119 18.5H5A1.5 1.5 0 013.5 17V7.5z"/></svg>',
   pin: '<svg viewBox="0 0 24 24"><path d="M9 3.5h6l-1 5 3 3v1H7v-1l3-3-1-5z"/><path d="M12 12.5V20"/></svg>',
   model: '<svg viewBox="0 0 24 24"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9L12 3.5z"/></svg>',
+  shield: '<svg viewBox="0 0 24 24"><path d="M12 3.5l7 2.6v5.4c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9V6.1l7-2.6z"/></svg>',
+  unlock: '<svg viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="9.5" rx="2"/><path d="M8 10.5V7.8a4 4 0 017.6-1.7"/></svg>',
 };
 
 function tabBar(active) {
@@ -2850,9 +2860,24 @@ async function closeTerminal(it) {
     el('b', { text: '\u7EC8\u7AEF' }),
     el('span', { style: 'flex:1' }),
     el('button', { class: 'ico', text: '\u2715', onclick: () => mask.remove() }));
-  const frame = el('iframe', { class: 'termframe', src: '/agents/?embed=1&pane=' + encodeURIComponent(paneId || '') });
+  const frame = el('iframe', { class: 'termframe', src: '/agents/?embed=1&pane=' + encodeURIComponent(paneId || '') + '&v=' + encodeURIComponent(APP_VERSION) });
   mask.append(bar, frame);
   document.body.append(mask);
+  frame.addEventListener('load', () => {
+    try { frame.contentWindow.postMessage({ type: 'agents-token', token: termToken() }, location.origin); } catch {}
+  });
+}
+
+// 子 iframe（/agents/）没有 token 时向父页面要；父页面用 postMessage 回传，避免 token 进 URL 和访问日志。
+if (!window._agentsTokenListener) {
+  window._agentsTokenListener = true;
+  window.addEventListener('message', (ev) => {
+    if (ev.origin !== location.origin) return;
+    const d = ev.data || {};
+    if (d.type !== 'agents-token-request') return;
+    const t = termToken();
+    if (t && ev.source) ev.source.postMessage({ type: 'agents-token', token: t }, location.origin);
+  });
 }
 // 本地搜索：标题 / 最近一条 / **已缓存的消息正文**。
 // 服务端 session/search 在这个部署里是关的（openAt "never"），所以正文只能搜本机
@@ -3461,6 +3486,7 @@ function renderSession(wrap) {
   const more = el('button', { class:'ico', text:'⋯', onclick: () => openSheet([
     { label:'刷新消息', icon:'⟳', run: () => loadMessages(true) },
     { label:'文件', icon:'📁', run: () => openFileDrawer(state.sessionCwd || '') },
+    { label:'会话权限', icon:'🛡', run: openPermissionPicker },
     { label:'重新加载', icon:'↻', run: reloadApp },
     { label:'键盘诊断', icon:'⌨', run: () => {
       state.debug = !state.debug;
@@ -3503,6 +3529,9 @@ function renderSession(wrap) {
       state.sessStats = p.sessionStats || null;
       const cp = p.contextPressure || null;
       const ct = p.contextTimeline || null;
+      const perm = p.permissions;
+      state.permCurrent = perm && typeof perm.currentValue === 'string' ? perm.currentValue : '';
+      paintPerm();
       // 首次进入/断线重连时，排队条也要从投影里补一次
       const inbox = p.inbox;
       if (inbox) {
@@ -3814,7 +3843,7 @@ function renderSession(wrap) {
     const p = state.sessionCwd || (wsSel && wsSel.path) || '';
     if (p) openFileDrawer(p); else toast('这个会话还没有目录');
   }}, el('span', { class:'ci', html:NAV_ICONS.folder }), el('b', { text: wsName }));
-  const chips = el('div', { class:'chips' }, wsChip, modelRow, effortRow);
+
   // 中断运行：正在跑的时候才出现
   const stopBtn = el('button', { class:'stop', text:'■', title:'中断运行', onclick: async () => {
     if (!confirm('中断这次运行？')) return;
@@ -3824,6 +3853,79 @@ function renderSession(wrap) {
     } catch (e) { toast('取消失败：' + (e.message || e)); }
   }});
   const qDock = el('div', { class:'qdock' });
+
+  // 会话权限：读 projections.permissions，切换走宿主 /permission 命令（不发给模型）
+  const permMeta = (name) => {
+    const map = {
+      'workspace-write': { icon:'🛡', short:'写入', label:'工作区写入', desc:'可写工作区和临时目录；越权操作需要审批' },
+      'danger-full-access': { icon:'🔓', short:'全权', label:'完全访问', desc:'不再逐次审批，可直接读写任意路径（危险）' },
+      'auto': { icon:'🤖', short:'自动', label:'自动审查', desc:'由 Auto review 按每次工具调用决定' },
+      'custom': { icon:'🛡', short:'自定义', label:'自定义', desc:'当前沙箱/审批组合不在预设表里' },
+    };
+    return map[name] || { icon:'🛡', short:name ? String(name).slice(0, 4) : '权限', label:name || '未知', desc:'' };
+  };
+  const permBtn = el('button', { type:'button', class:'chip2 permchip', title:'调整会话权限', onclick: () => openPermissionPicker() });
+  function paintPerm() {
+    const m = permMeta(state.permCurrent);
+    const danger = state.permCurrent === 'danger-full-access';
+    const icon = danger ? NAV_ICONS.unlock : NAV_ICONS.shield;
+    permBtn.innerHTML = `<span class="ci">${icon}</span><b>${m.short}</b>`;
+    permBtn.title = '会话权限：' + m.label;
+    permBtn.classList.toggle('danger', danger);
+  }
+  const chips = el('div', { class:'chips' }, wsChip, modelRow, effortRow, permBtn);
+  paintPerm();
+  async function choosePermission(name, label) {
+    if (name === 'danger-full-access') {
+      openInfoBox('开启完全访问？', [
+        ['影响', '工具调用不再逐次审批，可以直接执行'],
+        ['沙箱', 'danger-full-access：可读写任意路径'],
+        ['建议', '只在需要时临时开启，用完切回工作区写入'],
+      ], [
+        { label:'开启完全访问', run: () => applyPermission(name, label) },
+        { label:'取消', run: () => {} },
+      ]);
+      return;
+    }
+    await applyPermission(name, label);
+  }
+  async function applyPermission(name, label) {
+    try {
+      // 先确认宿主确实注册了 /permission：不认识时 /session/send 会把整行当普通消息发给模型
+      const cmds = await api('/api/mobile/v1/commands?sessionId=' + encodeURIComponent(state.sessionId));
+      if (!(cmds.items || []).some(c => c && c.name === 'permission')) {
+        toast('当前宿主没有 /permission 命令，无法切换权限');
+        return;
+      }
+      await api('/api/mobile/v1/session/send', { method:'POST', body: {
+        sessionId: state.sessionId,
+        content: [{ type:'text', text: `/permission ${name}` }],
+        clientMessageId: crypto.randomUUID(),
+      }});
+      toast('已切换到：' + label);
+      setTimeout(loadSessionStats, 400);
+      setTimeout(loadSessionStats, 1400);
+    } catch (e) {
+      toast('切换权限失败：' + (e.message || e));
+    }
+  }
+  function openPermissionPicker() {
+    const cur = state.permCurrent || '';
+    const opts = [
+      { value:'workspace-write', icon:'🛡', label:'工作区写入', desc:'可写工作区和临时目录；越权操作需要审批' },
+      { value:'danger-full-access', icon:'🔓', label:'完全访问', desc:'不再逐次审批，可直接读写任意路径（危险）' },
+    ];
+    const items = opts.map(o => ({
+      label: (cur === o.value ? '✓ ' : '') + o.label,
+      icon: o.icon,
+      run: () => choosePermission(o.value, o.label),
+    }));
+    if (cur && cur !== 'workspace-write' && cur !== 'danger-full-access') {
+      items.unshift({ label:'当前：' + permMeta(cur).label, icon:'🛡', run: () => {} });
+    }
+    openSheet(items, '会话权限 · ' + (permMeta(cur).label || '未知'));
+  }
+
   const dock = el('div', { class:'dock' },
     slashBox,
     attach,
@@ -3832,8 +3934,7 @@ function renderSession(wrap) {
     el('div', { class:'composer' }, ta,
       el('div', { class:'crow' },
         el('button', { class:'plus', text:'+', onclick: () => fileInput.click() }),
-        chips,
-        el('div', { class:'sendgroup' }, stopBtn, sendBtn))),
+        chips,        el('div', { class:'sendgroup' }, stopBtn, sendBtn))),
     fileInput,
   );
 
@@ -4460,6 +4561,7 @@ function openSession(s) {
   state.messages = []; state.cards = []; state.lastSeq = 0; state.busy = !!s.running;
   state.model = null; state.pending = []; state.unseen = 0; state.msgLimit = 120;
   state.queue = [];
+  state.permCurrent = '';
   state.modelGroups = []; state.modelMeta = null;
   state.sessionCwd = s.cwd || '';
   // 本地已读水位：进来的这一刻就消点，不等宿主 readAt 落盘

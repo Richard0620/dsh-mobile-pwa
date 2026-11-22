@@ -2,8 +2,8 @@
 // Phase-2 lab: read panes + send input, plus a small built-in UI.
 // Binds 127.0.0.1 only. Bearer token (header or ?token=) except / and /health.
 import http from "node:http";
-import { execFile } from "node:child_process";
-import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
+import { execFile, spawn } from "node:child_process";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, basename } from "node:path";
 import { homedir } from "node:os";
@@ -29,6 +29,125 @@ function run(args, timeout = 20000) {
 }
 
 const CLAUDE_ROOT = join(process.env.USERPROFILE || homedir(), ".claude", "projects");
+
+// ---- DSH chat: one persisted headless session per pane, driven by this bridge ----
+const DSH_CHAT_FILE = join(process.env.LOCALAPPDATA || "", "agents-bridge", "dsh-chat.json");
+const DSH_BIN = join(process.env.APPDATA || "", "npm", "node_modules", "@deepseek-ai", "dsh", "lib", "bin.js");
+const DSH_MAX_MESSAGES = 200;
+const DSH_MAX_CONCURRENT = 1;
+const DSH_TIMEOUT_MS = 5 * 60 * 1000;
+const dshChildren = new Map(); // pane -> { child, timer, stopped }
+const dshQueue = [];
+const dshTurns = new Map(); // pane -> { events: [], subs: Set<res> }
+let dshRunning = 0;
+
+function dshTurnState(pane) {
+  let t = dshTurns.get(pane);
+  if (!t) { t = { events: [], subs: new Set() }; dshTurns.set(pane, t); }
+  return t;
+}
+function dshEmit(pane, ev) {
+  if (!pane) return;
+  const t = dshTurnState(pane);
+  t.events.push(ev);
+  if (t.events.length > 500) t.events.shift();
+  const line = JSON.stringify(ev) + "\n";
+  for (const sub of t.subs) {
+    try { sub.write(line); } catch {}
+  }
+}
+let dshStore = {};
+try { dshStore = JSON.parse(readFileSync(DSH_CHAT_FILE, "utf8")) || {}; } catch { dshStore = {}; }
+function saveDshStore() {
+  try {
+    for (const e of Object.values(dshStore)) {
+      if (Array.isArray(e.messages) && e.messages.length > DSH_MAX_MESSAGES) e.messages = e.messages.slice(-DSH_MAX_MESSAGES);
+    }
+    mkdirSync(dirname(DSH_CHAT_FILE), { recursive: true });
+    writeFileSync(DSH_CHAT_FILE, JSON.stringify(dshStore));
+  } catch {}
+}
+function dshTurn(entry, text, pane, onEvent) {
+  return new Promise((resolve) => {
+    const args = [DSH_BIN, "--profile", "headless", "--json"];
+    if (entry.sessionId) args.push("--session-id", entry.sessionId);
+    args.push(text);
+    let child;
+    try {
+      child = spawn(process.execPath, args, { cwd: entry.cwd || process.cwd(), windowsHide: true });
+    } catch (e) {
+      return resolve({ text: "", sid: "", err: String(e), code: -1, stopped: false });
+    }
+    let buf = "";
+    let err = "";
+    let sid = "";
+    let final = null;
+    let timedOut = false;
+    const handle = (o) => {
+      if (!o || typeof o !== "object") return;
+      if (o.type === "session" && o.sessionId) sid = o.sessionId;
+      if (o.type === "final") final = o;
+      if (onEvent) { try { onEvent(o); } catch {} }
+    };
+    const rec = { child, stopped: false };
+    if (pane) dshChildren.set(pane, rec);
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try { child.kill(); } catch {}
+    }, DSH_TIMEOUT_MS);
+    child.stdout.on("data", (d) => {
+      buf += d.toString("utf8");
+      let idx;
+      while ((idx = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, idx).replace(/\r$/, "");
+        buf = buf.slice(idx + 1);
+        if (!line.trim()) continue;
+        try { handle(JSON.parse(line)); } catch {}
+      }
+    });
+    child.stderr.on("data", (d) => { err += d.toString("utf8"); });
+    child.on("error", (e) => {
+      clearTimeout(timer);
+      if (pane) dshChildren.delete(pane);
+      resolve({ text: "", sid, err: String(e), code: -1, stopped: !!rec.stopped });
+    });
+    child.on("close", (code) => {
+      if (buf.trim()) { try { handle(JSON.parse(buf)); } catch {} }
+      clearTimeout(timer);
+      if (pane) dshChildren.delete(pane);
+      if (timedOut) err = (err ? err + "\n" : "") + "timeout after " + Math.round(DSH_TIMEOUT_MS / 60000) + " min";
+      resolve({ text: (final && final.text) || "", sid, err, code, stopped: !!rec.stopped });
+    });
+  });
+}
+
+function drainDshQueue() {
+  if (dshRunning >= DSH_MAX_CONCURRENT) return;
+  const job = dshQueue.shift();
+  if (!job) return;
+  dshRunning++;
+  (async () => {
+    const r = await dshTurn(job.entry, job.text, job.pane, (ev) => dshEmit(job.pane, ev));
+    if (r.sid) job.entry.sessionId = r.sid;
+    if (r.text) {
+      job.entry.messages.push({ role: "assistant", text: r.text, time: new Date().toISOString() });
+    } else {
+      const msg = r.stopped ? "\u5DF2\u505C\u6B62" : ((r.err || "").trim() || ("exit " + r.code));
+      job.entry.error = msg.slice(0, 4000);
+      job.entry.messages.push({ role: "assistant", text: "\u26A0\uFE0F " + msg, time: new Date().toISOString() });
+    }
+    job.entry.busy = false;
+    saveDshStore();
+    dshEmit(job.pane, { type: "done", message: job.entry.messages[job.entry.messages.length - 1] || null });
+    dshRunning--;
+    drainDshQueue();
+  })();
+}
+
+function enqueueDsh(entry, text, pane) {
+  dshQueue.push({ entry, text, pane });
+  drainDshQueue();
+}
 
 function encodeProjectDir(cwd) {
   return String(cwd || "").replace(/[\\/:]/g, "-");
@@ -102,7 +221,7 @@ function readBody(req, limit = 65536) {
 
 function send(res, code, body, type = "application/json; charset=utf-8") {
   const buf = Buffer.isBuffer(body) ? body : Buffer.from(body);
-  res.writeHead(code, { "content-type": type, "content-length": buf.length, "cache-control": "no-store" });
+  res.writeHead(code, { "content-type": type, "content-length": buf.length, "cache-control": "no-store", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff" });
   res.end(buf);
 }
 
@@ -257,7 +376,96 @@ const server = http.createServer(async (req, res) => {
       if (!body.tabId) return send(res, 400, JSON.stringify({ error: "tabId required" }));
       await run(["tab", "close", body.tabId]);
       return send(res, 200, JSON.stringify({ ok: true }));
-    }    return send(res, 404, JSON.stringify({ error: "not found" }));
+    }
+    if (req.method === "GET" && url.pathname === "/dsh/state") {
+      const pane = url.searchParams.get("pane") || "";
+      const e = dshStore[pane];
+      if (!e) return send(res, 200, JSON.stringify({ exists: false }));
+      return send(res, 200, JSON.stringify({ exists: true, pane, sessionId: e.sessionId || "", cwd: e.cwd || "", busy: !!e.busy, error: e.error || "", messages: (e.messages || []).slice(-200) }));
+    }
+    if (req.method === "GET" && url.pathname === "/dsh/stream") {
+      const pane = url.searchParams.get("pane") || "";
+      if (!pane) return send(res, 400, JSON.stringify({ error: "pane required" }));
+      res.writeHead(200, {
+        "content-type": "application/x-ndjson; charset=utf-8",
+        "cache-control": "no-cache",
+        "connection": "keep-alive",
+        "x-accel-buffering": "no",
+        "referrer-policy": "no-referrer",
+      });
+      const t = dshTurnState(pane);
+      for (const ev of t.events) { try { res.write(JSON.stringify(ev) + "\n"); } catch {} }
+      t.subs.add(res);
+      const ka = setInterval(() => { try { res.write(JSON.stringify({ type: "ping" }) + "\n"); } catch {} }, 15000);
+      req.on("close", () => { clearInterval(ka); t.subs.delete(res); });
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/dsh/start") {
+      const body = JSON.parse((await readBody(req)) || "{}");
+      if (!body.pane) return send(res, 400, JSON.stringify({ error: "pane required" }));
+      let e = dshStore[body.pane];
+      if (!e) {
+        let cwd = body.cwd || "";
+        if (!cwd) {
+          const snap = JSON.parse(await run(["api", "snapshot"])).result.snapshot;
+          const p = (snap.panes || []).find((x) => x.pane_id === body.pane);
+          cwd = (p && p.cwd) || process.cwd();
+        }
+        e = { cwd, sessionId: "", messages: [], busy: false, error: "", startedAt: Date.now() };
+        dshStore[body.pane] = e;
+        saveDshStore();
+      }
+      return send(res, 200, JSON.stringify({ ok: true, exists: true, pane: body.pane, sessionId: e.sessionId || "", cwd: e.cwd || "", busy: !!e.busy, messages: (e.messages || []).slice(-200) }));
+    }
+    if (req.method === "POST" && url.pathname === "/dsh/send") {
+      const body = JSON.parse((await readBody(req)) || "{}");
+      if (!body.pane || typeof body.text !== "string" || !body.text.trim()) {
+        return send(res, 400, JSON.stringify({ error: "pane and text required" }));
+      }
+      const e = dshStore[body.pane];
+      if (!e) return send(res, 404, JSON.stringify({ error: "dsh not started in this pane" }));
+      if (e.busy) return send(res, 409, JSON.stringify({ error: "busy" }));
+      e.busy = true;
+      e.error = "";
+      e.messages.push({ role: "user", text: body.text, time: new Date().toISOString() });
+      saveDshStore();
+      const entry = e;
+      dshTurnState(body.pane).events = [];
+      enqueueDsh(entry, body.text, body.pane);
+      return send(res, 200, JSON.stringify({ ok: true, busy: true }));
+    }
+    if (req.method === "POST" && url.pathname === "/dsh/reset") {
+      const body = JSON.parse((await readBody(req)) || "{}");
+      if (!body.pane) return send(res, 400, JSON.stringify({ error: "pane required" }));
+      const e = dshStore[body.pane];
+      if (e) {
+        e.sessionId = "";
+        e.messages = [];
+        e.busy = false;
+        e.error = "";
+        saveDshStore();
+      }
+      return send(res, 200, JSON.stringify({ ok: true }));
+    }
+    if (req.method === "POST" && url.pathname === "/dsh/stop") {
+      const body = JSON.parse((await readBody(req)) || "{}");
+      if (!body.pane) return send(res, 400, JSON.stringify({ error: "pane required" }));
+      const e = dshStore[body.pane];
+      if (!e) return send(res, 404, JSON.stringify({ error: "no dsh session" }));
+      for (let i = dshQueue.length - 1; i >= 0; i--) if (dshQueue[i].pane === body.pane) dshQueue.splice(i, 1);
+      const rec = dshChildren.get(body.pane);
+      if (rec) {
+        rec.stopped = true;
+        try { rec.child.kill(); } catch {}
+      } else {
+        e.busy = false;
+        dshEmit(body.pane, { type: "done", message: null });
+      }
+      e.error = "stopped";
+      saveDshStore();
+      return send(res, 200, JSON.stringify({ ok: true }));
+    }
+    return send(res, 404, JSON.stringify({ error: "not found" }));
   } catch (e) {
     return send(res, 500, JSON.stringify({ error: String((e && e.message) || e) }));
   }

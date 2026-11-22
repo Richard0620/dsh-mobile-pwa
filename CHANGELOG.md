@@ -36,3 +36,5 @@
 | v119 | 2026-11-21 | master | 推送门控改为「在场即静默」：前台每 20 秒续心跳，所有类型推送都受门控；设置里的完成类开关作为例外 | 手机通知 | 在 App 内触发审批应静默（日志 skipped:in-app）；切走 90 秒后本轮结束应收到推送 |
 | v121 | 2026-11-21 | master | 推送门控最终形态：审批与完成永远响；其他类型在 App 内静默 | 手机通知 | App 内触发审批仍收到；提问类在 App 内静默 |
 | v123 | 2026-11-21 | master | 提问类也永远推送（门控默认关闭，可配 GATED_KINDS）；/push/subscribe 与 /push/unsubscribe 要求设备凭据 | 手机通知 + 安全 | 订阅时不带凭据应 401；带凭据 200 |
+| v125 | 2026-11-21 | master | agents 终端 P0：流式输出、停止、复制、busy 状态；token 改 postMessage 握手（不进 URL/日志），响应加 no-referrer/nosniff | 手机 PWA 终端 + /agents 桥接 | 线上 VERSION app=v125 / sw=dsh-mobile-v126；smoke OK；iframe src 已无 token；停止/复制实测 |
+| v127 | 2026-11-22 | master | 会话内权限切换：composer 权限 chip，支持工作区写入 / 完全访问（走宿主 /permission 命令） | 手机 PWA 会话 | chip 显示当前档位；切 full 后 chip 变红且命令生效，切回 workspace-write 恢复；preflight + GitHub Actions 通过 |
