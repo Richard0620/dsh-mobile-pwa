@@ -147,6 +147,11 @@
   .hero .sub{margin-top:6px;font-size:10px;letter-spacing:.06em;text-transform:none;
     color:var(--dim);font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
   .hero .acts{display:flex;gap:4px;padding-top:2px}
+  .hero.hero-back{align-items:center;justify-content:flex-start;gap:8px}
+  .hero.hero-back .hero-main{flex:1;min-width:0}
+  .hero.hero-back .acts{margin-left:auto;padding-top:0}
+  .hero.hero-back .ico{flex:none;color:var(--dim);margin-left:-8px}
+  .hero.hero-back .ico svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8}
 
   /* 会话行：标题下面补一行预览 */
   .row .p{font-size:12.5px;line-height:1.4;color:var(--dim);margin-top:2px;
@@ -179,9 +184,9 @@
   .fname2 span{display:block;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
     font-size:9.5px;color:var(--dim);margin-top:3px}
   .flrow .chev{color:var(--dim);font-size:16px;flex:none}
-  .fselbox{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--line-2);flex:none;
-    display:grid;place-items:center;color:transparent;font-size:11px}
-  .flrow.sel .fselbox{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+  .fselbox{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--dim);flex:none;
+    display:grid;place-items:center;color:transparent;font-size:11px;background:var(--card);opacity:.7}
+  .flrow.sel .fselbox{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);opacity:1}
   .fselbar{flex:none;display:flex;align-items:center;gap:10px;margin:8px 14px 0;padding:10px 12px;
     border-radius:14px;background:var(--accent);color:var(--accent-fg)}
   .fselbar .t{flex:1;font-size:12.5px;font-weight:600}
@@ -699,7 +704,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v173';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v175';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1493,13 +1498,21 @@ function heroHeader(title, sub, action) {
     action ? el('div', { class:'acts' }, action) : null);
 }
 
+// 二级页沿用「返回在左、标题紧随」的规范，不再把返回箭头丢到右上角
+function heroBackHeader(title, sub, back, action) {
+  return el('div', { class:'hero hero-back' },
+    back || null,
+    el('div', { class:'hero-main' }, el('h1', { text: title }), sub ? el('div', { class:'sub', text: sub }) : null),
+    action ? el('div', { class:'acts' }, action) : null);
+}
+
 async function renderSubPage(wrap) {
   const page = state.subPage || 'conn';
   const titles = { conn:'连接', push:'通知', pushdiag:'推送诊断', stats:'统计', about:'关于' };
-  const back = el('button', { class:'ico', text:'‹', title:'返回设置', onclick: () => {
+  const back = el('button', { class:'ico', html:sheetIconSVG('chevronLeft'), title:'返回设置', 'aria-label':'返回设置', onclick: () => {
     state.view = 'settings'; state.subPage = ''; render();
   }});
-  wrap.append(heroHeader(titles[page] || '设置', '', back));
+  wrap.append(heroBackHeader(titles[page] || '设置', '', back));
   const main = el('div', { class:'settings' });
   wrap.append(main);
 
@@ -2076,7 +2089,7 @@ async function loadFiles(path) {
 }
 
 function renderFiles(wrap) {
-  const back = state.sessionId ? el('button', { class:'ico', text:'‹', onclick: () => {
+  const back = state.sessionId ? el('button', { class:'ico', html:sheetIconSVG('chevronLeft'), title:'返回会话', 'aria-label':'返回会话', onclick: () => {
     state.view = 'session'; render();
   }}) : null;
   const selBtn = el('button', { class:'ico', text: state.filesSelecting ? '取消' : '选择',
@@ -2096,8 +2109,8 @@ function renderFiles(wrap) {
     return p ? p.split(/[\\/]/).filter(Boolean).pop() : '';
   })();
   const sub = L ? `${dirsAll.length} 个文件夹 · ${filesAll.length} 个文件` : '加载中…';
-  wrap.append(heroHeader('文件', (wsName ? wsName + ' · ' : '') + sub,
-    el('div', { style:'display:flex;gap:2px;align-items:center' }, selBtn, back)));
+  wrap.append(heroBackHeader('文件', (wsName ? wsName + ' · ' : '') + sub, back,
+    el('div', { style:'display:flex;gap:2px;align-items:center' }, selBtn)));
 
   // 盘符 / 根目录切换（Windows 上就是 C: / D: / 主目录）
   const rootRow = el('div', { class:'rootrow' });
@@ -2604,7 +2617,7 @@ function openDrawer() {
     class:'drbtn', title:label, 'aria-label':label, onclick: run, html: sheetIconSVG(name),
   });
   const foot = el('div', { class:'drfoot icons' },
-    iconBtn('gear', '设置', () => { closeDrawer(); openAbout(); }),
+    iconBtn('sliders', '设置', () => { closeDrawer(); state.view = 'settings'; state.subPage = ''; render(); }),
     iconBtn('bars', '统计', () => { closeDrawer(); openStats(); }),
     iconBtn('folder', '文件', () => { closeDrawer(); openFileDrawer(state.sessionCwd || ''); }),
     iconBtn('refresh', '重载', () => { closeDrawer(); reloadApp(); }),
@@ -5059,6 +5072,7 @@ function sheetIconSVG(name) {
     chevronRight: '<path d="M9 5l7 7-7 7"/>',
     chevronLeft: '<path d="M15 5l-7 7 7 7"/>',
     gear: '<circle cx="12" cy="12" r="3.2"/><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4M16.6 16.6L18 18M18 6l-1.4 1.4M7.4 16.6L6 18"/>',
+    sliders: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/>',
     upload: '<path d="M12 16V5M7.5 9.5L12 5l4.5 4.5M5 19h14"/>',
     eye: '<path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.6"/>',
     plus: '<path d="M12 5.5v13M5.5 12h13"/>',
