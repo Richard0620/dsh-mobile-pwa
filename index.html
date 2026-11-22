@@ -520,7 +520,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v133';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v135';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -2744,19 +2744,27 @@ async function closeTerminal(it) {
   const tsend = el('button', { class: 'tsend', text: '\u2191', title: '\u53D1\u9001', onclick: sendTerm });
   tta.addEventListener('keydown', (e) => { if (e.isComposing) return; if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTerm(); } });
   tta.addEventListener('focus', () => { setTimeout(fitOverlay, 120); setTimeout(fitOverlay, 380); });
-  tta.addEventListener('input', () => { tta.style.height = 'auto'; tta.style.height = Math.min(120, Math.max(44, tta.scrollHeight)) + 'px'; });
+  tta.addEventListener('input', () => { tta.style.height = 'auto'; tta.style.height = Math.min(120, Math.max(44, tta.scrollHeight)) + 'px'; setTimeout(fitOverlay, 0); });
   const tcomp = el('div', { class: 'termcomposer' }, tta, tstop, tsend);
   mask.append(bar, frame, tcomp);
   document.body.append(mask);
-  // Pin the overlay to the visual viewport so the composer sits right above the
-  // iOS keyboard and keeps zero gap when the input assistant bar is present.
+  // Keep the overlay full-screen (opaque) and lift only the composer to the
+  // visual viewport edge: the keyboard's translucent accessory bar must never
+  // reveal the PWA session list underneath.
   const fitOverlay = () => {
     const vv = window.visualViewport;
     if (!vv) return;
-    const kb = vv.height < window.innerHeight - 100;
-    mask.style.height = Math.round(vv.height) + 'px';
-    mask.style.bottom = 'auto';
+    const vh = Math.round(vv.height);
+    const kb = vh < window.innerHeight - 100;
+    mask.style.height = '100%';
+    mask.style.bottom = '0';
+    tcomp.style.position = 'absolute';
+    tcomp.style.left = '0';
+    tcomp.style.right = '0';
     tcomp.style.paddingBottom = kb ? '8px' : 'calc(10px + env(safe-area-inset-bottom))';
+    const compH = tcomp.offsetHeight;
+    tcomp.style.top = Math.max(0, vh - compH) + 'px';
+    frame.style.marginBottom = compH + 'px';
     try { window.scrollTo(0, 0); } catch {}
   };
   if (window.visualViewport) {
