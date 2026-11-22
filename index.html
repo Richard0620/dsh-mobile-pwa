@@ -599,7 +599,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v134';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v136';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -3553,7 +3553,7 @@ function renderSession(wrap) {
 
   // 标题下的会话用量（数据来自 /session/stats 的 sessionStats）
   function paintMeta() {
-    if (!metabar.isConnected) return;
+    if (!metabar) return;
     const s = state.sessStats;
     const c = state.ctxInfo || {};
     metabar.replaceChildren();
@@ -3890,10 +3890,7 @@ function renderSession(wrap) {
     el('span', { class:'ci', html:NAV_ICONS.model }), el('b', { text: modelShort }));
   const effortRow = el('button', { class:'chip2', onclick: () => openModelPicker() },
     el('b', { text: effortNow }));
-  const wsChip = el('button', { class:'chip2', onclick: () => {
-    const p = state.sessionCwd || (wsSel && wsSel.path) || '';
-    if (p) openFileDrawer(p); else toast('这个会话还没有目录');
-  }}, el('span', { class:'ci', html:NAV_ICONS.folder }), el('b', { text: wsName }));
+
 
   // 中断运行：正在跑的时候才出现
   const stopBtn = el('button', { class:'stop', text:'■', title:'中断运行', onclick: async () => {
@@ -3924,7 +3921,7 @@ function renderSession(wrap) {
     permBtn.title = '会话权限：' + m.label;
     permBtn.classList.toggle('danger', danger);
   }
-  const chips = el('div', { class:'chips' }, wsChip, modelRow, effortRow, permBtn);
+  const chips = el('div', { class:'chips' }, modelRow, effortRow, permBtn);
   paintPerm();
   async function choosePermission(name, label) {
     if (name === 'danger-full-access') {
