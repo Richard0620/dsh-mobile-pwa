@@ -343,12 +343,12 @@ node --check $env:TEMP\app.mjs
 - [x] A3 按键行只在终端模式显示；chat 模式隐藏 Enter/Esc/Tab/↑/↓/Ctrl-C 那一排
 - [x] A4 键盘适配：`100dvh` + `visualViewport`，键盘弹出时 composer 贴底、聊天区不被遮挡
 - [x] A5 尺寸/间距统一：头部 44px、消息间距 8px、气泡 15px/1.62、左右 12px、安全区适配
-- [ ] A6 SSE 流式：bridge 新增 `/dsh/stream?pane=`，把 headless `--json` 的 `text`/`thinking`/`tool_call`/`tool_result`/`status` 实时推给页面
-- [ ] A7 工具进度：显示「正在执行工具 xxx」、本轮耗时计时
-- [ ] A8 停止本轮：`/dsh/stop` kill 子进程，UI 可中断
-- [ ] A9 复制：每条消息「复制」、代码块「复制」、整段对话「复制」；长按消息菜单
-- [ ] A10 busy 状态：发送按钮禁用、可停止、失败可重试
-- [ ] A11 自动滚动：仅当用户已在底部时贴底，上翻查看历史时不打断
+- [x] A6 SSE 流式：bridge 新增 `/dsh/stream?pane=`（NDJSON，fetch 带 Authorization），实时推 `text`/`thinking`/`tool_call`/`tool_result`/`status`/`done`（v17）
+- [x] A7 工具进度：显示「正在执行工具 xxx」、本轮耗时计时（v17）
+- [x] A8 停止本轮：`/dsh/stop` kill 子进程，UI「停止」按钮（v17）
+- [x] A9 复制：每条消息「复制」、代码块「复制」（v17）；整段对话复制并入 B5，长按菜单留 P1
+- [x] A10 busy 状态：发送按钮禁用、可停止、失败可重试（v17）
+- [x] A11 自动滚动：仅当用户已在底部时贴底，上翻查看历史时不打断（v17）
 
 ### P1 · 体验补齐
 
@@ -398,6 +398,7 @@ node --check $env:TEMP\app.mjs
 - [x] D11 自启路径耦合：Startup 的 `agents-bridge.lnk` 指向 `pwa-e`，worktree 不能随意删；写进 `agents/README`（v15）
 - [ ] D12 token 轮换与设备级凭据（替代共享 token，P2）
 - [x] D13 token.txt 与 env 不一致导致 smoke 401；`start.ps1` 启动时同步（v15）
+- [x] D14 流事件 backlog 跨轮残留导致重连即 done；每轮开始清空 `dshTurnState.events`（v17）
 
 ### 验收方式
 

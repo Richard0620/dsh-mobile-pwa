@@ -38,7 +38,24 @@ const DSH_MAX_CONCURRENT = 1;
 const DSH_TIMEOUT_MS = 5 * 60 * 1000;
 const dshChildren = new Map(); // pane -> { child, timer, stopped }
 const dshQueue = [];
+const dshTurns = new Map(); // pane -> { events: [], subs: Set<res> }
 let dshRunning = 0;
+
+function dshTurnState(pane) {
+  let t = dshTurns.get(pane);
+  if (!t) { t = { events: [], subs: new Set() }; dshTurns.set(pane, t); }
+  return t;
+}
+function dshEmit(pane, ev) {
+  if (!pane) return;
+  const t = dshTurnState(pane);
+  t.events.push(ev);
+  if (t.events.length > 500) t.events.shift();
+  const line = JSON.stringify(ev) + "\n";
+  for (const sub of t.subs) {
+    try { sub.write(line); } catch {}
+  }
+}
 let dshStore = {};
 try { dshStore = JSON.parse(readFileSync(DSH_CHAT_FILE, "utf8")) || {}; } catch { dshStore = {}; }
 function saveDshStore() {
@@ -50,7 +67,7 @@ function saveDshStore() {
     writeFileSync(DSH_CHAT_FILE, JSON.stringify(dshStore));
   } catch {}
 }
-function dshTurn(entry, text, pane) {
+function dshTurn(entry, text, pane, onEvent) {
   return new Promise((resolve) => {
     const args = [DSH_BIN, "--profile", "headless", "--json"];
     if (entry.sessionId) args.push("--session-id", entry.sessionId);
@@ -61,35 +78,43 @@ function dshTurn(entry, text, pane) {
     } catch (e) {
       return resolve({ text: "", sid: "", err: String(e), code: -1, stopped: false });
     }
-    let out = "";
+    let buf = "";
     let err = "";
+    let sid = "";
+    let final = null;
     let timedOut = false;
+    const handle = (o) => {
+      if (!o || typeof o !== "object") return;
+      if (o.type === "session" && o.sessionId) sid = o.sessionId;
+      if (o.type === "final") final = o;
+      if (onEvent) { try { onEvent(o); } catch {} }
+    };
     const rec = { child, stopped: false };
     if (pane) dshChildren.set(pane, rec);
     const timer = setTimeout(() => {
       timedOut = true;
       try { child.kill(); } catch {}
     }, DSH_TIMEOUT_MS);
-    child.stdout.on("data", (d) => { out += d.toString("utf8"); });
+    child.stdout.on("data", (d) => {
+      buf += d.toString("utf8");
+      let idx;
+      while ((idx = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, idx).replace(/\r$/, "");
+        buf = buf.slice(idx + 1);
+        if (!line.trim()) continue;
+        try { handle(JSON.parse(line)); } catch {}
+      }
+    });
     child.stderr.on("data", (d) => { err += d.toString("utf8"); });
     child.on("error", (e) => {
       clearTimeout(timer);
       if (pane) dshChildren.delete(pane);
-      resolve({ text: "", sid: "", err: String(e), code: -1, stopped: !!rec.stopped });
+      resolve({ text: "", sid, err: String(e), code: -1, stopped: !!rec.stopped });
     });
     child.on("close", (code) => {
+      if (buf.trim()) { try { handle(JSON.parse(buf)); } catch {} }
       clearTimeout(timer);
       if (pane) dshChildren.delete(pane);
-      let sid = "";
-      let final = null;
-      for (const line of out.split(/\r?\n/)) {
-        if (!line.trim()) continue;
-        try {
-          const o = JSON.parse(line);
-          if (o.type === "session" && o.sessionId) sid = o.sessionId;
-          if (o.type === "final") final = o;
-        } catch {}
-      }
       if (timedOut) err = (err ? err + "\n" : "") + "timeout after " + Math.round(DSH_TIMEOUT_MS / 60000) + " min";
       resolve({ text: (final && final.text) || "", sid, err, code, stopped: !!rec.stopped });
     });
@@ -102,7 +127,7 @@ function drainDshQueue() {
   if (!job) return;
   dshRunning++;
   (async () => {
-    const r = await dshTurn(job.entry, job.text, job.pane);
+    const r = await dshTurn(job.entry, job.text, job.pane, (ev) => dshEmit(job.pane, ev));
     if (r.sid) job.entry.sessionId = r.sid;
     if (r.text) {
       job.entry.messages.push({ role: "assistant", text: r.text, time: new Date().toISOString() });
@@ -113,6 +138,7 @@ function drainDshQueue() {
     }
     job.entry.busy = false;
     saveDshStore();
+    dshEmit(job.pane, { type: "done", message: job.entry.messages[job.entry.messages.length - 1] || null });
     dshRunning--;
     drainDshQueue();
   })();
@@ -357,6 +383,23 @@ const server = http.createServer(async (req, res) => {
       if (!e) return send(res, 200, JSON.stringify({ exists: false }));
       return send(res, 200, JSON.stringify({ exists: true, pane, sessionId: e.sessionId || "", cwd: e.cwd || "", busy: !!e.busy, error: e.error || "", messages: (e.messages || []).slice(-200) }));
     }
+    if (req.method === "GET" && url.pathname === "/dsh/stream") {
+      const pane = url.searchParams.get("pane") || "";
+      if (!pane) return send(res, 400, JSON.stringify({ error: "pane required" }));
+      res.writeHead(200, {
+        "content-type": "application/x-ndjson; charset=utf-8",
+        "cache-control": "no-cache",
+        "connection": "keep-alive",
+        "x-accel-buffering": "no",
+        "referrer-policy": "no-referrer",
+      });
+      const t = dshTurnState(pane);
+      for (const ev of t.events) { try { res.write(JSON.stringify(ev) + "\n"); } catch {} }
+      t.subs.add(res);
+      const ka = setInterval(() => { try { res.write(JSON.stringify({ type: "ping" }) + "\n"); } catch {} }, 15000);
+      req.on("close", () => { clearInterval(ka); t.subs.delete(res); });
+      return;
+    }
     if (req.method === "POST" && url.pathname === "/dsh/start") {
       const body = JSON.parse((await readBody(req)) || "{}");
       if (!body.pane) return send(res, 400, JSON.stringify({ error: "pane required" }));
@@ -387,6 +430,7 @@ const server = http.createServer(async (req, res) => {
       e.messages.push({ role: "user", text: body.text, time: new Date().toISOString() });
       saveDshStore();
       const entry = e;
+      dshTurnState(body.pane).events = [];
       enqueueDsh(entry, body.text, body.pane);
       return send(res, 200, JSON.stringify({ ok: true, busy: true }));
     }
@@ -415,6 +459,7 @@ const server = http.createServer(async (req, res) => {
         try { rec.child.kill(); } catch {}
       } else {
         e.busy = false;
+        dshEmit(body.pane, { type: "done", message: null });
       }
       e.error = "stopped";
       saveDshStore();

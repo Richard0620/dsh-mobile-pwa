@@ -81,6 +81,8 @@
   .agp .composer input{flex:1;min-width:0;height:44px;padding:0 13px;border-radius:13px;border:1px solid var(--line);background:var(--card);color:var(--fg);font:inherit;font-size:15px}
   .agp .composer input:focus{outline:none;border-color:var(--accent)}
   .agp .composer .send{width:64px;height:44px;border-radius:13px;background:var(--accent);color:#fff;font-weight:600;font-size:14px}
+  .agp .composer .send.stop{background:var(--bad)}
+  .agp .composer .send:disabled{opacity:.45}
   .agp .gate{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:22px;background:color-mix(in srgb,var(--bg) 92%,transparent);z-index:20}
   .agp .gate[hidden]{display:none}
   .agp .card{width:min(360px,100%);background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}
@@ -121,6 +123,9 @@
   .agp .msg.assistant .bubble{border-bottom-left-radius:5px}
   .agp .msg .bubble.md{white-space:normal}
   .agp .mtime{font-size:10.5px;color:var(--dim);margin:2px 6px 8px}
+  .agp .copyrow{display:flex;gap:8px;margin-top:4px}
+  .agp .copybtn{font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:8px;padding:2px 8px;background:var(--card)}
+  .agp .md pre.code .codecopy{position:absolute;top:6px;right:8px;font-size:10.5px;color:#c8cede;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:7px;padding:2px 7px;cursor:pointer;opacity:.85}
   .agp .md{font-size:15px;line-height:1.62;word-break:break-word}
   .agp .md > :first-child{margin-top:0}
   .agp .md > :last-child{margin-bottom:0}
@@ -172,7 +177,7 @@
       <div class="title">终端</div>
       <div class="sub" id="conn">connecting…</div>
     </div>
-    <span class="ver">v15</span>
+    <span class="ver">v17</span>
     <span class="grow"></span>
     <div class="seg" id="seg"><button id="vChat">对话</button><button id="vTerm">终端</button></div>
     <button class="chip" id="resetBtn" style="display:none">新会话</button>
@@ -214,6 +219,7 @@
       </div>
       <div class="composer">
         <input id="txt" type="text" placeholder="输入命令，Enter 发送" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button class="send stop" id="stopBtn" style="display:none">停止</button>
         <button class="send" id="send">发送</button>
       </div>
     </main>
@@ -250,6 +256,9 @@
   let dshState = null;   // {exists, busy, messages, sessionId, ...} for the current pane
   let autoChatPane = '';
   let started = false;
+  let dshLive = null;
+  let dshCtrl = null;
+  let dshClock = null;
 
   function E(tag, props = {}, text = '') {
     const n = document.createElement(tag);
@@ -416,6 +425,11 @@
         if (m.text) {
           const b = E('div', { class: 'md' });
           b.innerHTML = mdToHtml(m.text);
+          for (const pre of b.querySelectorAll('pre.code')) {
+            const cb = E('button', { class: 'codecopy' }, '复制');
+            cb.onclick = (ev) => { ev.stopPropagation(); copyText(pre.querySelector('code') ? pre.querySelector('code').textContent : pre.textContent); };
+            pre.appendChild(cb);
+          }
           row.appendChild(b);
         }
         if ((m.tools || []).length) {
@@ -424,6 +438,11 @@
           row.appendChild(tw);
         }
         row.appendChild(E('div', { class: 'mtime' }, fmtClock(m.time)));
+        const cp = E('div', { class: 'copyrow' });
+        const cbtn = E('button', { class: 'copybtn' }, '复制');
+        cbtn.onclick = () => copyText(m.text);
+        cp.appendChild(cbtn);
+        row.appendChild(cp);
         box.appendChild(row);
       } else if (m.role === 'tool') {
         box.appendChild(E('div', { class: 'bubble tool' }, m.text));
@@ -479,19 +498,152 @@
     }
   }
 
+  function copyText(t) {
+    const s = String(t || '');
+    if (!s) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(s).then(() => toast('已复制')).catch(() => fallbackCopy(s));
+    } else fallbackCopy(s);
+  }
+  function fallbackCopy(s) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = s;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+      toast('已复制');
+    } catch { toast('复制失败'); }
+  }
+  function elapsedText() {
+    if (!dshLive || !dshLive.startedAt) return '';
+    const s = Math.max(0, Math.round((Date.now() - dshLive.startedAt) / 1000));
+    return s < 60 ? s + 's' : Math.floor(s / 60) + 'm' + (s % 60) + 's';
+  }
+  function stopDshClock() { if (dshClock) { clearInterval(dshClock); dshClock = null; } }
+  function startDshClock() {
+    stopDshClock();
+    dshClock = setInterval(() => { if (dshLive) renderDshLive(); }, 1000);
+  }
+  function stopDshStream(keep) {
+    if (dshCtrl) { try { dshCtrl.abort(); } catch {} dshCtrl = null; }
+    stopDshClock();
+    if (!keep) dshLive = null;
+  }
+  function startDshStream() {
+    stopDshStream();
+    dshLive = { text: '', tools: [], status: '', startedAt: Date.now(), error: '' };
+    dshCtrl = new AbortController();
+    startDshClock();
+    renderDshLive();
+    fetch(BASE + '/dsh/stream?pane=' + encodeURIComponent(pane), { headers: { Authorization: 'Bearer ' + token }, signal: dshCtrl.signal })
+      .then(async (r) => {
+        if (!r.ok) throw new Error('stream HTTP ' + r.status);
+        const reader = r.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '';
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let i;
+          while ((i = buf.indexOf('\n')) >= 0) {
+            const line = buf.slice(0, i).trim();
+            buf = buf.slice(i + 1);
+            if (!line) continue;
+            try { onDshEvent(JSON.parse(line)); } catch {}
+          }
+        }
+      })
+      .catch((e) => {
+        if (/abort/i.test(String(e))) return;
+        toast('流断开：' + e.message);
+      })
+      .finally(() => { stopDshClock(); if (dshLive) { dshLive.status = ''; renderDshLive(); } });
+  }
+  function onDshEvent(ev) {
+    if (!dshLive) return;
+    if (!ev || ev.type === 'ping') return;
+    if (ev.type === 'text') {
+      dshLive.text = (dshLive.text ? dshLive.text + '\n\n' : '') + ev.text;
+      dshLive.status = '';
+    } else if (ev.type === 'thinking') {
+      dshLive.status = '思考中…';
+    } else if (ev.type === 'tool_call') {
+      dshLive.tools.push({ name: ev.tool || 'tool', status: 'run' });
+      dshLive.status = '执行 ' + (ev.tool || 'tool') + '…';
+    } else if (ev.type === 'tool_result') {
+      for (let i = dshLive.tools.length - 1; i >= 0; i--) {
+        if (dshLive.tools[i].status === 'run') { dshLive.tools[i].status = ev.status || 'ok'; break; }
+      }
+      dshLive.status = '';
+    } else if (ev.type === 'status') {
+      if (ev.phase === 'step_start') dshLive.status = '第 ' + ev.step + ' 步…';
+    } else if (ev.type === 'final') {
+      dshLive.text = ev.text || dshLive.text;
+      dshLive.status = '';
+    } else if (ev.type === 'done') {
+      stopDshStream(true);
+      dshLive = null;
+      chatTick();
+      return;
+    }
+    renderDshLive();
+  }
+  function renderDshLive() {
+    if (!dshLive || viewMode !== 'chat') return;
+    const box = $('#chat');
+    let row = box.querySelector('.msg.assistant.live');
+    if (!row) {
+      row = E('div', { class: 'msg assistant live' });
+      box.appendChild(row);
+    }
+    const near = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+    row.replaceChildren();
+    if (dshLive.text) {
+      const b = E('div', { class: 'md' });
+      b.innerHTML = mdToHtml(dshLive.text);
+      row.appendChild(b);
+    }
+    if (dshLive.tools.length) {
+      const tw = E('div', { class: 'tools' });
+      for (const t of dshLive.tools) tw.appendChild(E('span', { class: 'tool' }, (t.status === 'run' ? '… ' : '\u2699 ') + t.name));
+      row.appendChild(tw);
+    }
+    const meta = [];
+    if (dshLive.status) meta.push(dshLive.status);
+    if (dshLive.startedAt) meta.push(elapsedText());
+    if (meta.length) row.appendChild(E('div', { class: 'mtime' }, meta.join(' · ')));
+    if (near) box.scrollTop = box.scrollHeight;
+  }
+  async function stopDsh() {
+    if (!pane) return;
+    try { await api('/dsh/stop', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane }) }); } catch (e) { toast(e.message); }
+    stopDshStream();
+    chatTick();
+  }
+
   function renderDsh() {
     const msgs = dshMsgs();
     const last = msgs[msgs.length - 1] || {};
     const sig = 'dsh:' + msgs.length + ':' + (dshState.busy ? '1' : '0') + ':' + String(last.text || '').length;
-    if (sig === chatSig) return;
+    $('#send').disabled = !!dshState.busy;
+    $('#stopBtn').style.display = dshState.busy ? '' : 'none';
+    if (sig === chatSig) { if (dshState.busy && dshLive) renderDshLive(); return; }
     chatSig = sig;
     renderChat(msgs);
     if (dshState.busy) {
-      const box = $('#chat');
-      const row = E('div', { class: 'msg assistant' });
-      row.appendChild(E('div', { class: 'chatempty', style: 'align-self:flex-start;padding:8px 2px' }, 'DSH 正在思考…'));
-      box.appendChild(row);
-      box.scrollTop = box.scrollHeight;
+      if (dshLive) renderDshLive();
+      else {
+        const box = $('#chat');
+        const row = E('div', { class: 'msg assistant' });
+        row.appendChild(E('div', { class: 'chatempty', style: 'align-self:flex-start;padding:8px 2px' }, 'DSH 正在思考…'));
+        box.appendChild(row);
+        box.scrollTop = box.scrollHeight;
+      }
     }
   }
 
@@ -537,6 +689,7 @@
     $('.keys').style.display = isChat ? 'none' : 'flex';
     $('#vChat').classList.toggle('on', isChat);
     $('#vTerm').classList.toggle('on', !isChat);
+    if (!dshActive()) { $('#stopBtn').style.display = 'none'; $('#send').disabled = false; }
     $('#txt').placeholder = isChat ? (dshActive() ? '发消息给 DSH，Enter 发送' : (currentAgent() ? '发消息给 agent，Enter 发送' : '先选择启动方式')) : '输入命令，Enter 发送';
     if (isChat) chatTick();
   }
@@ -549,7 +702,7 @@
       if (dshActive()) {
         try {
           await api('/dsh/send', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane, text }) });
-          await chatTick();
+          startDshStream();
         } catch (e) { toast(e.message); el.value = text; }
         return;
       }
@@ -589,6 +742,7 @@
   }
 
   $('#send').onclick = send;
+  $('#stopBtn').onclick = () => stopDsh();
   $('#vChat').onclick = () => { viewMode = 'chat'; localStorage.setItem('agents.view', 'chat'); renderView(); };
   $('#vTerm').onclick = () => { viewMode = 'term'; localStorage.setItem('agents.view', 'term'); renderView(); };
   $('#txt').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
