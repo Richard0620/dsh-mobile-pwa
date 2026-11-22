@@ -629,7 +629,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v144';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v146';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -4113,9 +4113,8 @@ function renderSession(wrap) {
   ui = { sessionId: state.sessionId, body, listWrap, cardsWrap, ta, sendBtn, stopBtn, strip, dot, modelEl: modelRow, effortEl: effortRow,
     qDock, jump, updateJump, loadStats: loadSessionStats, keys: [], nodes: [], cardsKey: '', prevCount: undefined, atBottom: true };
   paintSession({ scroll:'bottom' });
-  // 进会话直接定位到底部 + 聚焦输入框（iOS 上焦点可能被系统拦，忽略即可）
+  // 进会话只定位到底部，不自动聚焦输入框：多数时候是进来看内容的，弹键盘会挡住正文
   requestAnimationFrame(() => { body.scrollTop = body.scrollHeight; });
-  setTimeout(() => { try { ta.focus({ preventScroll: true }); } catch {} }, 120);
 }
 
 // 把「纯工具调用」的连续消息合并成一行步骤，避免一屏都是 ⚙ chip
