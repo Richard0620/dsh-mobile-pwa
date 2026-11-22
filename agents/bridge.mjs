@@ -3,7 +3,7 @@
 // Binds 127.0.0.1 only. Bearer token (header or ?token=) except / and /health.
 import http from "node:http";
 import { execFile, spawn } from "node:child_process";
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync, cpSync, copyFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, basename } from "node:path";
 import { homedir } from "node:os";
@@ -33,6 +33,23 @@ const CLAUDE_ROOT = join(process.env.USERPROFILE || homedir(), ".claude", "proje
 // ---- DSH chat: one persisted headless session per pane, driven by this bridge ----
 const DSH_CHAT_FILE = join(process.env.LOCALAPPDATA || "", "agents-bridge", "dsh-chat.json");
 const DSH_BIN = join(process.env.APPDATA || "", "npm", "node_modules", "@deepseek-ai", "dsh", "lib", "bin.js");
+// Terminal chats run in an isolated DSH home so their sessions/workspaces never
+// show up in the mobile gateway (the one the PWA session list reads).
+const MAIN_DSH_HOME = process.env.DSH_HOME || join(process.env.USERPROFILE || homedir(), ".dsh");
+const TERM_DSH_HOME = process.env.AGENTS_DSH_HOME || join(process.env.LOCALAPPDATA || "", "agents-bridge", "dsh-home");
+function ensureTermDshHome() {
+  try {
+    mkdirSync(join(TERM_DSH_HOME, "profiles"), { recursive: true });
+    const profSrc = join(MAIN_DSH_HOME, "profiles", "headless");
+    const profDst = join(TERM_DSH_HOME, "profiles", "headless");
+    if (existsSync(profSrc) && !existsSync(profDst)) cpSync(profSrc, profDst, { recursive: true });
+    for (const f of [".env", ".credentials.yaml"]) {
+      const s = join(MAIN_DSH_HOME, f);
+      const d = join(TERM_DSH_HOME, f);
+      if (existsSync(s) && !existsSync(d)) copyFileSync(s, d);
+    }
+  } catch {}
+}
 const DSH_MAX_MESSAGES = 200;
 const DSH_MAX_CONCURRENT = 1;
 const DSH_TIMEOUT_MS = 5 * 60 * 1000;
@@ -74,7 +91,8 @@ function dshTurn(entry, text, pane, onEvent) {
     args.push(text);
     let child;
     try {
-      child = spawn(process.execPath, args, { cwd: entry.cwd || process.cwd(), windowsHide: true });
+      ensureTermDshHome();
+      child = spawn(process.execPath, args, { cwd: entry.cwd || process.cwd(), windowsHide: true, env: { ...process.env, DSH_HOME: TERM_DSH_HOME } });
     } catch (e) {
       return resolve({ text: "", sid: "", err: String(e), code: -1, stopped: false });
     }
@@ -127,7 +145,14 @@ function drainDshQueue() {
   if (!job) return;
   dshRunning++;
   (async () => {
-    const r = await dshTurn(job.entry, job.text, job.pane, (ev) => dshEmit(job.pane, ev));
+    let r = await dshTurn(job.entry, job.text, job.pane, (ev) => dshEmit(job.pane, ev));
+    // Sessions created before the isolated DSH home existed are unknown there;
+    // retry once without --session-id so the pane keeps working.
+    if (r.err && /does not exist/i.test(r.err) && /session/i.test(r.err) && job.entry.sessionId) {
+      delete job.entry.sessionId;
+      saveDshStore();
+      r = await dshTurn(job.entry, job.text, job.pane, (ev) => dshEmit(job.pane, ev));
+    }
     if (r.sid) job.entry.sessionId = r.sid;
     if (r.text) {
       job.entry.messages.push({ role: "assistant", text: r.text, time: new Date().toISOString() });
@@ -445,6 +470,14 @@ const server = http.createServer(async (req, res) => {
         e.error = "";
         saveDshStore();
       }
+      return send(res, 200, JSON.stringify({ ok: true }));
+    }
+    if (req.method === "POST" && url.pathname === "/dsh/close") {
+      const body = JSON.parse((await readBody(req)) || "{}");
+      if (!body.pane) return send(res, 400, JSON.stringify({ error: "pane required" }));
+      delete dshStore[body.pane];
+      try { dshTurns.delete(body.pane); } catch {}
+      saveDshStore();
       return send(res, 200, JSON.stringify({ ok: true }));
     }
     if (req.method === "POST" && url.pathname === "/dsh/stop") {

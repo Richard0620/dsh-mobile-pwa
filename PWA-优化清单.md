@@ -377,6 +377,16 @@ node --check $env:TEMP\app.mjs
 - [x] A9 复制：每条消息「复制」、代码块「复制」（v17）；整段对话复制并入 B5，长按菜单留 P1
 - [x] A10 busy 状态：发送按钮禁用、可停止、失败可重试（v17）
 - [x] A11 自动滚动：仅当用户已在底部时贴底，上翻查看历史时不打断（v17）
+- [x] A12 iOS 输入框聚焦不缩放：composer 字号改 16px（v18）
+- [x] A13 「新会话」回到启动页：`/dsh/close` 删除会话，重新选 DSH/claude（v18）
+- [x] A14 终端浮层：新增 ☰ 会话 / 📁 文件按钮；iframe 左右边缘滑动转发给 PWA（v18）
+- [x] A15 token 弹窗：空白不再清空、保存前 /health 校验、新增「从 PWA 获取 token」、打开即请求（v18）
+- [x] A16 终端视图：空输出显示「（无输出）」、切到终端立即刷新（v18）
+- [x] A17 底部输入框贴底：键盘关闭后 `kb-open` 残留导致 dock padding 归零；现在只在输入聚焦时成立、padding 不再归零（v129）
+- [x] A18 聊天视图按 `design/ui-v1` Instrument Paper 重做：DSH 标签、纸面气泡、工具卡片、运行行、圆形发送、52px 头部（v19）
+- [x] A19 iOS 输入框辅助栏：composer 改 `contenteditable`（不再出现 ^∨✓ 条），发送后清空/占位恢复；iframe 高度跟随父页 visualViewport，键盘弹起时输入框保持在键盘上方（v20）
+- [x] A20 iframe 内的输入框仍会触发 iOS 辅助栏：PWA 外层接管终端输入（`termcomposer`，`pcomposer=1` 隐藏 iframe composer），发送/停止走 postMessage，浮层高度随键盘（v131）
+- [x] A21 终端会话污染主会话列表：bridge 启动 dsh 时改用独立 `%LOCALAPPDATA%\agents-bridge\dsh-home`（复制 headless profile 与凭据），主 DSH home 不再新增 terminal 会话；旧 sessionId 不存在时自动重试新建（bridge）
 
 ### P1 · 体验补齐
 
