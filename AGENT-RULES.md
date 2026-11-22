@@ -239,13 +239,23 @@ $e=$null; [void][System.Management.Automation.Language.Parser]::ParseFile((Resol
    在自己的 worktree（如 `pwa-f`）和 feature 分支上改，小步提交。
 
 2. **先上 preview 验收**
+
+   预览工具在分支 `feature/preview-env` 的 `preview/deploy-preview.ps1`，**根目录已是 `/srv/dsh-preview`**
+   （2026-11-22 从 `/srv/dsh-mobile/preview` 迁走，Caddy `/preview/*` 跟着改）。取一份临时脚本再跑：
+
    ```powershell
-   powershell -NoProfile -ExecutionPolicy Bypass -File D:\Vibe\PWA\pwa-d\preview\deploy-preview.ps1 `
-     -Branch <branch> -Repo <worktree目录>
+   cd D:\Vibe\PWA\pwa
+   git show feature/preview-env:preview/deploy-preview.ps1 > D:\Vibe\PWA\design\_deploy-preview.ps1
+   powershell -NoProfile -ExecutionPolicy Bypass -File D:\Vibe\PWA\design\_deploy-preview.ps1 `
+     -Branch <branch> -Repo <worktree目录> [-Slug <slug>]
    # → https://dsh.easymana.online:8443/preview/<slug>/
    ```
-   预览只写 `/srv/dsh-mobile/preview/<slug>/`，有自己的 manifest / SW scope / `dsh-preview-*` 缓存，
-   **不碰主站的 index.html 和 sw.js**。真机看完，用户明确说"可以合并"才进第 3 步。
+
+   - 预览只写 `/srv/dsh-preview/<slug>/`，有自己的 manifest / SW scope / `dsh-preview-*` 缓存，
+     **不碰主站的 index.html 和 sw.js**。
+   - **换 slug 是清缓存的土办法**：同名 slug 复用同一个 SW 缓存，重新部署后旧缓存可能顶住新代码；
+     要给别人"立刻看到新的"，就换个 slug 重发。
+   - 真机看完，用户明确说"可以合并"才进第 3 步。
 
 3. **合并到本地 master**
    用户同意后：`git switch master; git merge <branch>`，冲突按"功能都保留"手工解，跑 `node --check`。
