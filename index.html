@@ -1479,7 +1479,7 @@ function heroHeader(title, sub, action) {
 
 async function renderSubPage(wrap) {
   const page = state.subPage || 'conn';
-  const titles = { conn:'连接', push:'通知', pushdiag:'推送诊断', about:'关于' };
+  const titles = { conn:'连接', push:'通知', pushdiag:'推送诊断', stats:'统计', about:'关于' };
   const back = el('button', { class:'ico', text:'‹', title:'返回设置', onclick: () => {
     state.view = 'settings'; state.subPage = ''; render();
   }});
