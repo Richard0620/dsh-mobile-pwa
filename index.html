@@ -310,7 +310,17 @@
 
   /* 全屏文件查看器 */
   .viewer{position:fixed;inset:0;z-index:1100;background:var(--bg);display:flex;flex-direction:column}
-  .vhead{display:flex;align-items:center;gap:6px;padding:calc(8px + var(--safe-t)) 10px 6px}
+  /* 查看器：恒深色，纸面/碳黑都一样 */
+  .viewer{--bg:#0B0C0E;--card:#121417;--fg:#EAE8DF;--dim:#6E726C;--line:#24272C;
+    --bubble:#171A1E;--accent:#C6F04E;--accent-fg:#0B0C0E;background:#0B0C0E;color:var(--fg)}
+  .viewer .vtitle{color:#F0EEE6}
+  .viewer .vmeta{color:#8E8C82}
+  .viewer .vbody{color:#E7E5DA}  .vfoot{flex:none;display:flex;gap:8px;padding:8px 12px calc(10px + var(--safe-b));
+    border-top:1px solid var(--line);background:#0B0C0E}
+  .vbtn{height:42px;padding:0 14px;border-radius:11px;border:1px solid var(--line);
+    color:var(--fg);font-size:12.5px}
+  .vgo{flex:1;height:42px;border-radius:11px;background:var(--fg);color:#0B0C0E;
+    font-size:13px;font-weight:600}  .vhead{display:flex;align-items:center;gap:6px;padding:calc(8px + var(--safe-t)) 10px 6px}
   .vtitle{flex:1;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center}
   .vmeta{font-size:11px;color:var(--dim);padding:0 14px 6px;overflow:hidden;
     text-overflow:ellipsis;white-space:nowrap}
@@ -606,7 +616,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v138';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v140';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1904,7 +1914,7 @@ function renderFiles(wrap) {
         render();
         return;
       }
-      if (isDir) loadFiles(e.path); else previewFile(e.path, e.name);
+      if (isDir) loadFiles(e.path); else openViewer(e.path, e.name);
     }},
       state.filesSelecting ? el('span', { class:'fselbox', text:'✓' }) : null,
       el('div', { class:'ftile' + (isDir ? ' dir' : '') }, el('span', { text: isDir ? 'DIR' : extOf(e.name) })),
@@ -2247,7 +2257,21 @@ async function openViewer(path, name) {
       if (await copyText(raw)) toast('已复制全文'); else toast('复制失败');
     } }));
 
-  mask.append(head, meta, tools, findbar, pre);
+  const foot = el('div', { class:'vfoot' },
+    el('button', { class:'vbtn', text:'复制全文', onclick: async () => {
+      if (await copyText(raw)) toast('已复制全文'); else toast('复制失败');
+    }}),
+    el('button', { class:'vgo', text:'引用到会话', onclick: () => {
+      const ta = ui && ui.ta;
+      if (!ta) { toast('要先进一个会话，才能引用文件'); return; }
+      const ref = /\s/.test(path) ? `"${path}"` : path;
+      const base = (ta.innerText || '').replace(/\u00a0/g, '');
+      ta.textContent = (base.trim() ? base.replace(/\s*$/, '') + ' ' : '') + ref;
+      try { saveDraft(state.sessionId, ta.textContent); } catch {}
+      close();
+      toast('已引用到输入框');
+    }}));
+  mask.append(head, meta, tools, findbar, pre, foot);
   document.body.append(mask);
 
   try {
