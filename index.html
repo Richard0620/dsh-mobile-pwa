@@ -191,7 +191,12 @@
   .slabel{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);
     font-family:ui-monospace,SFMono-Regular,Consolas,monospace;padding:18px 6px 6px}
   .groupcard{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
-  .srow{display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid var(--line);
+  .tgl{width:44px;height:26px;border-radius:13px;background:var(--line);position:relative;flex:none;
+    transition:background .2s;cursor:pointer}
+  .tgl::after{content:"";position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:50%;
+    background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.22);transition:transform .22s cubic-bezier(.2,.8,.2,1)}
+  .tgl.on{background:var(--accent)}
+  .tgl.on::after{transform:translateX(18px)}  .srow{display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid var(--line);
     width:100%;text-align:left}
   .srow:last-child{border-bottom:0}
   .srow:active{background:var(--bubble)}
@@ -1482,9 +1487,9 @@ async function renderSubPage(wrap) {
   const row = (title, desc, value, run) => el('button', { class:'srow', onclick: run },
     el('div', { class:'st' }, el('b', { text: title }), desc ? el('span', { text: desc }) : null),
     value ? el('span', { class:'sv', text: value }) : null);
-  const sw = (title, desc, on, run) => el('div', { class:'srow' },
+  const sw = (title, desc, on, run) => el('div', { class:'srow', onclick: run },
     el('div', { class:'st' }, el('b', { text: title }), desc ? el('span', { text: desc }) : null),
-    el('span', { class:'tgl' + (on ? ' on' : ''), onclick: run }));
+    el('span', { class:'tgl' + (on ? ' on' : '') }));
 
   if (page === 'conn') {
     const modeLabel = state.mode === 'auto' ? '自动' : state.mode === 'lan' ? '仅局域网' : '仅中转';
