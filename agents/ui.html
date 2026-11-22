@@ -78,7 +78,7 @@
   .agp .keys::-webkit-scrollbar{display:none}
   .agp .keys .kbtn{flex:none;height:36px;min-width:42px;font-size:13px;color:var(--dim)}
   .agp .composer{display:flex;gap:8px;padding:9px 12px calc(11px + env(safe-area-inset-bottom));flex:0 0 auto;background:var(--bg)}
-  .agp .composer input{flex:1;min-width:0;height:44px;padding:0 13px;border-radius:13px;border:1px solid var(--line);background:var(--card);color:var(--fg);font:inherit;font-size:15px}
+  .agp .composer input{flex:1;min-width:0;height:44px;padding:0 13px;border-radius:13px;border:1px solid var(--line);background:var(--card);color:var(--fg);font:inherit;font-size:16px}
   .agp .composer input:focus{outline:none;border-color:var(--accent)}
   .agp .composer .send{width:64px;height:44px;border-radius:13px;background:var(--accent);color:#fff;font-weight:600;font-size:14px}
   .agp .composer .send.stop{background:var(--bad)}
@@ -177,7 +177,7 @@
       <div class="title">终端</div>
       <div class="sub" id="conn">connecting…</div>
     </div>
-    <span class="ver">v17</span>
+    <span class="ver">v18</span>
     <span class="grow"></span>
     <div class="seg" id="seg"><button id="vChat">对话</button><button id="vTerm">终端</button></div>
     <button class="chip" id="resetBtn" style="display:none">新会话</button>
@@ -231,6 +231,7 @@
       <p>需要本地 bridge 的 Bearer token。粘一次，之后存在本机。</p>
       <input id="token" type="password" placeholder="Bearer token" autocomplete="off">
       <button class="go" id="saveToken">保存并连接</button>
+      <button class="go" id="gatePull" style="margin-top:8px;background:var(--bg);color:var(--fg);border:1px solid var(--line)">从 PWA 获取 token</button>
     </div>
   </div>
   <div class="toast" id="toast"></div>
@@ -275,7 +276,7 @@
   function dshMsgs() { return (dshState && dshState.messages) || []; }
 
   function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 1900); }
-  function gate(v) { $('#gate').hidden = !v; }
+  function gate(v) { $('#gate').hidden = !v; if (v) requestToken(); }
   function conn(ok, text) { $('#dot').classList.toggle('on', !!ok); $('#conn').textContent = text; }
 
   function api(path, opt = {}) {
@@ -394,7 +395,7 @@
       const t = await r.text();
       const out = $('#out');
       const near = out.scrollHeight - out.scrollTop - out.clientHeight < 48;
-      out.textContent = t;
+      out.textContent = t || '（无输出）';
       if (near || t !== lastText) out.scrollTop = out.scrollHeight;
       lastText = t;
       conn(true, '已连接 · ' + pane);
@@ -691,7 +692,7 @@
     $('#vTerm').classList.toggle('on', !isChat);
     if (!dshActive()) { $('#stopBtn').style.display = 'none'; $('#send').disabled = false; }
     $('#txt').placeholder = isChat ? (dshActive() ? '发消息给 DSH，Enter 发送' : (currentAgent() ? '发消息给 agent，Enter 发送' : '先选择启动方式')) : '输入命令，Enter 发送';
-    if (isChat) chatTick();
+    if (isChat) chatTick(); else tick();
   }
 
   async function send() {
@@ -751,15 +752,31 @@
   $('#resetBtn').onclick = async () => {
     if (!pane) return;
     try {
-      await api('/dsh/reset', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane }) });
+      await api('/dsh/close', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane }) });
+      dshState = null;
       chatSig = '';
       await load();
       renderView();
-      toast('已开新会话');
+      toast('已结束，请选择启动方式');
     } catch (e) { toast(e.message); }
   };
   $('#tokenBtn').onclick = () => gate(true);
-  $('#saveToken').onclick = () => { token = $('#token').value.trim(); localStorage.setItem('bridge_token', token); gate(false); boot(); };
+  $('#gatePull').onclick = () => { requestToken(); toast('已向 PWA 请求 token'); };
+  $('#saveToken').onclick = async () => {
+    const v = $('#token').value.trim();
+    if (!v) {
+      if (token) { toast('输入为空，已保留原 token'); gate(false); return; }
+      toast('请先粘贴 token'); return;
+    }
+    try {
+      const r = await fetch(BASE + '/health', { headers: { Authorization: 'Bearer ' + v } });
+      if (!r.ok) { toast('token 无效（HTTP ' + r.status + '）'); return; }
+    } catch (e) { toast('连接失败：' + e.message); return; }
+    token = v;
+    localStorage.setItem('bridge_token', token);
+    gate(false);
+    boot();
+  };
   $('#sel').onchange = (e) => select(e.target.value);
 
   function boot() {
@@ -791,6 +808,31 @@
     try { localStorage.setItem('bridge_token', token); } catch {}
     if (!started) boot(); else gate(false);
   });
+
+  // Edge swipes inside the iframe: forward to the PWA shell (it owns drawer/file panel).
+  let swX = 0, swY = 0, swMode = '';
+  document.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1 || window.parent === window) { swMode = ''; return; }
+    const t = e.touches[0];
+    const w = window.innerWidth;
+    swMode = t.clientX <= 32 ? 'left' : (t.clientX >= w - 32 ? 'right' : '');
+    swX = t.clientX;
+    swY = t.clientY;
+  }, { passive: true });
+  document.addEventListener('touchcancel', () => { swMode = ''; }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    if (!swMode) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - swX;
+    const dy = t.clientY - swY;
+    const m = swMode;
+    swMode = '';
+    if (Math.abs(dy) >= 60) return;
+    try {
+      if (m === 'left' && dx > 50) window.parent.postMessage({ type: 'pwa-open-drawer' }, location.origin);
+      if (m === 'right' && dx < -50) window.parent.postMessage({ type: 'pwa-open-files' }, location.origin);
+    } catch {}
+  }, { passive: true });
 
   function fitViewport() {
     const vv = window.visualViewport;

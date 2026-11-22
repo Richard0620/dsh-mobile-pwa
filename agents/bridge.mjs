@@ -447,6 +447,14 @@ const server = http.createServer(async (req, res) => {
       }
       return send(res, 200, JSON.stringify({ ok: true }));
     }
+    if (req.method === "POST" && url.pathname === "/dsh/close") {
+      const body = JSON.parse((await readBody(req)) || "{}");
+      if (!body.pane) return send(res, 400, JSON.stringify({ error: "pane required" }));
+      delete dshStore[body.pane];
+      try { dshTurns.delete(body.pane); } catch {}
+      saveDshStore();
+      return send(res, 200, JSON.stringify({ ok: true }));
+    }
     if (req.method === "POST" && url.pathname === "/dsh/stop") {
       const body = JSON.parse((await readBody(req)) || "{}");
       if (!body.pane) return send(res, 400, JSON.stringify({ error: "pane required" }));

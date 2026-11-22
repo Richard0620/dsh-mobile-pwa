@@ -2648,6 +2648,7 @@ async function newTerminal() {
       toast('\u5DF2\u521B\u5EFA\u7EC8\u7AEF');
       termAgents.at = 0;
       loadTermAgents();
+      if (j.paneId) openTerminal(j.paneId);
     } catch (e) { toast('\u521B\u5EFA\u5931\u8D25\uFF1A' + (e.message || e)); }
     return true;
   }});
@@ -2707,6 +2708,8 @@ async function closeTerminal(it) {
   const bar = el('div', { class: 'termbar' },
     el('button', { class: 'ico', text: '\u2039', onclick: () => mask.remove() }),
     el('b', { text: '\u7EC8\u7AEF' }),
+    el('button', { class: 'ico', text: '\u2630', title: '\u4F1A\u8BDD\u5217\u8868', onclick: () => { mask.remove(); openDrawer(); } }),
+    el('button', { class: 'ico', text: '\uD83D\uDCC1', title: '\u6587\u4EF6', onclick: () => { mask.remove(); openFileDrawer(state.sessionCwd || ''); } }),
     el('span', { style: 'flex:1' }),
     el('button', { class: 'ico', text: '\u2715', onclick: () => mask.remove() }));
   const frame = el('iframe', { class: 'termframe', src: '/agents/?embed=1&pane=' + encodeURIComponent(paneId || '') + '&v=' + encodeURIComponent(APP_VERSION) });
@@ -2723,6 +2726,8 @@ if (!window._agentsTokenListener) {
   window.addEventListener('message', (ev) => {
     if (ev.origin !== location.origin) return;
     const d = ev.data || {};
+    if (d.type === 'pwa-open-drawer') { openDrawer(); return; }
+    if (d.type === 'pwa-open-files') { openFileDrawer(state.sessionCwd || ''); return; }
     if (d.type !== 'agents-token-request') return;
     const t = termToken();
     if (t && ev.source) ev.source.postMessage({ type: 'agents-token', token: t }, location.origin);
