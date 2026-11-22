@@ -415,7 +415,7 @@
 
   /* ---------- composer ---------- */
   .dock{padding:6px 12px calc(8px + var(--safe-b));background:var(--bg)}
-  html.kb-open .dock{padding-bottom:0}
+  html.kb-open .dock{padding-bottom:4px}
   html.kb-open .streamline{display:none}
   /* 待发送附件 */
   .attach{display:none;gap:8px;padding:2px 2px 8px;overflow-x:auto;scrollbar-width:none}
@@ -509,7 +509,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v127';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v129';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1322,7 +1322,9 @@ function installViewportSync() {
     const shrunk = maxH - ih;
     // 关键：iOS 有时不缩 innerHeight，只缩 visualViewport。两个信号取大的那个。
     const vvShrunk = vv ? maxH - Math.round(vv.height) : 0;
-    const kb = Math.max(shrunk, vvShrunk) > 120;
+    const ae = document.activeElement;
+    const editing = !!(ae && (ae.isContentEditable || ae.tagName === 'TEXTAREA' || ae.tagName === 'INPUT'));
+    const kb = editing && Math.max(shrunk, vvShrunk) > 120;
     de.classList.toggle('kb-open', kb);
 
     // iOS 会把页面往上顶（offsetTop/scrollY 变成几百），把滚动位置强行拉回 0
