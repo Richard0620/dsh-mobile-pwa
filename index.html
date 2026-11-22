@@ -104,15 +104,57 @@
   .ghead{display:flex;align-items:center;gap:8px;padding:8px 2px;font-size:13px;color:var(--dim)}
   .ghead .gname{font-weight:600;color:var(--fg);font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .ghead .chev{font-size:10px;transition:transform .18s;color:var(--dim)}
+  .ghead .fico{display:grid;place-items:center;color:var(--dim)}
+  .ghead .fico svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;
+    stroke-linecap:round;stroke-linejoin:round}
   .ghead.closed .chev{transform:rotate(-90deg)}
   .branch{font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:1px 7px;flex:none}
   .count{font-size:11px;color:var(--dim);flex:none}
-  .row{display:flex;gap:10px;align-items:center;padding:9px 10px;border-radius:14px}
+
+  /* ---------- 底部 Tab 栏 ---------- */
+  .tabbar{flex:none;display:flex;gap:2px;padding:6px 10px calc(6px + var(--safe-b));
+    border-top:1px solid var(--line);background:color-mix(in srgb,var(--card) 94%,transparent);
+    backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+  .tabbar button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+    padding:6px 0 4px;border-radius:12px;color:var(--dim);font-size:10.5px;letter-spacing:.02em}
+  .tabbar button.on{color:var(--fg);font-weight:600}
+  .tabbar svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.6;
+    stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---------- 大标题头（会话 / 文件 / 设置） ---------- */
+  .hero{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+    padding:calc(12px + var(--safe-t)) 18px 0}
+  .hero h1{margin:0;font-size:30px;line-height:1.12;font-weight:650;letter-spacing:-.5px}
+  .hero .sub{margin-top:6px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--dim);font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+  .hero .acts{display:flex;gap:4px;padding-top:2px}
+
+  /* 会话行：标题下面补一行预览 */
+  .row .p{font-size:12.5px;line-height:1.4;color:var(--dim);margin-top:2px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* ---------- 设置页 ---------- */
+  .settings{flex:1;overflow-y:auto;padding:2px 16px calc(10px + var(--safe-b))}
+  .slabel{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);
+    font-family:ui-monospace,SFMono-Regular,Consolas,monospace;padding:18px 6px 6px}
+  .groupcard{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .srow{display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid var(--line);
+    width:100%;text-align:left}
+  .srow:last-child{border-bottom:0}
+  .srow:active{background:var(--bubble)}
+  .srow .st{flex:1;min-width:0}
+  .srow b{display:block;font-size:14px;font-weight:550;letter-spacing:-.1px}
+  .srow span{display:block;font-size:11.5px;color:var(--dim);margin-top:2px}
+  .srow .sv{flex:none;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+    font-size:11px;color:var(--dim)}
+  .row{display:flex;gap:10px;align-items:center;padding:11px 4px;border-radius:12px;
+    border-bottom:1px solid var(--line)}
   .row:active{background:var(--bubble)}
   .row .body{flex:1;min-width:0}
   .row .t{display:flex;align-items:center;gap:7px}
   .row .title{font-size:15px;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
-  .row .time{font-size:12px;color:var(--dim);flex:none}
+  .row .time{font-size:10.5px;color:var(--dim);flex:none;
+    font-family:ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.02em}
   .row .dot{margin-top:0}
   /* 文件夹里没有可显示的会话时（都被置顶/归档）给一句说明，别让分组像丢了 */
   .ghint{font-size:12px;color:var(--dim);padding:2px 10px 10px}
@@ -323,7 +365,7 @@
   .has-attn.attn-done::after{background:var(--accent)}
   .has-attn.attn-running::after{background:var(--ok)}
   /* 会话行右侧的三点菜单 */
-  .row .rowmore{flex:none;width:30px;height:30px;border-radius:50%;color:var(--dim);font-size:16px;
+  .row .rowmore{flex:none;width:30px;height:30px;border-radius:50%;color:var(--dim);font-size:16px;opacity:.55;
     display:grid;place-items:center;margin-right:-4px}
   .row .rowmore:active{background:var(--bubble)}
   .pinmark{font-size:10px;margin-right:2px;opacity:.85}
@@ -517,7 +559,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v124';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v126';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1277,6 +1319,62 @@ function showFatal(e) {
   } catch {}
 }
 
+const NAV_ICONS = {
+  chat: '<svg viewBox="0 0 24 24"><path d="M20 12.5c0 3.9-3.6 7-8 7-1 0-2-.15-2.9-.43L4 20.5l1.3-3.6C4.1 15.6 3.5 14.1 3.5 12.5c0-3.9 3.6-7 8.5-7s8 3.1 8 7z"/></svg>',
+  files: '<svg viewBox="0 0 24 24"><path d="M7 4.5h6.5L18 9v10.5H7z"/><path d="M13.5 4.5V9H18"/><path d="M4.5 7.5v12h9"/></svg>',
+  gear: '<svg viewBox="0 0 24 24"><path d="M3.5 8h9M17 8h3.5M3.5 16h3.5M11 16h9.5"/><circle cx="14.5" cy="8" r="2.2"/><circle cx="8.5" cy="16" r="2.2"/></svg>',
+  folder: '<svg viewBox="0 0 24 24"><path d="M3.5 7.5A1.5 1.5 0 015 6h4l2 2.5h8A1.5 1.5 0 0120.5 10v7A1.5 1.5 0 0119 18.5H5A1.5 1.5 0 013.5 17V7.5z"/></svg>',
+  pin: '<svg viewBox="0 0 24 24"><path d="M9 3.5h6l-1 5 3 3v1H7v-1l3-3-1-5z"/><path d="M12 12.5V20"/></svg>',
+};
+
+function tabBar(active) {
+  const btn = (id, label, icon, run) => el('button', { class: active === id ? 'on' : '', onclick: run },
+    el('span', { html: NAV_ICONS[icon] }), el('span', { text: label }));
+  return el('nav', { class:'tabbar' },
+    btn('list', '会话', 'chat', () => { if (state.view !== 'list') { state.view = 'list'; render(); } }),
+    btn('files', '文件', 'files', () => {
+      if (state.filesListing) { state.view = 'files'; render(); }
+      else loadFiles(state.sessionCwd || '');
+    }),
+    btn('settings', '设置', 'gear', () => { if (state.view !== 'settings') { state.view = 'settings'; render(); } }),
+  );
+}
+
+function heroHeader(title, sub, action) {
+  return el('div', { class:'hero' },
+    el('div', {}, el('h1', { text: title }), sub ? el('div', { class:'sub', text: sub }) : null),
+    action ? el('div', { class:'acts' }, action) : null);
+}
+
+function renderSettings(wrap) {
+  wrap.append(heroHeader('设置', 'DSH MOBILE · ' + APP_VERSION));
+  const skin = (() => { try { return localStorage.getItem('dsh.skin') === 'carbon' ? '碳黑' : '纸面'; } catch { return '纸面'; } })();
+  const theme = (() => { try { const t = localStorage.getItem('dsh.theme'); return t === 'light' ? '浅色' : t === 'dark' ? '深色' : '跟随系统'; } catch { return '跟随系统'; } })();
+  const row = (title, desc, value, run) => el('button', { class:'srow', onclick: run },
+    el('div', { class:'st' }, el('b', { text: title }), desc ? el('span', { text: desc }) : null),
+    value ? el('span', { class:'sv', text: value }) : null);
+  const card = rows => el('div', { class:'groupcard' }, ...rows);
+  const main = el('div', { class:'settings' });
+  main.append(el('div', { class:'slabel', text:'外观' }), card([
+    row('皮肤', '纸面 / 碳黑', skin, openSkinSheet),
+    row('主题', '跟随系统 / 浅色 / 深色', theme, openThemeSheet),
+  ]));
+  main.append(el('div', { class:'slabel', text:'通知' }), card([
+    row('通知提醒', '完成、审批与提问的推送', '', openPushSettings),
+    row('推送诊断', '检查订阅与最近投递', '', openPushDiag),
+  ]));
+  main.append(el('div', { class:'slabel', text:'连接' }), card([
+    row('连接信息', '当前线路、延迟与中转', '', openConnInfo),
+    row('统计', '会话数、词元与用量', '', openStats),
+    row('终端', '在浏览器打开 /agents/', '', () => { location.href = '/agents/'; }),
+  ]));
+  main.append(el('div', { class:'slabel', text:'应用' }), card([
+    row('版本', '构建与更新说明', APP_VERSION, openAbout),
+    row('重新加载', '清掉页面状态重新进入', '', reloadApp),
+    row('退出登录', '清除本机凭据', '', () => { localStorage.clear(); state.token = ''; state.view = 'list'; render(); }),
+  ]));
+  wrap.append(main);
+}
 function render() {
   root.replaceChildren();
   if (!state.token) return renderPair();
@@ -1284,8 +1382,10 @@ function render() {
     const wrap = el('div', { class:'app' });
     if (state.view === 'list') { ui.sessionId = null; renderList(wrap); }
     else if (state.view === 'files') renderFiles(wrap);
+    else if (state.view === 'settings') renderSettings(wrap);
     else if (state.view === 'git') renderGit(wrap);
     else renderSession(wrap);
+    if (state.view === 'list' || state.view === 'files' || state.view === 'settings') wrap.append(tabBar(state.view));
     root.append(wrap);
     paintOpenDrawer();
   } catch (e) {
@@ -2812,7 +2912,7 @@ function renderList(wrap, opts = {}) {
     { label:'退出登录', icon:'⏏', run: () => { localStorage.clear(); state.token=''; state.view='list'; render(); } },
   ]) });
   const plus = el('button', { class:'ico', text:'＋', onclick: openNewSessionSheet });
-  if (!opts.noHeader) wrap.append(headerEl('会话', menu, plus));
+  if (!opts.noHeader) wrap.append(heroHeader('会话', state.sessions.length + ' 个会话 · ' + state.workspaces.length + ' 个工作区', el('div', { style:'display:flex;gap:2px' }, plus, menu)));
 
   const main = el('main');
   // 「已归档」页的数据来自 archived=1；当前宿主只返回归档子集，
@@ -2823,11 +2923,10 @@ function renderList(wrap, opts = {}) {
       state.tab = 'archived'; state.archived = null; render(); loadArchived();
     } }),
   );
-  main.append(tabs);
 
   // 搜索：服务端内容检索在这个部署里是关闭的（openAt "never"），
   // 所以本地过滤标题 / 最近一条，并把范围扩到已缓存的消息正文（见 buildSearchResults）
-  const searchInput = el('input', { type:'search', placeholder:'搜索会话（标题 / 预览 / 已缓存消息）…' });
+  const searchInput = el('input', { type:'search', placeholder:'搜索标题或最近一条' });
   searchInput.value = state.searchQ || '';
   searchInput.addEventListener('input', () => {
     const q = searchInput.value.trim().toLowerCase();
@@ -2840,6 +2939,7 @@ function renderList(wrap, opts = {}) {
   // 归档页不显示搜索框：本地搜索的数据源是 state.sessions（不含归档），
   // 摆在那里输入也搜不到东西（以前就是个死控件）
   if (state.tab !== 'archived') main.append(el('div', { class:'searchrow' }, searchInput));
+  main.append(tabs);
 
   if (state.tab === 'archived') {
     const items = state.archived;
@@ -2896,6 +2996,7 @@ function renderList(wrap, opts = {}) {
           s.pinned && !opts.hidePin ? el('span', { class:'pinmark', text:'📌' }) : null,
           el('span', { class:'title', text: s.title || '(无标题)' }),
           el('span', { class:'time', text: fmtTime(s.updatedAt) })),
+        s.lastMessage && s.lastMessage.text ? el('div', { class:'p', text: plain(String(s.lastMessage.text)).replace(/\s+/g, ' ').trim() }) : null,
       ),
       more);
     // 长按（或桌面右键）出菜单：重命名 / 置顶
@@ -2921,7 +3022,7 @@ function renderList(wrap, opts = {}) {
       render();
     }},
       el('span', { class:'chev', text:'▼' }),
-      el('span', { text:'📌' }),
+      el('span', { class:'fico', html:NAV_ICONS.pin }),
       el('span', { class:'gname', text:'置顶' }),
       el('span', { class:'count', style:'margin-left:auto', text: String(pinnedItems.length) }),
     );
@@ -2960,7 +3061,7 @@ function renderList(wrap, opts = {}) {
       render();
     }},
       el('span', { class:'chev', text:'▼' }),
-      el('span', { text:'📁' }),
+      el('span', { class:'fico', html:NAV_ICONS.folder }),
       el('span', { class:'gname', text: g.name || '(未命名)' }),
       g.git && g.git.branch ? el('span', { class:'branch', text: g.git.branch }) : null,
       el('span', { class:'count', style:'margin-left:auto', text: String(g.items.length) }),
