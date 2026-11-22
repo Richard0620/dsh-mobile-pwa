@@ -48,3 +48,4 @@
 | v177 | 2026-11-22 | master | composer 底部 plus/chips/发送键垂直对齐：清掉 `.chips` 不对称 padding | 手机 PWA 输入框 | getBoundingClientRect 实测 plus/sendgroup top 791.953、chips top 793.953，中心一致 |
 
 | v179 | 2026-11-22 | master | 通知点击跳转加固：冷启动时多次重试读「待打开便条」；推送服务日志补 sessionId | 手机通知 | 杀 App 点通知应稳定进入对应会话 |
+| v179 | 2026-11-22 | master | /push/healthz 不再公开订阅数；部署脚本清理死代码 | 安全 | 无密钥请求 healthz 应看不到 subs |

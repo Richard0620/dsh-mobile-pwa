@@ -117,7 +117,11 @@ const server = http.createServer(async (req, res) => {
   const p = url.pathname;
 
   if (req.method === 'GET' && p === '/push/healthz') {
-    return json(res, 200, { ok: true, subs: subs.length, service: 'dsh-push' });
+    // 不公开订阅数：只有带推送密钥的内部调用才看得到
+    const authed = SECRET && req.headers['x-push-secret'] === SECRET;
+    return json(res, 200, authed
+      ? { ok: true, service: 'dsh-push', subs: subs.length }
+      : { ok: true, service: 'dsh-push' });
   }
   // 前端拿公钥自己 subscribe
   if (req.method === 'GET' && p === '/push/vapid') {
