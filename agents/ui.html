@@ -77,7 +77,9 @@
   .agp .keys{display:flex;gap:7px;padding:9px 12px 0;overflow-x:auto;flex:0 0 auto;scrollbar-width:none}
   .agp .keys::-webkit-scrollbar{display:none}
   .agp .keys .kbtn{flex:none;height:36px;min-width:42px;font-size:13px;color:var(--dim)}
-  .agp .composer{display:flex;gap:8px;padding:9px 12px calc(11px + env(safe-area-inset-bottom));flex:0 0 auto;background:var(--bg)}
+    /* kbOpenClassPatch: 键盘弹起时不要再留 home indicator 的 34pt */
+  html.kb .agp .composer{padding-bottom:8px !important}
+.agp .composer{display:flex;gap:8px;padding:9px 12px calc(11px + env(safe-area-inset-bottom));flex:0 0 auto;background:var(--bg)}
   .agp .composer input{flex:1;min-width:0;height:44px;padding:0 13px;border-radius:13px;border:1px solid var(--line);background:var(--card);color:var(--fg);font:inherit;font-size:15px}
   .agp .composer input:focus{outline:none;border-color:var(--accent)}
   .agp .composer .send{width:64px;height:44px;border-radius:13px;background:var(--accent);color:#fff;font-weight:600;font-size:14px}
@@ -797,12 +799,24 @@
     const h = vv ? Math.round(vv.height) : window.innerHeight;
     const agp = document.getElementById('agp');
     if (agp && h > 200) agp.style.height = h + 'px';
+    // 键盘弹起（可见高度明显小于窗口）时去掉底部 home indicator 留白
+    const kb = h < (window.innerHeight - 120);
+    document.documentElement.classList.toggle('kb', kb);
   }
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', fitViewport);
     window.visualViewport.addEventListener('scroll', fitViewport);
   }
   window.addEventListener('resize', fitViewport);
+  // 进页面先算一次，别让首次布局停在未适配的高度
+  requestAnimationFrame(fitViewport);
+  setTimeout(fitViewport, 250);
+  document.addEventListener('focusin', (e) => {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+      setTimeout(fitViewport, 60);
+      setTimeout(() => { try { window.scrollTo(0, 0); } catch {} }, 120);
+    }
+  });
 
   // --- minimal markdown renderer, same rules as the PWA ---
   function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
