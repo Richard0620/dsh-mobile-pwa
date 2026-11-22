@@ -520,7 +520,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v135';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v137';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -2763,8 +2763,11 @@ async function closeTerminal(it) {
     tcomp.style.right = '0';
     tcomp.style.paddingBottom = kb ? '8px' : 'calc(10px + env(safe-area-inset-bottom))';
     const compH = tcomp.offsetHeight;
+    const barH = bar.offsetHeight;
     tcomp.style.top = Math.max(0, vh - compH) + 'px';
-    frame.style.marginBottom = compH + 'px';
+    frame.style.flex = '0 0 auto';
+    frame.style.height = Math.max(120, vh - barH - compH) + 'px';
+    frame.style.marginBottom = '0';
     try { window.scrollTo(0, 0); } catch {}
   };
   if (window.visualViewport) {
