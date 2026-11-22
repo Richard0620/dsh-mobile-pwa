@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 # DSH Mobile PWA - deploy from GitHub to /srv/dsh-mobile
 #
-#   ./deploy.sh            deploy origin/main
-#   ./deploy.sh v123       deploy a tag
-#   ./deploy.sh <commit>   deploy a commit
+#   ./deploy.sh            deploy origin/main (the only allowed ref)
 #
 # Target dir always equals exactly the runtime files of one commit.
 set -euo pipefail
@@ -13,18 +11,28 @@ TARGET=/srv/dsh-mobile
 STAGE=/tmp/dsh-mobile-stage
 REF="${1:-origin/main}"
 
+if [ "$REF" != "origin/main" ]; then
+  echo "refusing deploy: only origin/main is allowed (got $REF)" >&2
+  echo "feature branches must be tested via /preview/ and merged to main first" >&2
+  exit 2
+fi
+
 cd "$REPO"
 
 git fetch --all --tags --prune --quiet
 
-# self-install: keep the /opt copies in sync with the repo version
+# self-install: keep the /opt copies in sync with the repo version.
+# Use cp-to-temp + mv (NOT cp over the running file): bash reads a script
+# incrementally, truncating/replacing it in place can corrupt the current run.
 if [ -f "$REPO/deploy/deploy-remote.sh" ]; then
-  cp "$REPO/deploy/deploy-remote.sh" /opt/dsh-mobile-deploy.sh
-  chmod +x /opt/dsh-mobile-deploy.sh
+  cp "$REPO/deploy/deploy-remote.sh" /opt/.dsh-mobile-deploy.sh.new
+  chmod +x /opt/.dsh-mobile-deploy.sh.new
+  mv -f /opt/.dsh-mobile-deploy.sh.new /opt/dsh-mobile-deploy.sh
 fi
 if [ -f "$REPO/deploy/deploy-push.sh" ]; then
-  cp "$REPO/deploy/deploy-push.sh" /opt/dsh-push-deploy.sh
-  chmod +x /opt/dsh-push-deploy.sh
+  cp "$REPO/deploy/deploy-push.sh" /opt/.dsh-push-deploy.sh.new
+  chmod +x /opt/.dsh-push-deploy.sh.new
+  mv -f /opt/.dsh-push-deploy.sh.new /opt/dsh-push-deploy.sh
 fi
 
 if ! git rev-parse --verify --quiet "$REF" >/dev/null; then
@@ -44,7 +52,8 @@ mkdir -p "$STAGE"
 cp index.html sw.js manifest.webmanifest "$STAGE"/
 cp icon-192.png icon-512.png icon-maskable-512.png apple-touch-icon.png icon-dsh.ico "$STAGE"/
 
-rsync -a --delete "$STAGE"/ "$TARGET"/
+# 保留 /preview/ 分支预览目录，不被主站部署清掉
+rsync -a --delete --exclude 'preview/' "$STAGE"/ "$TARGET"/
 
 {
   echo "app=$APP"

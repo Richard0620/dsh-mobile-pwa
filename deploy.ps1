@@ -1,10 +1,9 @@
-# Deploy DSH Mobile PWA from GitHub (the server pulls; no local scp).
+﻿# Deploy DSH Mobile PWA from GitHub (the server pulls; no local scp).
 #
 #   ./deploy.ps1                # static PWA from origin/main
 #   ./deploy.ps1 -Push          # static PWA + Web Push service (restarts dsh-push ~1s)
-#   ./deploy.ps1 -Ref v123      # deploy a tag
-#   ./deploy.ps1 -Ref <sha>     # deploy a commit
-#   ./deploy.ps1 -Force         # allow when local HEAD != origin/main
+#
+# 只允许部署 origin/main。feature 分支预览请用 /preview/ 环境，不要走这里。
 param(
   [string]$Ref = 'origin/main',
   [switch]$Force,
@@ -19,13 +18,22 @@ $hostName = 'root@38.189.61.57'
 
 Set-Location $PSScriptRoot
 
+if ($Ref -ne 'origin/main') {
+  Write-Error "只允许部署 origin/main（收到 $Ref）。feature 分支请用 /preview/ 测试环境，合并到 main 后再部署。"
+  exit 1
+}
+if ($Force) {
+  Write-Error '-Force 已禁用。部署前先把本地 master 快进到 origin/main。'
+  exit 1
+}
+
 git fetch origin --quiet 2>$null
 $head = (git rev-parse --short HEAD)
 $main = (git rev-parse --short origin/main)
 Write-Host "local HEAD=$head  origin/main=$main"
 
-if (-not $Force -and $head -ne $main) {
-  Write-Warning 'local HEAD differs from origin/main. Push and merge first, or pass -Force.'
+if ($head -ne $main) {
+  Write-Error 'local HEAD 与 origin/main 不一致：先推 feature 分支、开 PR、合并，再 git merge --ff-only origin/main。'
   exit 1
 }
 
@@ -36,4 +44,9 @@ if ($Push) {
   ssh @opt $hostName "bash /opt/dsh-push-deploy.sh $Ref"
 }
 
-ssh @opt $hostName "cat /srv/dsh-mobile/VERSION"
+$ver = (ssh @opt $hostName "cat /srv/dsh-mobile/VERSION") -join "`n"
+$ver
+if ($ver -notmatch 'ref=origin/main' -or $ver -notmatch "commit=$main") {
+  Write-Error "部署后 VERSION 与 origin/main 不一致：`n$ver"
+  exit 1
+}
