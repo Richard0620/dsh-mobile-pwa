@@ -7,6 +7,11 @@ REPO=/srv/dsh-mobile-src
 DST=/opt/dsh-push
 REF="${1:-origin/main}"
 
+if [ "$REF" != "origin/main" ]; then
+  echo "refusing deploy: only origin/main is allowed (got $REF)" >&2
+  exit 2
+fi
+
 cd "$REPO"
 git fetch --all --tags --prune --quiet
 git checkout --force --detach "$REF" --quiet
