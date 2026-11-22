@@ -601,7 +601,7 @@
   .composer .ta:empty::before{content:attr(data-ph);color:var(--dim);pointer-events:none}
   .composer textarea::placeholder{color:var(--dim)}
   .crow{display:flex;align-items:center;gap:8px;margin-top:8px}
-  .chips{display:flex;align-items:center;gap:6px;flex:1;min-width:0;overflow:hidden;flex-wrap:wrap;row-gap:6px;align-content:center}
+  .chips{display:flex;align-items:center;gap:6px;flex:1;min-width:0;overflow:hidden;flex-wrap:wrap;row-gap:6px;align-content:center;padding:0}
   .chip2{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 9px;border-radius:8px;flex:0 0 auto;min-width:0;
     background:var(--bubble);color:var(--dim);font-size:11.5px;letter-spacing:-.1px;white-space:nowrap;
     flex:none;max-width:60%}
@@ -704,7 +704,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v175';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v177';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
