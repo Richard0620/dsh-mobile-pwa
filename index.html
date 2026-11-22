@@ -393,7 +393,9 @@
   /* 抽屉底部：图标按钮一行放下（通知入口收进「设置」里，不再占一格） */
   .drfoot.icons{flex-wrap:nowrap;justify-content:space-around;align-items:center;gap:4px;
     padding:8px 10px calc(8px + var(--safe-b))}
-  .drfoot .drbtn > svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.6;
+  .drfoot .drbtn{display:inline-flex;align-items:center;gap:6px;line-height:1}
+  .drfoot .drbtn .bi{height:18px}
+  .drfoot.icons .drbtn{justify-content:center}  .drfoot .drbtn > svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.6;
     stroke-linecap:round;stroke-linejoin:round;flex:none}
   .drfoot.icons .drbtn > svg{width:21px;height:21px}  .drfoot .drbtn .bi{display:inline-flex;align-items:center}
   .drfoot .drbtn .bi svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.6;
@@ -3349,12 +3351,12 @@ function renderList(wrap, opts = {}) {
   // 「已归档」页的数据来自 archived=1；当前宿主只返回归档子集，
   // 老宿主返回全量，loadArchived() 会按「是否出现默认列表里的会话」判断并做差集兜底。
   const tabs = el('div', { class:'tabs' },
-    el('b', { class: state.tab === 'all' ? 'on' : '', text:'全部会话', onclick: () => { state.tab = 'all'; render(); } }),
+    el('b', { class: state.tab === 'all' ? 'on' : '', text:'全部会话', onclick: () => { state.tab = 'all'; if (state.searchQ) state.searchItems = buildSearchResults(state.searchQ.trim().toLowerCase()); render(); } }),
     el('b', { class: state.tab === 'archived' ? 'on' : '', text:'已归档', onclick: () => {
-      state.tab = 'archived'; state.archived = null; render(); loadArchived();
+      state.tab = 'archived'; state.archived = null; state.searchItems = null; render(); loadArchived();
     } }),
     termToken() ? el('b', { class: state.tab === 'terminal' ? 'on' : '', text:'终端', onclick: () => {
-      state.tab = 'terminal'; render(); loadTermAgents();
+      state.tab = 'terminal'; state.searchItems = null; render(); loadTermAgents();
     } }) : null,
   );
 
@@ -3365,7 +3367,7 @@ function renderList(wrap, opts = {}) {
   searchInput.addEventListener('input', () => {
     const q = searchInput.value.trim().toLowerCase();
     state.searchQ = searchInput.value;
-    state.searchItems = q ? buildSearchResults(q) : null;
+    state.searchItems = (q && state.tab === 'all') ? buildSearchResults(q) : null;
     render();
     const again = document.querySelector('.searchrow input');
     if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
@@ -3382,7 +3384,9 @@ function renderList(wrap, opts = {}) {
   }
 
   if (state.tab === 'archived') {
-    const items = state.archived;
+    const q = (state.searchQ || '').trim().toLowerCase();
+    const raw = state.archived;
+    const items = raw === null ? null : (q ? raw.filter(x => (x.title || '').toLowerCase().includes(q)) : raw);
     if (items === null) {
       main.append(el('div', { class:'empty', text:'加载中…' }));
     } else if (!items.length) {
