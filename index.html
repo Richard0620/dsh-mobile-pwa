@@ -17,7 +17,7 @@
     var t = localStorage.getItem('dsh.theme');
     if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
     var sk = localStorage.getItem('dsh.skin');
-    if (sk === 'carbon' || sk === 'paper') document.documentElement.dataset.skin = sk;
+    if (sk === 'carbon' || sk === 'paper' || sk === 'auto') document.documentElement.dataset.skin = sk;
   } catch (e) {}
 </script>
 <style>
@@ -30,19 +30,19 @@
     --ok:#2E6B3F; --bad:#A33B31; --warn:#8A5A12;
   }
   @media (prefers-color-scheme: dark){
-    :root:not([data-theme="light"]):not([data-skin="carbon"]){
+    :root:not([data-theme="light"]):not([data-skin="carbon"]):not([data-skin="auto"]){
       --bg:#0E0E0B; --card:#171714; --fg:#F0EEE6; --dim:#7B786D; --line:#2A2A23;
       --bubble:#24241E; --accent:#F0EEE6; --accent-fg:#171714; --accent-2:#ACA99D;
       --ok:#7CBF90; --bad:#E0837A; --warn:#D9AC57;
     }
   }
   /* 手动主题：覆盖系统配色；auto 时不设 data-theme，仍走上面的媒体查询 */
-  :root[data-theme="dark"]:not([data-skin="carbon"]){
+  :root[data-theme="dark"]:not([data-skin="carbon"]):not([data-skin="auto"]){
     --bg:#0E0E0B; --card:#171714; --fg:#F0EEE6; --dim:#7B786D; --line:#2A2A23;
     --bubble:#24241E; --accent:#F0EEE6; --accent-fg:#171714; --accent-2:#ACA99D;
     --ok:#7CBF90; --bad:#E0837A; --warn:#D9AC57;
   }
-  :root[data-theme="light"]:not([data-skin="carbon"]){
+  :root[data-theme="light"]:not([data-skin="carbon"]):not([data-skin="auto"]){
     --bg:#F6F5F1; --card:#FFFFFF; --fg:#1A1A16; --dim:#8C8A7F; --line:#E5E2D8;
     --bubble:#ECEAE2; --accent:#1A1A16; --accent-fg:#FFFFFF; --accent-2:#5E5D54;
     --ok:#2E6B3F; --bad:#A33B31; --warn:#8A5A12;
@@ -53,7 +53,15 @@
     --bubble:#171A1E; --accent:#C6F04E; --accent-fg:#0B0C0E; --accent-2:#9FE07C;
     --ok:#9FE07C; --bad:#F07C6C; --warn:#E3BA5C;
   }
-  /* 大屏手机（16 Pro Max 这类 430pt+）：正文字号与内边距略微放大，行宽不至于太松 */
+  /* 皮肤：跟随系统。浅色=纸面，深色=碳黑 */
+  @media (prefers-color-scheme: dark){
+    :root[data-skin="auto"]{
+      --bg:#0B0C0E; --card:#121417; --surface-2:#191C20; --surface-3:#22262B;
+      --fg:#EAE8DF; --dim:#6E726C; --line:#24272C; --line-2:#34383E;
+      --bubble:#171A1E; --accent:#C6F04E; --accent-fg:#0B0C0E; --accent-2:#9FE07C;
+      --ok:#9FE07C; --bad:#F07C6C; --warn:#E3BA5C;
+    }
+  }  /* 大屏手机（16 Pro Max 这类 430pt+）：正文字号与内边距略微放大，行宽不至于太松 */
   @media (min-width: 430px){
     main{padding-left:16px;padding-right:16px}
     .md{font-size:15.5px;line-height:1.65}
@@ -646,7 +654,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v162';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v164';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -672,7 +680,7 @@ function applyTheme(mode) {
 // 皮肤：paper（纸面，跟系统浅/深）| carbon（碳黑，恒深色）。只换 token，不改结构。
 const SKIN_KEY = 'dsh.skin';
 function applySkin(id) {
-  const v = id === 'carbon' ? 'carbon' : 'paper';
+  const v = id === 'carbon' ? 'carbon' : (id === 'auto' ? 'auto' : 'paper');
   document.documentElement.dataset.skin = v;
   try { localStorage.setItem(SKIN_KEY, v); } catch {}
 }
@@ -1442,7 +1450,7 @@ function heroHeader(title, sub, action) {
 
 function renderSettings(wrap) {
   wrap.append(heroHeader('设置', 'DSH MOBILE · ' + APP_VERSION));
-  const skin = (() => { try { return localStorage.getItem('dsh.skin') === 'carbon' ? '碳黑' : '纸面'; } catch { return '纸面'; } })();
+  const skin = (() => { try { const v = localStorage.getItem('dsh.skin'); return v === 'carbon' ? '碳黑' : v === 'auto' ? '跟随系统' : '纸面'; } catch { return '纸面'; } })();
   const theme = (() => { try { const t = localStorage.getItem('dsh.theme'); return t === 'light' ? '浅色' : t === 'dark' ? '深色' : '跟随系统'; } catch { return '跟随系统'; } })();
   const row = (title, desc, value, run) => el('button', { class:'srow', onclick: run },
     el('div', { class:'st' }, el('b', { text: title }), desc ? el('span', { text: desc }) : null),
@@ -2582,6 +2590,7 @@ function openSkinSheet() {
   const cur = (() => { try { return localStorage.getItem(SKIN_KEY) || 'paper'; } catch { return 'paper'; } })();
   const mark = k => cur === k ? '✓ ' : '';
   openSheet([
+    { label: mark('auto') + '跟随系统', icon:'🌓', run: () => { applySkin('auto'); toast('皮肤：跟随系统'); } },
     { label: mark('paper') + '纸面', icon:'◐', run: () => { applySkin('paper'); toast('皮肤：纸面'); } },
     { label: mark('carbon') + '碳黑', icon:'◑', run: () => { applySkin('carbon'); toast('皮肤：碳黑'); } },
   ], '皮肤');
