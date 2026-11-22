@@ -365,6 +365,7 @@ node --check $env:TEMP\app.mjs
 - [x] A14 终端浮层：新增 ☰ 会话 / 📁 文件按钮；iframe 左右边缘滑动转发给 PWA（v18）
 - [x] A15 token 弹窗：空白不再清空、保存前 /health 校验、新增「从 PWA 获取 token」、打开即请求（v18）
 - [x] A16 终端视图：空输出显示「（无输出）」、切到终端立即刷新（v18）
+- [x] A17 底部输入框贴底：键盘关闭后 `kb-open` 残留导致 dock padding 归零；现在只在输入聚焦时成立、padding 不再归零（v129）
 
 ### P1 · 体验补齐
 
