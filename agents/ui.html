@@ -11,7 +11,7 @@
   .agp{
     --bg:var(--agp-bg,#f7f7f8); --card:var(--agp-card,#ffffff); --fg:var(--agp-fg,#111318);
     --dim:var(--agp-dim,#8a8f98); --line:var(--agp-line,#e9e9ee); --accent:var(--agp-accent,#2f6bff);
-    --ok:#2ea043; --warn:#b58100; --bad:#e5484d; --term:#f1f2f5; --term-fg:#20242c;
+    --ok:#2ea043; --warn:#b58100; --bad:#e5484d; --term:#f1f2f5; --term-fg:#20242c; --bubble:#e8e9ee;
     position:fixed; inset:0; display:flex; flex-direction:column;
     background:var(--bg); color:var(--fg);
     font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
@@ -20,11 +20,11 @@
   @media (prefers-color-scheme: dark){
     .agp{ --bg:#0e1014; --card:#171a20; --fg:#e8eaee; --dim:#8d94a0; --line:#242933;
           --accent:#4f8cff; --ok:#3fb950; --warn:#d29922; --bad:#f85149;
-          --term:#0b0e13; --term-fg:#d7deea; }
+          --term:#0b0e13; --term-fg:#d7deea; --bubble:#232833; }
   }
   .agp *{box-sizing:border-box}
   .agp button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
-  .agp .hdr{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--card);flex:0 0 auto}
+  .agp .hdr{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--card);flex:0 0 auto}
   .agp .dot{width:9px;height:9px;border-radius:50%;background:var(--bad);flex:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--bad) 18%,transparent)}
   .agp .dot.on{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 16%,transparent)}
   .agp .title{font-weight:650;font-size:16px;letter-spacing:.2px}
@@ -68,7 +68,7 @@
   .agp .seg{display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:10px;background:var(--bg);flex:none}
   .agp .seg button{padding:4px 9px;border-radius:8px;font-size:12px;color:var(--dim)}
   .agp .seg button.on{background:var(--card);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
-  .agp .chat{flex:1;min-height:0;overflow:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px;-webkit-overflow-scrolling:touch}
+  .agp .chat{flex:1;min-height:0;overflow:auto;padding:10px 12px;display:flex;flex-direction:column;gap:10px;-webkit-overflow-scrolling:touch}
   .agp .bubble{max-width:88%;padding:9px 12px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
   .agp .bubble.user{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:5px}
   .agp .bubble.assistant{align-self:flex-start;background:var(--card);border:1px solid var(--line);border-bottom-left-radius:5px}
@@ -81,6 +81,8 @@
   .agp .composer input{flex:1;min-width:0;height:44px;padding:0 13px;border-radius:13px;border:1px solid var(--line);background:var(--card);color:var(--fg);font:inherit;font-size:15px}
   .agp .composer input:focus{outline:none;border-color:var(--accent)}
   .agp .composer .send{width:64px;height:44px;border-radius:13px;background:var(--accent);color:#fff;font-weight:600;font-size:14px}
+  .agp .composer .send.stop{background:var(--bad)}
+  .agp .composer .send:disabled{opacity:.45}
   .agp .gate{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:22px;background:color-mix(in srgb,var(--bg) 92%,transparent);z-index:20}
   .agp .gate[hidden]{display:none}
   .agp .card{width:min(360px,100%);background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}
@@ -92,7 +94,12 @@
   .agp .toast.on{opacity:1}
   .agp .empty{padding:10px;color:var(--dim);font-size:12.5px}
   .agp .ver{font-size:10px;color:var(--dim);opacity:.65;margin-left:2px;align-self:flex-start;padding-top:2px}
-  .agp.embed .hdr{display:none}
+  .agp.embed .hdr{display:flex;padding:6px 10px;gap:8px}
+  .agp.embed .hdr .title{font-size:14px}
+  .agp.embed .hdr .sub{display:none}
+  .agp.embed .hdr > div:first-of-type{display:none}
+  .agp.embed .ver{display:none}
+  .agp.embed .hdr .grow{flex:1}
   .agp.embed .nav{display:none}
   .agp.embed .mobar{display:none}
   .agp.embed .termwrap{padding-top:8px}
@@ -106,7 +113,7 @@
     .agp .composer{padding:8px 10px calc(10px + env(safe-area-inset-bottom))}
   }
   /* chat bubbles, ported from the PWA */
-  .agp .msg{display:flex;flex-direction:column;margin:0 0 2px}
+  .agp .msg{display:flex;flex-direction:column;margin:0}
   .agp .msg.user{align-items:flex-end}
   .agp .msg.assistant{align-items:flex-start}
   .agp .msg .bubble{max-width:88%;padding:9px 13px;border-radius:16px;font-size:15px;line-height:1.62;
@@ -115,7 +122,10 @@
   .agp .msg.assistant .md{width:100%;max-width:none;padding:0;background:none;border:0}
   .agp .msg.assistant .bubble{border-bottom-left-radius:5px}
   .agp .msg .bubble.md{white-space:normal}
-  .agp .mtime{font-size:10.5px;color:var(--dim);margin:3px 6px 10px}
+  .agp .mtime{font-size:10.5px;color:var(--dim);margin:2px 6px 8px}
+  .agp .copyrow{display:flex;gap:8px;margin-top:4px}
+  .agp .copybtn{font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:8px;padding:2px 8px;background:var(--card)}
+  .agp .md pre.code .codecopy{position:absolute;top:6px;right:8px;font-size:10.5px;color:#c8cede;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:7px;padding:2px 7px;cursor:pointer;opacity:.85}
   .agp .md{font-size:15px;line-height:1.62;word-break:break-word}
   .agp .md > :first-child{margin-top:0}
   .agp .md > :last-child{margin-bottom:0}
@@ -167,9 +177,10 @@
       <div class="title">终端</div>
       <div class="sub" id="conn">connecting…</div>
     </div>
-    <span class="ver">v9</span>
+    <span class="ver">v17</span>
     <span class="grow"></span>
     <div class="seg" id="seg"><button id="vChat">对话</button><button id="vTerm">终端</button></div>
+    <button class="chip" id="resetBtn" style="display:none">新会话</button>
     <button class="chip" id="startBtn">＋ claude</button>
     <button class="iconbtn" id="tokenBtn" title="token">⚙</button>
   </header>
@@ -208,6 +219,7 @@
       </div>
       <div class="composer">
         <input id="txt" type="text" placeholder="输入命令，Enter 发送" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button class="send stop" id="stopBtn" style="display:none">停止</button>
         <button class="send" id="send">发送</button>
       </div>
     </main>
@@ -232,7 +244,8 @@
   const q = new URLSearchParams(location.search);
   if (q.get('token')) { token = q.get('token'); localStorage.setItem('bridge_token', token); history.replaceState(null, '', location.pathname); }
   const prefPane = q.get('pane') || '';
-  if (q.get('embed')) document.getElementById('agp').classList.add('embed');
+  const EMBED = !!q.get('embed');
+  if (EMBED) document.getElementById('agp').classList.add('embed');
 
   let pane = null;
   let snap = null;
@@ -240,17 +253,26 @@
   let busy = false;
   let viewMode = localStorage.getItem('agents.view') || 'chat';
   let chatSig = '';
+  let dshState = null;   // {exists, busy, messages, sessionId, ...} for the current pane
+  let autoChatPane = '';
+  let started = false;
+  let dshLive = null;
+  let dshCtrl = null;
+  let dshClock = null;
 
   function E(tag, props = {}, text = '') {
     const n = document.createElement(tag);
     for (const k of Object.keys(props)) {
       if (k === 'class') n.className = props[k];
+      else if (k === 'style') n.style.cssText = props[k];
       else n[k] = props[k];
     }
     if (text) n.textContent = text;
     return n;
   }
   function chatAgent() { return agents().find((a) => a.pane_id === pane); }
+  function dshActive() { return !!(dshState && dshState.exists); }
+  function dshMsgs() { return (dshState && dshState.messages) || []; }
 
   function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 1900); }
   function gate(v) { $('#gate').hidden = !v; }
@@ -278,10 +300,28 @@
     if (!pane && panes().length) pane = panes()[0].pane_id;
     renderNav();
     const me = panes().find((p) => p.pane_id === pane);
-    if (!currentAgent() && viewMode === 'chat') { viewMode = 'term'; localStorage.setItem('agents.view', 'term'); renderView(); }
-    $('#startBtn').style.display = currentAgent() ? 'none' : '';
+    await loadDsh();
+    if (EMBED && !currentAgent() && !dshActive() && viewMode === 'term' && autoChatPane !== pane) {
+      autoChatPane = pane;
+      viewMode = 'chat';
+      localStorage.setItem('agents.view', 'chat');
+      renderView();
+    }
+    $('#startBtn').style.display = currentAgent() || dshActive() ? 'none' : '';
+    if (viewMode === 'chat') {
+      $('#txt').placeholder = dshActive() ? '发消息给 DSH，Enter 发送' : (currentAgent() ? '发消息给 agent，Enter 发送' : '先选择启动方式');
+    }
+    $('#resetBtn').style.display = dshActive() ? '' : 'none';
     $('#blockedWho').textContent = pane || '';
     renderBlocked(me);
+  }
+
+  async function loadDsh() {
+    if (!pane) { dshState = null; return; }
+    try {
+      const r = await api('/dsh/state?pane=' + encodeURIComponent(pane));
+      dshState = await r.json();
+    } catch { dshState = null; }
   }
 
   function renderNav() {
@@ -385,6 +425,11 @@
         if (m.text) {
           const b = E('div', { class: 'md' });
           b.innerHTML = mdToHtml(m.text);
+          for (const pre of b.querySelectorAll('pre.code')) {
+            const cb = E('button', { class: 'codecopy' }, '复制');
+            cb.onclick = (ev) => { ev.stopPropagation(); copyText(pre.querySelector('code') ? pre.querySelector('code').textContent : pre.textContent); };
+            pre.appendChild(cb);
+          }
           row.appendChild(b);
         }
         if ((m.tools || []).length) {
@@ -393,6 +438,11 @@
           row.appendChild(tw);
         }
         row.appendChild(E('div', { class: 'mtime' }, fmtClock(m.time)));
+        const cp = E('div', { class: 'copyrow' });
+        const cbtn = E('button', { class: 'copybtn' }, '复制');
+        cbtn.onclick = () => copyText(m.text);
+        cp.appendChild(cbtn);
+        row.appendChild(cp);
         box.appendChild(row);
       } else if (m.role === 'tool') {
         box.appendChild(E('div', { class: 'bubble tool' }, m.text));
@@ -424,11 +474,14 @@
   }
   async function chatTick() {
     if (!pane || viewMode !== 'chat') return;
+    await loadDsh();
     const a = chatAgent();
     const box = $('#chat');
+    if (dshActive()) { renderDsh(); conn(true, 'DSH · ' + pane); return; }
     if (!a) {
-      box.replaceChildren(E('div', { class: 'chatempty' }, '这个 pane 还没有 agent，点右上 ＋ claude'));
-      chatSig = '';
+      renderLauncher();
+      chatSig = 'launcher';
+      conn(true, '已连接 · ' + pane);
       return;
     }
     try {
@@ -445,13 +498,199 @@
     }
   }
 
+  function copyText(t) {
+    const s = String(t || '');
+    if (!s) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(s).then(() => toast('已复制')).catch(() => fallbackCopy(s));
+    } else fallbackCopy(s);
+  }
+  function fallbackCopy(s) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = s;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+      toast('已复制');
+    } catch { toast('复制失败'); }
+  }
+  function elapsedText() {
+    if (!dshLive || !dshLive.startedAt) return '';
+    const s = Math.max(0, Math.round((Date.now() - dshLive.startedAt) / 1000));
+    return s < 60 ? s + 's' : Math.floor(s / 60) + 'm' + (s % 60) + 's';
+  }
+  function stopDshClock() { if (dshClock) { clearInterval(dshClock); dshClock = null; } }
+  function startDshClock() {
+    stopDshClock();
+    dshClock = setInterval(() => { if (dshLive) renderDshLive(); }, 1000);
+  }
+  function stopDshStream(keep) {
+    if (dshCtrl) { try { dshCtrl.abort(); } catch {} dshCtrl = null; }
+    stopDshClock();
+    if (!keep) dshLive = null;
+  }
+  function startDshStream() {
+    stopDshStream();
+    dshLive = { text: '', tools: [], status: '', startedAt: Date.now(), error: '' };
+    dshCtrl = new AbortController();
+    startDshClock();
+    renderDshLive();
+    fetch(BASE + '/dsh/stream?pane=' + encodeURIComponent(pane), { headers: { Authorization: 'Bearer ' + token }, signal: dshCtrl.signal })
+      .then(async (r) => {
+        if (!r.ok) throw new Error('stream HTTP ' + r.status);
+        const reader = r.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '';
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let i;
+          while ((i = buf.indexOf('\n')) >= 0) {
+            const line = buf.slice(0, i).trim();
+            buf = buf.slice(i + 1);
+            if (!line) continue;
+            try { onDshEvent(JSON.parse(line)); } catch {}
+          }
+        }
+      })
+      .catch((e) => {
+        if (/abort/i.test(String(e))) return;
+        toast('流断开：' + e.message);
+      })
+      .finally(() => { stopDshClock(); if (dshLive) { dshLive.status = ''; renderDshLive(); } });
+  }
+  function onDshEvent(ev) {
+    if (!dshLive) return;
+    if (!ev || ev.type === 'ping') return;
+    if (ev.type === 'text') {
+      dshLive.text = (dshLive.text ? dshLive.text + '\n\n' : '') + ev.text;
+      dshLive.status = '';
+    } else if (ev.type === 'thinking') {
+      dshLive.status = '思考中…';
+    } else if (ev.type === 'tool_call') {
+      dshLive.tools.push({ name: ev.tool || 'tool', status: 'run' });
+      dshLive.status = '执行 ' + (ev.tool || 'tool') + '…';
+    } else if (ev.type === 'tool_result') {
+      for (let i = dshLive.tools.length - 1; i >= 0; i--) {
+        if (dshLive.tools[i].status === 'run') { dshLive.tools[i].status = ev.status || 'ok'; break; }
+      }
+      dshLive.status = '';
+    } else if (ev.type === 'status') {
+      if (ev.phase === 'step_start') dshLive.status = '第 ' + ev.step + ' 步…';
+    } else if (ev.type === 'final') {
+      dshLive.text = ev.text || dshLive.text;
+      dshLive.status = '';
+    } else if (ev.type === 'done') {
+      stopDshStream(true);
+      dshLive = null;
+      chatTick();
+      return;
+    }
+    renderDshLive();
+  }
+  function renderDshLive() {
+    if (!dshLive || viewMode !== 'chat') return;
+    const box = $('#chat');
+    let row = box.querySelector('.msg.assistant.live');
+    if (!row) {
+      row = E('div', { class: 'msg assistant live' });
+      box.appendChild(row);
+    }
+    const near = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+    row.replaceChildren();
+    if (dshLive.text) {
+      const b = E('div', { class: 'md' });
+      b.innerHTML = mdToHtml(dshLive.text);
+      row.appendChild(b);
+    }
+    if (dshLive.tools.length) {
+      const tw = E('div', { class: 'tools' });
+      for (const t of dshLive.tools) tw.appendChild(E('span', { class: 'tool' }, (t.status === 'run' ? '… ' : '\u2699 ') + t.name));
+      row.appendChild(tw);
+    }
+    const meta = [];
+    if (dshLive.status) meta.push(dshLive.status);
+    if (dshLive.startedAt) meta.push(elapsedText());
+    if (meta.length) row.appendChild(E('div', { class: 'mtime' }, meta.join(' · ')));
+    if (near) box.scrollTop = box.scrollHeight;
+  }
+  async function stopDsh() {
+    if (!pane) return;
+    try { await api('/dsh/stop', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane }) }); } catch (e) { toast(e.message); }
+    stopDshStream();
+    chatTick();
+  }
+
+  function renderDsh() {
+    const msgs = dshMsgs();
+    const last = msgs[msgs.length - 1] || {};
+    const sig = 'dsh:' + msgs.length + ':' + (dshState.busy ? '1' : '0') + ':' + String(last.text || '').length;
+    $('#send').disabled = !!dshState.busy;
+    $('#stopBtn').style.display = dshState.busy ? '' : 'none';
+    if (sig === chatSig) { if (dshState.busy && dshLive) renderDshLive(); return; }
+    chatSig = sig;
+    renderChat(msgs);
+    if (dshState.busy) {
+      if (dshLive) renderDshLive();
+      else {
+        const box = $('#chat');
+        const row = E('div', { class: 'msg assistant' });
+        row.appendChild(E('div', { class: 'chatempty', style: 'align-self:flex-start;padding:8px 2px' }, 'DSH 正在思考…'));
+        box.appendChild(row);
+        box.scrollTop = box.scrollHeight;
+      }
+    }
+  }
+
+  function renderLauncher() {
+    const box = $('#chat');
+    box.replaceChildren();
+    const wrap = E('div', { class: 'chatempty' });
+    wrap.style.cssText = 'display:flex;flex-direction:column;gap:10px;width:100%;max-width:420px;align-self:center;padding:26px 8px;text-align:left';
+    wrap.appendChild(E('div', { style: 'font-size:15px;font-weight:650' }, '这个终端还没有启动对话'));
+    wrap.appendChild(E('div', { style: 'font-size:12.5px;color:var(--dim);margin-top:-4px' }, '选一个开始，之后直接用自然语言聊天'));
+    const mk = (label, primary) => {
+      const b = E('button', {}, label);
+      b.style.cssText = 'padding:13px;border-radius:13px;border:1px solid var(--line);background:var(--card);font-size:15px;font-weight:600;color:var(--fg)';
+      if (primary) { b.style.background = 'var(--accent)'; b.style.borderColor = 'var(--accent)'; b.style.color = '#fff'; }
+      return b;
+    };
+    const b1 = mk('启动 DSH（自然语言）', true);
+    b1.onclick = () => startDsh();
+    const b2 = mk('启动 claude');
+    b2.onclick = () => startClaude();
+    wrap.appendChild(b1);
+    wrap.appendChild(b2);
+    wrap.appendChild(E('div', { style: 'font-size:11.5px;color:var(--dim);line-height:1.5' }, 'DSH 每轮约 10–20 秒；claude 需要已在宿主机登录'));
+    box.appendChild(wrap);
+  }
+
+  async function startDsh() {
+    if (!pane) return;
+    try {
+      await api('/dsh/start', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane }) });
+      toast('DSH 已就绪，直接说话');
+      viewMode = 'chat';
+      localStorage.setItem('agents.view', 'chat');
+      await load();
+      renderView();
+    } catch (e) { toast('启动失败：' + e.message); }
+  }
+
   function renderView() {
     const isChat = viewMode === 'chat';
     $('#termwrap').style.display = isChat ? 'none' : 'flex';
     $('#chat').style.display = isChat ? 'flex' : 'none';
+    $('.keys').style.display = isChat ? 'none' : 'flex';
     $('#vChat').classList.toggle('on', isChat);
     $('#vTerm').classList.toggle('on', !isChat);
-    $('#txt').placeholder = isChat ? '发消息给 agent，Enter 发送' : '输入命令，Enter 发送';
+    if (!dshActive()) { $('#stopBtn').style.display = 'none'; $('#send').disabled = false; }
+    $('#txt').placeholder = isChat ? (dshActive() ? '发消息给 DSH，Enter 发送' : (currentAgent() ? '发消息给 agent，Enter 发送' : '先选择启动方式')) : '输入命令，Enter 发送';
     if (isChat) chatTick();
   }
 
@@ -460,6 +699,13 @@
     if (!text || !pane) return;
     el.value = '';
     if (viewMode === 'chat') {
+      if (dshActive()) {
+        try {
+          await api('/dsh/send', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane, text }) });
+          startDshStream();
+        } catch (e) { toast(e.message); el.value = text; }
+        return;
+      }
       const a = chatAgent();
       if (!a) { toast('这个 pane 还没有 agent'); el.value = text; return; }
       try {
@@ -496,25 +742,67 @@
   }
 
   $('#send').onclick = send;
+  $('#stopBtn').onclick = () => stopDsh();
   $('#vChat').onclick = () => { viewMode = 'chat'; localStorage.setItem('agents.view', 'chat'); renderView(); };
   $('#vTerm').onclick = () => { viewMode = 'term'; localStorage.setItem('agents.view', 'term'); renderView(); };
   $('#txt').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
   document.querySelectorAll('.keys .kbtn').forEach((b) => { b.onclick = () => key(b.dataset.key); });
   $('#startBtn').onclick = startClaude;
+  $('#resetBtn').onclick = async () => {
+    if (!pane) return;
+    try {
+      await api('/dsh/reset', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane }) });
+      chatSig = '';
+      await load();
+      renderView();
+      toast('已开新会话');
+    } catch (e) { toast(e.message); }
+  };
   $('#tokenBtn').onclick = () => gate(true);
   $('#saveToken').onclick = () => { token = $('#token').value.trim(); localStorage.setItem('bridge_token', token); gate(false); boot(); };
   $('#sel').onchange = (e) => select(e.target.value);
 
   function boot() {
-    if (!token) { gate(true); return; }
+    if (started) return;
+    if (!token) { gate(true); requestToken(); return; }
+    started = true;
     gate(false);
     renderView();
     load().catch((e) => conn(false, e.message));
     tick();
     setInterval(tick, 1500);
     setInterval(() => { if (viewMode === 'chat') chatTick(); }, 2000);
+    setInterval(() => { if (viewMode === 'chat' && dshActive()) chatTick(); }, 1500);
     setInterval(() => load().catch(() => {}), 4000);
+    fitViewport();
   }
+
+  function requestToken() {
+    try {
+      if (window.parent && window.parent !== window) window.parent.postMessage({ type: 'agents-token-request' }, location.origin);
+    } catch {}
+  }
+
+  window.addEventListener('message', (ev) => {
+    if (ev.origin !== location.origin) return;
+    const d = ev.data || {};
+    if (d.type !== 'agents-token' || typeof d.token !== 'string' || !d.token) return;
+    token = d.token;
+    try { localStorage.setItem('bridge_token', token); } catch {}
+    if (!started) boot(); else gate(false);
+  });
+
+  function fitViewport() {
+    const vv = window.visualViewport;
+    const h = vv ? Math.round(vv.height) : window.innerHeight;
+    const agp = document.getElementById('agp');
+    if (agp && h > 200) agp.style.height = h + 'px';
+  }
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', fitViewport);
+    window.visualViewport.addEventListener('scroll', fitViewport);
+  }
+  window.addEventListener('resize', fitViewport);
 
   // --- minimal markdown renderer, same rules as the PWA ---
   function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }

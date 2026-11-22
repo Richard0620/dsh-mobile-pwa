@@ -330,3 +330,78 @@ node --check $env:TEMP\app.mjs
 ```
 
 **更新本文的时机**：开工前读最新状态；完成一项就改对应条目的状态与版本；每次发版更新第 1 节「进度快照」和第 6 节推送现状。这样任何会话接进来都能从这一页知道进度。
+
+## 终端 / DSH 对话优化（agents 页面 · feature/agents-dsh-chat）
+
+> 来源：2026-11-21 手机录屏（592×1280，87s）与后续讨论。
+> 规则：修一项就把 `[ ]` 改成 `[x]`，并在行尾写上线/提交版本；不要另建清单。
+
+### P0 · 可用性（先做）
+
+- [x] A1 token 透传：改为 iframe 加载后 postMessage 握手（不进 URL/日志，v15）；agents 页缺 token 时向父页面请求
+- [x] A2 单头部：embed 模式隐藏 iframe 里的「终端」标题与版本号，只留 `对话/终端`、`新会话`
+- [x] A3 按键行只在终端模式显示；chat 模式隐藏 Enter/Esc/Tab/↑/↓/Ctrl-C 那一排
+- [x] A4 键盘适配：`100dvh` + `visualViewport`，键盘弹出时 composer 贴底、聊天区不被遮挡
+- [x] A5 尺寸/间距统一：头部 44px、消息间距 8px、气泡 15px/1.62、左右 12px、安全区适配
+- [x] A6 SSE 流式：bridge 新增 `/dsh/stream?pane=`（NDJSON，fetch 带 Authorization），实时推 `text`/`thinking`/`tool_call`/`tool_result`/`status`/`done`（v17）
+- [x] A7 工具进度：显示「正在执行工具 xxx」、本轮耗时计时（v17）
+- [x] A8 停止本轮：`/dsh/stop` kill 子进程，UI「停止」按钮（v17）
+- [x] A9 复制：每条消息「复制」、代码块「复制」（v17）；整段对话复制并入 B5，长按菜单留 P1
+- [x] A10 busy 状态：发送按钮禁用、可停止、失败可重试（v17）
+- [x] A11 自动滚动：仅当用户已在底部时贴底，上翻查看历史时不打断（v17）
+
+### P1 · 体验补齐
+
+- [ ] B1 完成推送：DSH 回合结束且页面不可见时，复用 PWA web-push 发通知
+- [ ] B2 点通知直达对应 pane / 会话
+- [ ] B3 推送开关：DSH「完成时通知」可单独开关
+- [ ] B4 重新生成 / 清空会话（二次确认）
+- [ ] B5 终端视图：复制全部、清屏、字号三档
+- [ ] B6 头部状态：工具名、step、token 用量（step_end usage）
+- [ ] B7 错误展示：stderr 摘要 + 重试按钮，不吞错误
+- [ ] B8 断线重连：SSE 自动重连、401 刷新、请求超时提示
+- [ ] B9 会话恢复：刷新/重开页面后从 bridge 恢复历史与 sessionId
+- [ ] B10 多 pane 切换条：手机端顶部下拉（mobar）样式与 PWA 统一
+- [ ] B11 深色模式检查：气泡、代码块、时间、提示色
+- [ ] B12 iPad/桌面宽度：聊天 `max-width: 720px` 居中
+- [ ] B13 空状态与首次引导文案
+- [ ] B14 token 失效引导：不弹大框，提示「重新配对」入口
+
+### P2 · 增强
+
+- [ ] C1 token 级逐字流式（headless 不支持，需自定义插件/ACP，暂标记不可行）
+- [ ] C2 多会话管理：标题、列表、切换
+- [ ] C3 附件/图片输入
+- [ ] C4 语音输入
+- [ ] C5 分享/导出对话
+- [ ] C6 会话搜索
+- [ ] C7 桌面快捷键
+- [ ] C8 字号/主题设置
+- [ ] C9 长会话虚拟化/折叠
+- [ ] C10 离线队列与失败重发
+- [ ] C11 通知分组/静音时段
+
+### 技术债
+
+> **技术债预算（2026-11-21 起）**：每个功能 commit 至少附带一项债；没带需在 commit message 里说明原因。未完成债项超过 10 条时，暂停新功能先清债。
+
+- [x] D1 bridge 串行队列与并发限制（DSH_MAX_CONCURRENT=1，v15）
+- [x] D2 `dsh-chat.json` 存储上限与清理（单 pane 保留最近 200 条，v15）
+- [x] D3 token 存储安全：query 传递已移除（postMessage 握手 + no-referrer，v15）；轮换/设备凭据见 D12
+- [ ] D4 SSE 心跳、断线清理、超时
+- [x] D5 子进程超时/取消（5 分钟超时 + `/dsh/stop` kill，v15）
+- [ ] D6 agents 页单文件拆分（当前 ~700 行）
+- [ ] D7 录屏/截图回归：每次 P0 修完补一段手机验证
+- [x] D8 工作区纪律：agents 改动只在 `pwa-e`，`pwa`/master 保持干净（v15）
+- [x] D9 禁止 `commit-tree` 提交（会留下 staged 假象、且曾丢过文件），一律在 worktree 里正常 commit（v15）
+- [x] D10 提交前跑 `agents/smoke.ps1`，防 v14 那种丢端点事故（v15）
+- [x] D11 自启路径耦合：Startup 的 `agents-bridge.lnk` 指向 `pwa-e`，worktree 不能随意删；写进 `agents/README`（v15）
+- [ ] D12 token 轮换与设备级凭据（替代共享 token，P2）
+- [x] D13 token.txt 与 env 不一致导致 smoke 401；`start.ps1` 启动时同步（v15）
+- [x] D14 流事件 backlog 跨轮残留导致重连即 done；每轮开始清空 `dshTurnState.events`（v17）
+
+### 验收方式
+
+- 手机：PWA → 终端 → 启动 DSH → 连续两轮自然语言；检查键盘、复制、流式、通知
+- 桌面：`/agents/?embed=1&pane=<pane>` 同一入口验证
+- 网络：断网重连后 SSE 恢复；token 失效时不弹框

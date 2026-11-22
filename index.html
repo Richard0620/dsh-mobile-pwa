@@ -504,7 +504,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v123';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v125';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -2709,9 +2709,24 @@ async function closeTerminal(it) {
     el('b', { text: '\u7EC8\u7AEF' }),
     el('span', { style: 'flex:1' }),
     el('button', { class: 'ico', text: '\u2715', onclick: () => mask.remove() }));
-  const frame = el('iframe', { class: 'termframe', src: '/agents/?embed=1&pane=' + encodeURIComponent(paneId || '') });
+  const frame = el('iframe', { class: 'termframe', src: '/agents/?embed=1&pane=' + encodeURIComponent(paneId || '') + '&v=' + encodeURIComponent(APP_VERSION) });
   mask.append(bar, frame);
   document.body.append(mask);
+  frame.addEventListener('load', () => {
+    try { frame.contentWindow.postMessage({ type: 'agents-token', token: termToken() }, location.origin); } catch {}
+  });
+}
+
+// 子 iframe（/agents/）没有 token 时向父页面要；父页面用 postMessage 回传，避免 token 进 URL 和访问日志。
+if (!window._agentsTokenListener) {
+  window._agentsTokenListener = true;
+  window.addEventListener('message', (ev) => {
+    if (ev.origin !== location.origin) return;
+    const d = ev.data || {};
+    if (d.type !== 'agents-token-request') return;
+    const t = termToken();
+    if (t && ev.source) ev.source.postMessage({ type: 'agents-token', token: t }, location.origin);
+  });
 }
 // 本地搜索：标题 / 最近一条 / **已缓存的消息正文**。
 // 服务端 session/search 在这个部署里是关的（openAt "never"），所以正文只能搜本机
