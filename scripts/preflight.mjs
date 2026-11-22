@@ -62,7 +62,17 @@ for (const [name, text] of [['index.html', html], ['sw.js', sw]]) {
   else ok(`${name} 无冲突标记`);
 }
 
+// 4.5 PowerShell 脚本必须带 UTF-8 BOM（Windows PowerShell 5.1 否则按 ANSI 读，中文会破坏语法）
+for (const f of ['deploy.ps1', 'patches/reapply-push-patch.ps1']) {
+  const abs = join(root, f);
+  if (!existsSync(abs)) continue;
+  const b = readFileSync(abs);
+  if (b[0] === 0xEF && b[1] === 0xBB && b[2] === 0xBF) ok(`${f} 带 BOM`);
+  else fail(`${f} 缺少 UTF-8 BOM（PowerShell 5.1 会解析失败）`);
+}
+
 // 5. 关键文件存在
+
 for (const f of ['manifest.webmanifest', 'icon-192.png', 'sw.js']) {
   if (!existsSync(join(root, f))) fail(`缺少 ${f}`); else ok(`存在 ${f}`);
 }

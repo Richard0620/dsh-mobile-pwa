@@ -1,4 +1,4 @@
-# 自愈：dsh-mobile-plugin 升级会覆盖我们的 Web Push 补丁。
+﻿# 自愈：dsh-mobile-plugin 升级会覆盖我们的 Web Push 补丁。
 # 本脚本检查补丁标记；缺失就重新贴回，贴之前先做语法校验，校验不过则保持原样。
 $ErrorActionPreference = 'Stop'
 
