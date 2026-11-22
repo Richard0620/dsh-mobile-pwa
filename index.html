@@ -497,6 +497,17 @@
   .termoverlay{position:fixed;inset:0;z-index:1200;background:var(--bg);display:flex;flex-direction:column}
   .termbar{display:flex;align-items:center;gap:8px;padding:calc(8px + env(safe-area-inset-top)) 10px 8px;border-bottom:1px solid var(--line);background:var(--card);flex:0 0 auto}
   .termframe{flex:1;width:100%;border:0;background:var(--bg)}
+  .termcomposer{flex:0 0 auto;display:flex;align-items:flex-end;gap:8px;padding:8px 12px calc(10px + env(safe-area-inset-bottom));background:var(--bg)}
+  .termcomposer .tta{flex:1;min-width:0;min-height:44px;max-height:120px;overflow-y:auto;padding:11px 15px;
+    border-radius:22px;border:1px solid var(--line);background:var(--card);font-size:16px;line-height:1.4;
+    white-space:pre-wrap;word-break:break-word;outline:none;letter-spacing:-.01em}
+  .termcomposer .tta:empty::before{content:attr(data-ph);color:var(--dim);pointer-events:none}
+  .termcomposer .tsend{width:38px;height:38px;min-width:38px;border-radius:50%;background:var(--accent);color:#fff;
+    display:grid;place-items:center;font-size:17px;font-weight:600;flex:none}
+  .termcomposer .tsend:disabled{opacity:.45}
+  .termcomposer .tstop{width:38px;height:38px;min-width:38px;border-radius:50%;background:var(--bad);color:#fff;
+    display:none;place-items:center;font-size:13px;flex:none}
+  html.kb-open .termoverlay{height:var(--vvh);bottom:auto}
 </style>
 </head>
 <body>
@@ -509,7 +520,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v127';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v131';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -2718,8 +2729,23 @@ async function closeTerminal(it) {
     el('button', { class: 'ico', text: '\uD83D\uDCC1', title: '\u6587\u4EF6', onclick: () => { mask.remove(); openFileDrawer(state.sessionCwd || ''); } }),
     el('span', { style: 'flex:1' }),
     el('button', { class: 'ico', text: '\u2715', onclick: () => mask.remove() }));
-  const frame = el('iframe', { class: 'termframe', src: '/agents/?embed=1&pane=' + encodeURIComponent(paneId || '') + '&v=' + encodeURIComponent(APP_VERSION) });
-  mask.append(bar, frame);
+  const frame = el('iframe', { class: 'termframe', src: '/agents/?embed=1&pcomposer=1&pane=' + encodeURIComponent(paneId || '') + '&v=' + encodeURIComponent(APP_VERSION) });
+  const tta = el('div', { class: 'tta', contenteditable: 'true', role: 'textbox' });
+  tta.setAttribute('data-ph', '\u7EE7\u7EED\u8FFD\u95EE\uFF0CEnter \u53D1\u9001');
+  const post = (m) => { try { frame.contentWindow.postMessage(m, location.origin); } catch {} };
+  const tstop = el('button', { class: 'tstop', text: '\u25A0', title: '\u505C\u6B62', onclick: () => post({ type: 'agents-stop' }) });
+  const sendTerm = () => {
+    const text = (tta.innerText || '').replace(/\u00a0/g, ' ').trim();
+    if (!text) return;
+    post({ type: 'agents-send', text });
+    tta.textContent = '';
+    tta.style.height = '';
+  };
+  const tsend = el('button', { class: 'tsend', text: '\u2191', title: '\u53D1\u9001', onclick: sendTerm });
+  tta.addEventListener('keydown', (e) => { if (e.isComposing) return; if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTerm(); } });
+  tta.addEventListener('input', () => { tta.style.height = 'auto'; tta.style.height = Math.min(120, Math.max(44, tta.scrollHeight)) + 'px'; });
+  const tcomp = el('div', { class: 'termcomposer' }, tta, tstop, tsend);
+  mask.append(bar, frame, tcomp);
   document.body.append(mask);
   frame.addEventListener('load', () => {
     try { frame.contentWindow.postMessage({ type: 'agents-token', token: termToken() }, location.origin); } catch {}
@@ -2734,6 +2760,17 @@ if (!window._agentsTokenListener) {
     const d = ev.data || {};
     if (d.type === 'pwa-open-drawer') { openDrawer(); return; }
     if (d.type === 'pwa-open-files') { openFileDrawer(state.sessionCwd || ''); return; }
+    if (d.type === 'agents-busy') {
+      const ov = document.querySelector('.termoverlay');
+      if (!ov) return;
+      const st = ov.querySelector('.tstop');
+      const sd = ov.querySelector('.tsend');
+      const ta = ov.querySelector('.tta');
+      if (st) st.style.display = d.busy ? 'grid' : 'none';
+      if (sd) sd.style.display = d.busy ? 'none' : 'grid';
+      if (ta) ta.setAttribute('data-ph', d.busy ? 'DSH 正在回答…' : '继续追问，Enter 发送');
+      return;
+    }
     if (d.type !== 'agents-token-request') return;
     const t = termToken();
     if (t && ev.source) ev.source.postMessage({ type: 'agents-token', token: t }, location.origin);

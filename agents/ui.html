@@ -77,7 +77,9 @@
   .agp .keys{display:flex;gap:7px;padding:9px 12px 0;overflow-x:auto;flex:0 0 auto;scrollbar-width:none}
   .agp .keys::-webkit-scrollbar{display:none}
   .agp .keys .kbtn{flex:none;height:36px;min-width:42px;font-size:13px;color:var(--dim)}
-  .agp .composer{display:flex;gap:8px;padding:9px 12px calc(11px + env(safe-area-inset-bottom));flex:0 0 auto;background:var(--bg)}
+    /* kbOpenClassPatch: 键盘弹起时不要再留 home indicator 的 34pt */
+  html.kb .agp .composer{padding-bottom:8px !important}
+.agp .composer{display:flex;gap:8px;padding:9px 12px calc(11px + env(safe-area-inset-bottom));flex:0 0 auto;background:var(--bg)}
   .agp .composer input{flex:1;min-width:0;height:44px;padding:0 13px;border-radius:13px;border:1px solid var(--line);background:var(--card);color:var(--fg);font:inherit;font-size:16px}
   .agp .composer input:focus{outline:none;border-color:var(--accent)}
   .agp .composer .send{width:64px;height:44px;border-radius:13px;background:var(--accent);color:#fff;font-weight:600;font-size:14px}
@@ -241,6 +243,8 @@
   .agp.embed .hdr .sub{display:block}
   .agp.embed .hdr{height:52px}
   .agp .ver{display:none}
+  .agp.pcomposer .composer{display:none}
+  .agp.pcomposer .keys{display:none}
 </style>
 </head>
 <body>
@@ -320,7 +324,9 @@
   if (q.get('token')) { token = q.get('token'); localStorage.setItem('bridge_token', token); history.replaceState(null, '', location.pathname); }
   const prefPane = q.get('pane') || '';
   const EMBED = !!q.get('embed');
+  const PCOMPOSER = !!q.get('pcomposer');
   if (EMBED) document.getElementById('agp').classList.add('embed');
+  if (PCOMPOSER) document.getElementById('agp').classList.add('pcomposer');
 
   let pane = null;
   let snap = null;
@@ -370,6 +376,9 @@
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = Math.min(120, Math.max(46, el.scrollHeight)) + 'px';
+  }
+  function postParent(m) {
+    try { if (window.parent && window.parent !== window) window.parent.postMessage(m, location.origin); } catch {}
   }
   function chatAgent() { return agents().find((a) => a.pane_id === pane); }
   function dshActive() { return !!(dshState && dshState.exists); }
@@ -747,6 +756,7 @@
     $('#send').disabled = busy;
     $('#send').style.display = busy ? 'none' : '';
     $('#stopBtn').style.display = busy ? '' : 'none';
+    postParent({ type: 'agents-busy', busy });
     if (sig === chatSig) { if (dshState.busy && dshLive) renderDshLive(); return; }
     chatSig = sig;
     renderChat(msgs);
@@ -764,6 +774,7 @@
 
   function renderLauncher() {
     updateHead();
+    postParent({ type: 'agents-busy', busy: false });
     const box = $('#chat');
     box.replaceChildren();
     const wrap = E('div', { class: 'chatempty' });
@@ -813,14 +824,15 @@
     $('#vTerm').classList.toggle('on', !isChat);
     if (!dshActive()) { $('#stopBtn').style.display = 'none'; $('#send').disabled = false; }
     taSetPh(isChat ? (dshActive() ? '继续追问，Enter 发送' : (currentAgent() ? '发消息给 agent，Enter 发送' : '先选择启动方式')) : '输入命令，Enter 发送');
+    postParent({ type: 'agents-mode', mode: viewMode });
     const ttl = dshActive() ? 'DSH' : (currentAgent() ? 'Claude' : '终端');
     const tEl = document.querySelector('.hdr .title');
     if (tEl) tEl.textContent = ttl;
     if (isChat) chatTick(); else tick();
   }
 
-  async function send() {
-    const text = taText();
+  async function send(override) {
+    const text = (typeof override === 'string' ? override : taText()).trim();
     if (!text || !pane) return;
     taClear();
     if (viewMode === 'chat') {
@@ -935,6 +947,8 @@
   window.addEventListener('message', (ev) => {
     if (ev.origin !== location.origin) return;
     const d = ev.data || {};
+    if (d.type === 'agents-send') { if (typeof d.text === 'string') send(d.text); return; }
+    if (d.type === 'agents-stop') { stopDsh(); return; }
     if (d.type !== 'agents-token' || typeof d.token !== 'string' || !d.token) return;
     token = d.token;
     try { localStorage.setItem('bridge_token', token); } catch {}
@@ -991,6 +1005,15 @@
     }
   } catch {}
   window.addEventListener('resize', fitViewport);
+  // 进页面先算一次，别让首次布局停在未适配的高度
+  requestAnimationFrame(fitViewport);
+  setTimeout(fitViewport, 250);
+  document.addEventListener('focusin', (e) => {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+      setTimeout(fitViewport, 60);
+      setTimeout(() => { try { window.scrollTo(0, 0); } catch {} }, 120);
+    }
+  });
 
   // --- minimal markdown renderer, same rules as the PWA ---
   function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }

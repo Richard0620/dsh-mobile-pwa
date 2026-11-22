@@ -368,6 +368,7 @@ node --check $env:TEMP\app.mjs
 - [x] A17 底部输入框贴底：键盘关闭后 `kb-open` 残留导致 dock padding 归零；现在只在输入聚焦时成立、padding 不再归零（v129）
 - [x] A18 聊天视图按 `design/ui-v1` Instrument Paper 重做：DSH 标签、纸面气泡、工具卡片、运行行、圆形发送、52px 头部（v19）
 - [x] A19 iOS 输入框辅助栏：composer 改 `contenteditable`（不再出现 ^∨✓ 条），发送后清空/占位恢复；iframe 高度跟随父页 visualViewport，键盘弹起时输入框保持在键盘上方（v20）
+- [x] A20 iframe 内的输入框仍会触发 iOS 辅助栏：PWA 外层接管终端输入（`termcomposer`，`pcomposer=1` 隐藏 iframe composer），发送/停止走 postMessage，浮层高度随键盘（v131）
 
 ### P1 · 体验补齐
 
