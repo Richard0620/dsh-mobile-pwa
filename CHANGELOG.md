@@ -10,6 +10,7 @@
 
 | 版本 | 日期 | 会话 | 改动摘要 | 影响面 | 验证方式 |
 |---|---|---|---|---|---|
+| v172 | 2026-11-22 | lead | 界面收口：设置改二级页（连接方式三档回归/通知开关/统计），会话列表搜索常驻并按 tab 过滤，抽屉与文件面板去 emoji，会话页左上角返回列表 | 全员 | 预览 ui-drawer-panel 真机尺寸逐屏验收；node --check 通过 |
 | v164 | 2026-11-22 | lead | 界面重做：底部 Tab（会话/文件/设置）、大标题会话列表（未读区+分组徽标）、文件页（盘符/多选引用/全屏预览）、composer 三 chip + 权限、sheet 统一外观、纸面/碳黑双皮肤（支持跟随系统） | 全员 | 预览 ui-paper-carbon 真机尺寸逐屏验收；node --check 通过 |
 | v117 | 2026-11-21 | master | 推送三类打通（审批/完成/失败）；设置里可切换「完成时总是推送」；推送服务补请求日志与门控 | 手机通知 | 杀 App 后触发审批应收到；切走超过 60 秒后本轮结束应收到完成推送 |
 | v105 | 2026-11-21 | master | 版本号改为单双号约定并纠正到奇数段；打开会话一律落到最新一条 | 全员 | 杀进程重开 → 点任意会话 → 应看到最新消息 |
@@ -40,3 +41,5 @@
 | v125 | 2026-11-21 | master | agents 终端 P0：流式输出、停止、复制、busy 状态；token 改 postMessage 握手（不进 URL/日志），响应加 no-referrer/nosniff | 手机 PWA 终端 + /agents 桥接 | 线上 VERSION app=v125 / sw=dsh-mobile-v126；smoke OK；iframe src 已无 token；停止/复制实测 |
 | v127 | 2026-11-22 | master | 会话内权限切换：composer 权限 chip，支持工作区写入 / 完全访问（走宿主 /permission 命令） | 手机 PWA 会话 | chip 显示当前档位；切 full 后 chip 变红且命令生效，切回 workspace-write 恢复；preflight + GitHub Actions 通过 |
 | v129 | 2026-11-22 | master | 终端体验重做：聊天视图按 Instrument Paper 设计、iOS 键盘输入移到 PWA 外层（无 ^∨✓ 辅助栏、输入框贴键盘）、新会话回到启动页、终端 DSH 会话独立 home 不再污染工作区 | 手机 PWA 终端 + /agents 页 | preview v131 真机验收通过；WebKit 440×956 全流程（启动/流式/停止/复制/终端）；smoke OK；主 DSH sessions 数量不变 |
+| v165 | 2026-11-22 | master | 会话阅读体验：消息内多图左右滑、md 文件预览、移除键盘诊断、会话菜单减负、未读 tag 后置 | 手机 PWA 会话/文件查看器 | 用户验收通过；截图见 verify-v165；preflight + PR #19 通过 |
+| v167 | 2026-11-22 | master | 终端键盘修复：浮层全屏不透明、composer 钉到 visualViewport、iframe 高度随 composer、聊天自动贴底 | 手机 PWA 终端 + /agents | preview v137 用户验收；主屏 PWA 键盘弹起无透出、最后一条消息不被遮挡 |
