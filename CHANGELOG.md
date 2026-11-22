@@ -41,3 +41,4 @@
 | v127 | 2026-11-22 | master | 会话内权限切换：composer 权限 chip，支持工作区写入 / 完全访问（走宿主 /permission 命令） | 手机 PWA 会话 | chip 显示当前档位；切 full 后 chip 变红且命令生效，切回 workspace-write 恢复；preflight + GitHub Actions 通过 |
 | v129 | 2026-11-22 | master | 终端体验重做：聊天视图按 Instrument Paper 设计、iOS 键盘输入移到 PWA 外层（无 ^∨✓ 辅助栏、输入框贴键盘）、新会话回到启动页、终端 DSH 会话独立 home 不再污染工作区 | 手机 PWA 终端 + /agents 页 | preview v131 真机验收通过；WebKit 440×956 全流程（启动/流式/停止/复制/终端）；smoke OK；主 DSH sessions 数量不变 |
 | v165 | 2026-11-22 | master | 会话阅读体验：消息内多图左右滑、md 文件预览、移除键盘诊断、会话菜单减负、未读 tag 后置 | 手机 PWA 会话/文件查看器 | 用户验收通过；截图见 verify-v165；preflight + PR #19 通过 |
+| v167 | 2026-11-22 | master | 终端键盘修复：浮层全屏不透明、composer 钉到 visualViewport、iframe 高度随 composer、聊天自动贴底 | 手机 PWA 终端 + /agents | preview v137 用户验收；主屏 PWA 键盘弹起无透出、最后一条消息不被遮挡 |

@@ -679,7 +679,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v165';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v167';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -3104,7 +3104,7 @@ async function closeTerminal(it) {
     el('span', { style: 'flex:1' }),
     el('button', { class: 'ico', text: '\u2715', onclick: () => mask.remove() }));
   const frame = el('iframe', { class: 'termframe', src: '/agents/?embed=1&pcomposer=1&pane=' + encodeURIComponent(paneId || '') + '&v=' + encodeURIComponent(APP_VERSION) });
-  const tta = el('div', { class: 'tta', contenteditable: 'true', role: 'textbox' });
+  const tta = el('div', { class: 'tta', contenteditable: 'true' });
   tta.setAttribute('data-ph', '\u7EE7\u7EED\u8FFD\u95EE\uFF0CEnter \u53D1\u9001');
   const post = (m) => { try { frame.contentWindow.postMessage(m, location.origin); } catch {} };
   const tstop = el('button', { class: 'tstop', text: '\u25A0', title: '\u505C\u6B62', onclick: () => post({ type: 'agents-stop' }) });
@@ -3114,13 +3114,43 @@ async function closeTerminal(it) {
     post({ type: 'agents-send', text });
     tta.textContent = '';
     tta.style.height = '';
+    setTimeout(fitOverlay, 0);
   };
   const tsend = el('button', { class: 'tsend', text: '\u2191', title: '\u53D1\u9001', onclick: sendTerm });
   tta.addEventListener('keydown', (e) => { if (e.isComposing) return; if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTerm(); } });
-  tta.addEventListener('input', () => { tta.style.height = 'auto'; tta.style.height = Math.min(120, Math.max(44, tta.scrollHeight)) + 'px'; });
+  tta.addEventListener('input', () => { tta.style.height = 'auto'; tta.style.height = Math.min(120, Math.max(44, tta.scrollHeight)) + 'px'; setTimeout(fitOverlay, 0); });
   const tcomp = el('div', { class: 'termcomposer' }, tta, tstop, tsend);
   mask.append(bar, frame, tcomp);
   document.body.append(mask);
+  // Keep the overlay full-screen (opaque) and lift only the composer to the
+  // visual viewport edge: the keyboard's translucent accessory bar must never
+  // reveal the PWA session list underneath.
+  const fitOverlay = () => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const vh = Math.round(vv.height);
+    const kb = vh < window.innerHeight - 100;
+    mask.style.height = '100%';
+    mask.style.bottom = '0';
+    tcomp.style.position = 'absolute';
+    tcomp.style.left = '0';
+    tcomp.style.right = '0';
+    tcomp.style.paddingBottom = kb ? '8px' : 'calc(10px + env(safe-area-inset-bottom))';
+    const compH = tcomp.offsetHeight;
+    const barH = bar.offsetHeight;
+    tcomp.style.top = Math.max(0, vh - compH) + 'px';
+    frame.style.flex = '0 0 auto';
+    frame.style.height = Math.max(120, vh - barH - compH) + 'px';
+    frame.style.marginBottom = '0';
+    try { window.scrollTo(0, 0); } catch {}
+  };
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', fitOverlay);
+    window.visualViewport.addEventListener('scroll', fitOverlay);
+  }
+  tta.addEventListener('focus', () => { setTimeout(fitOverlay, 120); setTimeout(fitOverlay, 380); });
+  setTimeout(fitOverlay, 0);
+  setTimeout(fitOverlay, 120);
   frame.addEventListener('load', () => {
     try { frame.contentWindow.postMessage({ type: 'agents-token', token: termToken() }, location.origin); } catch {}
   });
