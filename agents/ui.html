@@ -92,7 +92,9 @@
   .agp .toast.on{opacity:1}
   .agp .empty{padding:10px;color:var(--dim);font-size:12.5px}
   .agp .ver{font-size:10px;color:var(--dim);opacity:.65;margin-left:2px;align-self:flex-start;padding-top:2px}
-  .agp.embed .hdr{display:none}
+  .agp.embed .hdr{display:flex;padding:6px 10px;gap:8px}
+  .agp.embed .hdr .title{font-size:14px}
+  .agp.embed .hdr .sub{display:none}
   .agp.embed .nav{display:none}
   .agp.embed .mobar{display:none}
   .agp.embed .termwrap{padding-top:8px}
@@ -167,7 +169,7 @@
       <div class="title">终端</div>
       <div class="sub" id="conn">connecting…</div>
     </div>
-    <span class="ver">v12</span>
+    <span class="ver">v13</span>
     <span class="grow"></span>
     <div class="seg" id="seg"><button id="vChat">对话</button><button id="vTerm">终端</button></div>
     <button class="chip" id="resetBtn" style="display:none">新会话</button>
@@ -233,7 +235,8 @@
   const q = new URLSearchParams(location.search);
   if (q.get('token')) { token = q.get('token'); localStorage.setItem('bridge_token', token); history.replaceState(null, '', location.pathname); }
   const prefPane = q.get('pane') || '';
-  if (q.get('embed')) document.getElementById('agp').classList.add('embed');
+  const EMBED = !!q.get('embed');
+  if (EMBED) document.getElementById('agp').classList.add('embed');
 
   let pane = null;
   let snap = null;
@@ -242,6 +245,7 @@
   let viewMode = localStorage.getItem('agents.view') || 'chat';
   let chatSig = '';
   let dshState = null;   // {exists, busy, messages, sessionId, ...} for the current pane
+  let autoChatPane = '';
 
   function E(tag, props = {}, text = '') {
     const n = document.createElement(tag);
@@ -284,6 +288,12 @@
     renderNav();
     const me = panes().find((p) => p.pane_id === pane);
     await loadDsh();
+    if (EMBED && !currentAgent() && !dshActive() && viewMode === 'term' && autoChatPane !== pane) {
+      autoChatPane = pane;
+      viewMode = 'chat';
+      localStorage.setItem('agents.view', 'chat');
+      renderView();
+    }
     $('#startBtn').style.display = currentAgent() || dshActive() ? 'none' : '';
     if (viewMode === 'chat') {
       $('#txt').placeholder = dshActive() ? '发消息给 DSH，Enter 发送' : (currentAgent() ? '发消息给 agent，Enter 发送' : '先选择启动方式');
