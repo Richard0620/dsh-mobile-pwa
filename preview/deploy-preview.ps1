@@ -86,9 +86,12 @@ try {
   $app = ([regex]::Match($idx, "const APP_VERSION = '(v\d+)'")).Groups[1].Value
   $swv = ([regex]::Match($sw, "const CACHE = '([^']+)'")).Groups[1].Value
   if (-not $app) { throw 'index.html 里找不到 APP_VERSION' }
+  $short = 'DSH ' + (($Branch -replace '^feature/', '') -replace '[^A-Za-z0-9._-]', '-')
+  if ($short.Length -gt 12) { $short = $short.Substring(0, 12) }
 
   $branchEsc = $Branch.Replace('\', '\\').Replace("'", "\'")
   $idx = $idx.Replace('<title>AI-HUB</title>', "<title>AI-HUB · 预览 · $branchEsc</title>")
+  $idx = $idx.Replace('<meta name="apple-mobile-web-app-title" content="AI-HUB">', "<meta name=`"apple-mobile-web-app-title`" content=`"$short`">")
   if ($idx -notmatch 'AI-HUB · 预览') { Write-Warning '标题未替换（可能页面结构变了）' }
   $marker = "<script>window.__DSH_PREVIEW__={branch:'$branchEsc',slug:'$Slug'};</script>"
   $idx = $idx -replace '(<head[^>]*>)', "`$1`n$marker"
@@ -105,8 +108,6 @@ try {
   [IO.File]::WriteAllText($swPath, $sw3, (New-Object Text.UTF8Encoding($false)))
 
   $mf = Get-Content $mfPath -Raw -Encoding UTF8 | ConvertFrom-Json
-  $short = 'DSH ' + (($Branch -replace '^feature/', '') -replace '[^A-Za-z0-9._-]', '-')
-  if ($short.Length -gt 12) { $short = $short.Substring(0, 12) }
   $mf.name = "DSH · $Branch · $app"
   $mf.short_name = $short
   $mf.start_url = './'
