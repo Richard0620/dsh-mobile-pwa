@@ -392,10 +392,10 @@ node --check $env:TEMP\app.mjs
 - [x] D5 子进程超时/取消（5 分钟超时 + `/dsh/stop` kill，v15）
 - [ ] D6 agents 页单文件拆分（当前 ~700 行）
 - [ ] D7 录屏/截图回归：每次 P0 修完补一段手机验证
-- [ ] D8 工作区纪律：agents 改动只在 `pwa-e`，`pwa`/master 保持干净
-- [ ] D9 禁止 `commit-tree` 提交（会留下 staged 假象、且曾丢过文件），一律在 worktree 里正常 commit
-- [ ] D10 提交前跑 `agents/smoke.ps1`，防 v14 那种丢端点事故
-- [ ] D11 自启路径耦合：Startup 的 `agents-bridge.lnk` 指向 `pwa-e`，worktree 不能随意删；写进 `agents/README`
+- [x] D8 工作区纪律：agents 改动只在 `pwa-e`，`pwa`/master 保持干净（v15）
+- [x] D9 禁止 `commit-tree` 提交（会留下 staged 假象、且曾丢过文件），一律在 worktree 里正常 commit（v15）
+- [x] D10 提交前跑 `agents/smoke.ps1`，防 v14 那种丢端点事故（v15）
+- [x] D11 自启路径耦合：Startup 的 `agents-bridge.lnk` 指向 `pwa-e`，worktree 不能随意删；写进 `agents/README`（v15）
 
 ### 验收方式
 
