@@ -135,7 +135,10 @@
 
   /* ---------- 设置页 ---------- */
   /* ---------- 文件页 ---------- */
-  .crumbrow{display:flex;align-items:center;gap:2px;padding:8px 16px 2px;overflow-x:auto;white-space:nowrap}
+  .rootrow{display:flex;gap:6px;padding:8px 16px 0;overflow-x:auto;white-space:nowrap}
+  .rootchip{flex:none;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;
+    padding:5px 9px;border-radius:8px;border:1px solid var(--line);color:var(--dim);background:var(--card)}
+  .rootchip.on{color:var(--fg);border-color:var(--accent);background:var(--bubble)}  .crumbrow{display:flex;align-items:center;gap:2px;padding:8px 16px 2px;overflow-x:auto;white-space:nowrap}
   .crumbchip{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;color:var(--dim);
     padding:4px 7px;border-radius:7px;flex:none}
   .crumbchip.on{color:var(--fg);background:var(--bubble)}
@@ -616,7 +619,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v140';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v142';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1880,6 +1883,22 @@ function renderFiles(wrap) {
   const sub = L ? `${dirsAll.length} 个文件夹 · ${filesAll.length} 个文件` : '加载中…';
   wrap.append(heroHeader('文件', (wsName ? wsName + ' · ' : '') + sub,
     el('div', { style:'display:flex;gap:2px;align-items:center' }, selBtn, back)));
+
+  // 盘符 / 根目录切换（Windows 上就是 C: / D: / 主目录）
+  const rootRow = el('div', { class:'rootrow' });
+  const rootsNow = state.roots;
+  if (Array.isArray(rootsNow) && rootsNow.length) {
+    const curPath = String((L && L.path) || state.filesPath || '').replace(/[\\/]+$/, '');
+    const norm = (x) => String(x || '').replace(/[\\/]+/g, '/').replace(/\/+$/, '').toLowerCase();
+    for (const r of rootsNow) {
+      const on = norm(curPath) === norm(r.path) || norm(curPath).startsWith(norm(r.path) + '/');
+      rootRow.append(el('span', { class:'rootchip' + (on ? ' on' : ''), text: r.name || r.path,
+        onclick: () => loadFiles(r.path) }));
+    }
+  } else if (rootsNow === null) {
+    loadRoots().then(() => { if (state.view === 'files') render(); }).catch(() => {});
+  }
+  if (rootRow.children.length) wrap.append(rootRow);
 
   const crumbs = el('div', { class:'crumbrow' });
   const cr = (L && L.crumbs) || [];
