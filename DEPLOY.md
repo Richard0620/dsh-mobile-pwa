@@ -257,3 +257,55 @@ tailscale funnel status               # 确认公网地址
 - [ ] 宿主机 18787 只监听 `127.0.0.1`（插件默认如此，别改成 `0.0.0.0` 直接裸奔）；
 - [ ] 桌面端「设置 → 移动端」里，`pwa-probe` 之类的调试设备已删除；
 - [ ] 手机上不再需要的设备凭据已吊销（`/api/mobile/v1/paired-devices/revoke`）。
+
+## git 部署（2026-11-21 起）
+
+线上不再由本地 scp，而是**服务器自己从 GitHub 拉**：
+
+```
+/srv/dsh-mobile-src      git clone（服务端，跟踪 origin/main）
+/opt/dsh-mobile-deploy.sh  部署脚本：checkout ref -> 暂存 -> rsync 到 /srv/dsh-mobile
+/srv/dsh-mobile          运行时目录（精确等于某个提交的 8 个文件 + VERSION）
+```
+
+本机用法：
+
+```powershell
+./deploy.ps1              # 部署 origin/main（要求本地 HEAD == origin/main）
+./deploy.ps1 -Ref v123    # 回滚/发布到指定 tag
+./deploy.ps1 -Ref abc1234 # 指定提交
+```
+
+线上查版本：
+
+```
+ssh root@38.189.61.57 cat /srv/dsh-mobile/VERSION
+```
+
+VERSION 里现在有 `ref` 与 `source=github`，能对应到具体提交。
+## 服务与密钥清单（2026-11-21）
+
+**代码全部在 git 里；密钥一律不在 git 里。**
+
+| 服务 | 代码位置（仓库） | 部署目标 | 密钥/配置 |
+|---|---|---|---|
+| 静态 PWA | `index.html` `sw.js` `manifest.webmanifest` 图标 | `/srv/dsh-mobile` | 无 |
+| Web Push | `push/server.mjs` `push/package.json` | `/opt/dsh-push` | `/etc/dsh-push.env`（VAPID 公/私钥、`PUSH_SECRET`）**不入库** |
+| systemd 单元 | `deploy/systemd/dsh-push.service` | `/etc/systemd/system/` | 无（只引用 env 文件） |
+| Caddy | `Caddyfile.us` | `/etc/caddy/Caddyfile` | 证书由 Caddy 自动管理 |
+| 宿主插件补丁 | `patches/push-notify.js` | `~/.dsh/profiles/desktop/node_modules/...` | `~/.dsh/webpush.json`（push 地址+secret）**不入库** |
+
+### 部署命令
+
+```powershell
+./deploy.ps1            # 只发静态 PWA
+./deploy.ps1 -Push      # 静态 PWA + 推送服务（会重启 dsh-push，约 1 秒中断）
+./deploy.ps1 -Ref v123  # 回滚到某个 tag
+```
+
+### 敏感信息处理原则
+
+1. **仓库里只有变量名**：`push/setup-vps.sh` 会生成 `/etc/dsh-push.env`，写的是 `$PRIV` 这种变量，不是值。
+2. **`.env` 永不入库**：`.gitignore` 已含 `*.env`、`push/node_modules/`。
+3. **GitHub 凭据**走 Windows 凭据管理器，不落盘到仓库。
+4. 新增服务时：密钥放服务器 `/etc/<svc>.env`，代码里只读环境变量。
