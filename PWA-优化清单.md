@@ -203,6 +203,17 @@
 - **验收**：多条排队时默认只占几行；点卡片可展开/收起；排队期间页面不被霸占；加载状态只出现一次且在卡片下方。
 - **已知缺口（待补）**：`queueEdit` 只把文本块放回输入框，随消息排队的图片/附件不会恢复，编辑会丢图；折叠预览也只显示文本。详见 4.2。
 
+### 2.23 分支预览环境（/preview/）🟡 基础设施已上线，代码待合 main
+
+- **入口**：`https://dsh.easymana.online:8443/preview/`，手机 Safari 可直接打开；每个分支目录可单独「添加到主屏幕」。
+- **实现**：
+  - `preview/index.html`：分支选择页，读 `branches.json`，显示分支/版本/commit/部署时间。
+  - `preview/deploy-preview.ps1 -Branch <branch>`：从 Git 取分支的 `index.html`/`sw.js`/manifest/图标，生成独立目录并部署到 VPS；`-Hub` 只更新选择页。
+  - 每个分支独立 manifest（`start_url`/`scope`/`id` = `./`）、独立 SW scope、缓存前缀 `dsh-preview-<slug>-<app>`；预览 SW 的 activate 只清 `dsh-preview-*`，不碰主站缓存。
+  - Caddy 增加 `/preview/*` 目录索引处理（仓库 `Caddyfile.us` 已同步）。
+- **限制**：同源共享 localStorage；预览不开推送（避免抢主 PWA 订阅）；主站以后清缓存可能顺带清预览离线缓存，不影响在线。
+- **状态**：预览 hub、main、feature/agents-dsh-chat、feature/session-perms 已部署；代码在 `feature/preview-env` 分支，尚未合入 main。
+
 ---
 
 ## 4. P2（功能补齐，AI-HUB 有我们没有）
