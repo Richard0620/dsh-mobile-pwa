@@ -14,7 +14,7 @@ param(
   [string]$Repo = 'D:\Vibe\PWA\pwa',
   [string]$Key = 'D:\Vibe\.ssh\keys\id_rsa_relay',
   [string]$Remote = 'root@38.189.61.57',
-  [string]$Root = '/srv/dsh-mobile/preview'
+  [string]$Root = '/srv/dsh-preview'
 )
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
