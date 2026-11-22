@@ -168,21 +168,90 @@
   .agp .tool{font-size:11.5px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:2px 8px;
     max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
+<style>
+  /* v19: Instrument Paper chat styling, aligned with design/ui-v1. */
+  .agp{
+    --bg:#F6F5F1; --card:#FFFFFF; --fg:#1A1A16; --dim:#8C8A7F; --line:#E5E2D8;
+    --bubble:#ECEAE2; --accent:#1A1A16; --accent-fg:#F6F5F1; --ok:#3F7D4E; --warn:#B58100;
+    --bad:#B3261E; --term:#0E0E0B; --term-fg:#F0EEE6;
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","PingFang SC","Noto Sans SC",sans-serif;
+    letter-spacing:-.005em;
+  }
+  @media (prefers-color-scheme: dark){
+    .agp{--bg:#0E0E0B;--card:#171714;--fg:#F0EEE6;--dim:#7B786D;--line:#2A2A23;
+      --bubble:#24241E;--accent:#C6F04E;--accent-fg:#0B0C0E;--ok:#7CBF90;--warn:#D9AC57;
+      --bad:#E0837A;--term:#0A0A08;--term-fg:#F0EEE6}
+  }
+  .agp .hdr{height:56px;padding:0 12px;gap:10px;background:var(--bg);border-bottom:1px solid var(--line)}
+  .agp .ht{display:flex;flex-direction:column;min-width:0;line-height:1.2}
+  .agp .hdr .title{font-size:16px;font-weight:600;letter-spacing:-.015em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .agp .hdr .sub{display:block;margin-top:2px;font:9.5px ui-monospace,SFMono-Regular,Consolas,monospace;
+    letter-spacing:.06em;text-transform:none;color:var(--dim)}
+  .agp .dot{width:7px;height:7px;box-shadow:none}
+  .agp .iconbtn{width:36px;height:36px;border-radius:12px;color:var(--fg);font-size:18px}
+  .agp .iconbtn:active{background:var(--bubble)}
+  .agp .seg{background:transparent;border:0;padding:0;gap:4px}
+  .agp .seg button{height:30px;padding:0 12px;border-radius:9px;font-size:12.5px;color:var(--dim);background:transparent}
+  .agp .seg button.on{background:var(--bubble);color:var(--fg);box-shadow:none;font-weight:600}
+  .agp .chat{padding:6px 18px 10px;gap:18px}
+  .agp .msg{width:100%}
+  .agp .msg.user{align-items:flex-end}
+  .agp .msg.assistant{align-items:flex-start}
+  .agp .msg.user .bubble{max-width:80%;background:var(--bubble);color:var(--fg);border:0;
+    border-radius:18px 18px 5px 18px;padding:11px 14px;font-size:15px;line-height:1.5}
+  .agp .msg.assistant .bubble{background:none;border:0;padding:0;max-width:none}
+  .agp .msg .md{font-size:15.5px;line-height:1.62}
+  .agp .who{font:9.5px ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--dim);font-weight:600;margin-bottom:5px}
+  .agp .mtime{font:9.5px ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.02em;color:var(--dim);margin:4px 4px 0}
+  .agp .copyrow{margin-top:6px}
+  .agp .copybtn{border:0;background:none;padding:2px 0;font-size:11px;color:var(--dim)}
+  .agp .tools{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;align-self:stretch;max-width:none}
+  .agp .tool{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--card);
+    border-radius:10px;padding:8px 11px;font:11.5px ui-monospace,SFMono-Regular,Consolas,monospace;
+    max-width:100%;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .agp .md pre.code{background:#0B0B08;color:#F0EEE6;border-radius:12px;padding:12px 14px;font-size:11.5px;line-height:1.65}
+  .agp .md code{background:var(--bubble);border:1px solid var(--line);border-radius:5px;font-size:12px}
+  .agp .md pre.code code{background:none;border:0}
+  .agp .chatempty{align-self:flex-start;color:var(--dim);font-size:13px;padding:18px 2px;text-align:left}
+  .agp .runline{display:flex;align-items:center;gap:6px;font:10px ui-monospace,SFMono-Regular,Consolas,monospace;
+    color:var(--dim);letter-spacing:.02em;margin-top:6px}
+  .agp .runline .pd{width:5px;height:5px;border-radius:50%;background:var(--ok);animation:pulse 1.6s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .agp .composer{padding:8px 14px calc(10px + env(safe-area-inset-bottom));background:var(--bg);gap:8px;align-items:center;border:0}
+  .agp .composer input{height:46px;border-radius:22px;border:1px solid var(--line);background:var(--card);
+    padding:0 16px;font-size:16px;letter-spacing:-.01em}
+  .agp .composer .send{width:38px;height:38px;min-width:38px;border-radius:50%;font-size:17px;padding:0;
+    display:grid;place-items:center;background:var(--accent);color:var(--accent-fg);font-weight:600}
+  .agp .composer .send.stop{background:var(--bad);color:#fff}
+  .agp .keys{padding:6px 14px 0}
+  .agp .keys .kbtn{height:32px;min-width:36px;border-radius:9px;font-size:12.5px;background:var(--card);color:var(--dim)}
+  .agp .termwrap{padding:8px 14px 2px}
+  .agp .term{border-radius:16px;border:1px solid var(--line);font:12.5px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;padding:14px}
+  .agp .gate{background:color-mix(in srgb,var(--bg) 92%,transparent)}
+  .agp .card{border-radius:18px}
+  .agp .toast{border-radius:12px}
+  .agp .blockedbar{border-radius:14px}
+  .agp.embed .hdr > .ht{display:flex !important}
+  .agp.embed .hdr .sub{display:block}
+  .agp.embed .hdr{height:52px}
+  .agp .ver{display:none}
+</style>
 </head>
 <body>
 <div class="agp" id="agp">
   <header class="hdr">
     <span class="dot" id="dot"></span>
-    <div>
-      <div class="title">终端</div>
-      <div class="sub" id="conn">connecting…</div>
+    <div class="ht">
+      <b class="title">终端</b>
+      <span class="sub" id="conn">connecting…</span>
     </div>
-    <span class="ver">v18</span>
     <span class="grow"></span>
     <div class="seg" id="seg"><button id="vChat">对话</button><button id="vTerm">终端</button></div>
-    <button class="chip" id="resetBtn" style="display:none">新会话</button>
-    <button class="chip" id="startBtn">＋ claude</button>
-    <button class="iconbtn" id="tokenBtn" title="token">⚙</button>
+    <button class="iconbtn" id="resetBtn" style="display:none" title="新会话">＋</button>
+    <button class="iconbtn" id="startBtn" style="display:none" title="启动 claude">C</button>
+    <button class="iconbtn" id="tokenBtn" title="设置">⋯</button>
+    <span id="agpVer" class="ver">v19</span>
   </header>
 
   <div class="body">
@@ -218,9 +287,9 @@
         <button class="kbtn" data-key="n">n</button>
       </div>
       <div class="composer">
-        <input id="txt" type="text" placeholder="输入命令，Enter 发送" autocomplete="off" autocapitalize="off" spellcheck="false">
-        <button class="send stop" id="stopBtn" style="display:none">停止</button>
-        <button class="send" id="send">发送</button>
+        <input id="txt" type="text" placeholder="继续追问，Enter 发送" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button class="send stop" id="stopBtn" style="display:none" title="停止">■</button>
+        <button class="send" id="send" title="发送">↑</button>
       </div>
     </main>
   </div>
@@ -308,9 +377,9 @@
       localStorage.setItem('agents.view', 'chat');
       renderView();
     }
-    $('#startBtn').style.display = currentAgent() || dshActive() ? 'none' : '';
+    $('#startBtn').style.display = 'none';
     if (viewMode === 'chat') {
-      $('#txt').placeholder = dshActive() ? '发消息给 DSH，Enter 发送' : (currentAgent() ? '发消息给 agent，Enter 发送' : '先选择启动方式');
+      $('#txt').placeholder = dshActive() ? '继续追问，Enter 发送' : (currentAgent() ? '发消息给 agent，Enter 发送' : '先选择启动方式');
     }
     $('#resetBtn').style.display = dshActive() ? '' : 'none';
     $('#blockedWho').textContent = pane || '';
@@ -414,7 +483,10 @@
     const box = $('#chat');
     const near = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
     box.replaceChildren();
-    if (!msgs.length) box.append(E('div', { class: 'chatempty' }, '\u8FD8\u6CA1\u6709\u5BF9\u8BDD\uFF0C\u5728\u4E0B\u9762\u53D1\u4E00\u6761\u6D88\u606F\u5F00\u59CB'));
+    if (!msgs.length) {
+      box.appendChild(E('div', { class: 'who', style: 'margin:6px 2px 0' }, 'DSH'));
+      box.appendChild(E('div', { class: 'chatempty', style: 'padding-top:0' }, '在下面发一条消息开始'));
+    }
     for (const m of msgs) {
       if (m.role === 'user') {
         const row = E('div', { class: 'msg user' });
@@ -423,6 +495,7 @@
         box.appendChild(row);
       } else if (m.role === 'assistant') {
         const row = E('div', { class: 'msg assistant' });
+        row.appendChild(E('div', { class: 'who' }, 'DSH'));
         if (m.text) {
           const b = E('div', { class: 'md' });
           b.innerHTML = mdToHtml(m.text);
@@ -435,7 +508,7 @@
         }
         if ((m.tools || []).length) {
           const tw = E('div', { class: 'tools' });
-          for (const t of m.tools) { const chip = E('span', { class: 'tool' }, '\u2699 ' + t.name); chip.title = t.input || ''; tw.appendChild(chip); }
+          for (const t of m.tools) { const chip = E('span', { class: 'tool' }, '› ' + t.name); chip.title = t.input || ''; tw.appendChild(chip); }
           row.appendChild(tw);
         }
         row.appendChild(E('div', { class: 'mtime' }, fmtClock(m.time)));
@@ -446,7 +519,7 @@
         row.appendChild(cp);
         box.appendChild(row);
       } else if (m.role === 'tool') {
-        box.appendChild(E('div', { class: 'bubble tool' }, m.text));
+        box.appendChild(E('div', { class: 'tool' }, m.text));
       }
     }
     appendApprovalCard(box);
@@ -478,7 +551,7 @@
     await loadDsh();
     const a = chatAgent();
     const box = $('#chat');
-    if (dshActive()) { renderDsh(); conn(true, 'DSH · ' + pane); return; }
+    if (dshActive()) { renderDsh(); conn(true, '运行中 · ' + pane); return; }
     if (!a) {
       renderLauncher();
       chatSig = 'launcher';
@@ -604,6 +677,7 @@
     }
     const near = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
     row.replaceChildren();
+    row.appendChild(E('div', { class: 'who' }, 'DSH'));
     if (dshLive.text) {
       const b = E('div', { class: 'md' });
       b.innerHTML = mdToHtml(dshLive.text);
@@ -611,13 +685,19 @@
     }
     if (dshLive.tools.length) {
       const tw = E('div', { class: 'tools' });
-      for (const t of dshLive.tools) tw.appendChild(E('span', { class: 'tool' }, (t.status === 'run' ? '… ' : '\u2699 ') + t.name));
+      for (const t of dshLive.tools) tw.appendChild(E('span', { class: 'tool' }, (t.status === 'run' ? '… ' : '› ') + t.name));
       row.appendChild(tw);
     }
     const meta = [];
     if (dshLive.status) meta.push(dshLive.status);
+    else if (dshLive.startedAt) meta.push('深度求索中');
     if (dshLive.startedAt) meta.push(elapsedText());
-    if (meta.length) row.appendChild(E('div', { class: 'mtime' }, meta.join(' · ')));
+    if (meta.length) {
+      const rl = E('div', { class: 'runline' });
+      rl.appendChild(E('span', { class: 'pd' }));
+      rl.appendChild(E('span', {}, meta.join(' · ')));
+      row.appendChild(rl);
+    }
     if (near) box.scrollTop = box.scrollHeight;
   }
   async function stopDsh() {
@@ -628,11 +708,14 @@
   }
 
   function renderDsh() {
+    updateHead();
     const msgs = dshMsgs();
     const last = msgs[msgs.length - 1] || {};
     const sig = 'dsh:' + msgs.length + ':' + (dshState.busy ? '1' : '0') + ':' + String(last.text || '').length;
-    $('#send').disabled = !!dshState.busy;
-    $('#stopBtn').style.display = dshState.busy ? '' : 'none';
+    const busy = !!dshState.busy;
+    $('#send').disabled = busy;
+    $('#send').style.display = busy ? 'none' : '';
+    $('#stopBtn').style.display = busy ? '' : 'none';
     if (sig === chatSig) { if (dshState.busy && dshLive) renderDshLive(); return; }
     chatSig = sig;
     renderChat(msgs);
@@ -649,16 +732,17 @@
   }
 
   function renderLauncher() {
+    updateHead();
     const box = $('#chat');
     box.replaceChildren();
     const wrap = E('div', { class: 'chatempty' });
-    wrap.style.cssText = 'display:flex;flex-direction:column;gap:10px;width:100%;max-width:420px;align-self:center;padding:26px 8px;text-align:left';
-    wrap.appendChild(E('div', { style: 'font-size:15px;font-weight:650' }, '这个终端还没有启动对话'));
-    wrap.appendChild(E('div', { style: 'font-size:12.5px;color:var(--dim);margin-top:-4px' }, '选一个开始，之后直接用自然语言聊天'));
+    wrap.style.cssText = 'display:flex;flex-direction:column;gap:10px;width:100%;max-width:420px;align-self:stretch;padding:26px 2px;text-align:left';
+    wrap.appendChild(E('div', { style: 'font-size:18px;font-weight:600;letter-spacing:-.02em' }, '这个终端还没有启动对话'));
+    wrap.appendChild(E('div', { style: 'font-size:13px;color:var(--dim);margin-top:-4px;line-height:1.5' }, '选一个开始，之后直接用自然语言聊天'));
     const mk = (label, primary) => {
       const b = E('button', {}, label);
-      b.style.cssText = 'padding:13px;border-radius:13px;border:1px solid var(--line);background:var(--card);font-size:15px;font-weight:600;color:var(--fg)';
-      if (primary) { b.style.background = 'var(--accent)'; b.style.borderColor = 'var(--accent)'; b.style.color = '#fff'; }
+      b.style.cssText = 'height:48px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-size:15px;font-weight:600;color:var(--fg);text-align:center';
+      if (primary) { b.style.background = 'var(--accent)'; b.style.borderColor = 'var(--accent)'; b.style.color = 'var(--accent-fg)'; }
       return b;
     };
     const b1 = mk('启动 DSH（自然语言）', true);
@@ -683,7 +767,13 @@
     } catch (e) { toast('启动失败：' + e.message); }
   }
 
+  function updateHead() {
+    const t = dshActive() ? 'DSH' : (currentAgent() ? 'Claude' : '终端');
+    const el = document.querySelector('.hdr .title');
+    if (el) el.textContent = t;
+  }
   function renderView() {
+    updateHead();
     const isChat = viewMode === 'chat';
     $('#termwrap').style.display = isChat ? 'none' : 'flex';
     $('#chat').style.display = isChat ? 'flex' : 'none';
@@ -691,7 +781,10 @@
     $('#vChat').classList.toggle('on', isChat);
     $('#vTerm').classList.toggle('on', !isChat);
     if (!dshActive()) { $('#stopBtn').style.display = 'none'; $('#send').disabled = false; }
-    $('#txt').placeholder = isChat ? (dshActive() ? '发消息给 DSH，Enter 发送' : (currentAgent() ? '发消息给 agent，Enter 发送' : '先选择启动方式')) : '输入命令，Enter 发送';
+    $('#txt').placeholder = isChat ? (dshActive() ? '继续追问，Enter 发送' : (currentAgent() ? '发消息给 agent，Enter 发送' : '先选择启动方式')) : '输入命令，Enter 发送';
+    const ttl = dshActive() ? 'DSH' : (currentAgent() ? 'Claude' : '终端');
+    const tEl = document.querySelector('.hdr .title');
+    if (tEl) tEl.textContent = ttl;
     if (isChat) chatTick(); else tick();
   }
 
