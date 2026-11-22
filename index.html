@@ -16,31 +16,52 @@
   try {
     var t = localStorage.getItem('dsh.theme');
     if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+    var sk = localStorage.getItem('dsh.skin');
+    if (sk === 'carbon' || sk === 'paper' || sk === 'auto') document.documentElement.dataset.skin = sk;
   } catch (e) {}
 </script>
 <style>
   :root{
-    --bg:#f7f7f8; --card:#ffffff; --fg:#111318; --dim:#8a8f98; --line:#e9e9ee;
-    --bubble:#ededf0; --accent:#2f6bff; --accent-2:#5b8cff; --ok:#2ea043; --bad:#e5484d; --warn:#b58100;
     --r-card:24px; --r-bubble:20px;
     --safe-t: env(safe-area-inset-top, 0px); --safe-b: env(safe-area-inset-bottom, 0px);
+    /* 皮肤：纸面（默认）。暖灰纸面 + 墨黑强调，层级靠字重与 1px 细线 */
+    --bg:#F6F5F1; --card:#FFFFFF; --fg:#1A1A16; --dim:#8C8A7F; --line:#E5E2D8;
+    --bubble:#ECEAE2; --accent:#1A1A16; --accent-fg:#FFFFFF; --accent-2:#5E5D54;
+    --ok:#2E6B3F; --bad:#A33B31; --warn:#8A5A12;
   }
   @media (prefers-color-scheme: dark){
-    :root{
-      --bg:#0e1014; --card:#171a20; --fg:#e8eaee; --dim:#8d94a0; --line:#242933;
-      --bubble:#22262e; --accent:#4f8cff; --accent-2:#6ea4ff; --ok:#3fb950; --bad:#f85149; --warn:#d29922;
+    :root:not([data-theme="light"]):not([data-skin="carbon"]):not([data-skin="auto"]){
+      --bg:#0E0E0B; --card:#171714; --fg:#F0EEE6; --dim:#7B786D; --line:#2A2A23;
+      --bubble:#24241E; --accent:#F0EEE6; --accent-fg:#171714; --accent-2:#ACA99D;
+      --ok:#7CBF90; --bad:#E0837A; --warn:#D9AC57;
     }
   }
   /* 手动主题：覆盖系统配色；auto 时不设 data-theme，仍走上面的媒体查询 */
-  :root[data-theme="dark"]{
-    --bg:#0e1014; --card:#171a20; --fg:#e8eaee; --dim:#8d94a0; --line:#242933;
-    --bubble:#22262e; --accent:#4f8cff; --accent-2:#6ea4ff; --ok:#3fb950; --bad:#f85149; --warn:#d29922;
+  :root[data-theme="dark"]:not([data-skin="carbon"]):not([data-skin="auto"]){
+    --bg:#0E0E0B; --card:#171714; --fg:#F0EEE6; --dim:#7B786D; --line:#2A2A23;
+    --bubble:#24241E; --accent:#F0EEE6; --accent-fg:#171714; --accent-2:#ACA99D;
+    --ok:#7CBF90; --bad:#E0837A; --warn:#D9AC57;
   }
-  :root[data-theme="light"]{
-    --bg:#f7f7f8; --card:#ffffff; --fg:#111318; --dim:#8a8f98; --line:#e9e9ee;
-    --bubble:#ededf0; --accent:#2f6bff; --accent-2:#5b8cff; --ok:#2ea043; --bad:#e5484d; --warn:#b58100;
+  :root[data-theme="light"]:not([data-skin="carbon"]):not([data-skin="auto"]){
+    --bg:#F6F5F1; --card:#FFFFFF; --fg:#1A1A16; --dim:#8C8A7F; --line:#E5E2D8;
+    --bubble:#ECEAE2; --accent:#1A1A16; --accent-fg:#FFFFFF; --accent-2:#5E5D54;
+    --ok:#2E6B3F; --bad:#A33B31; --warn:#8A5A12;
   }
-  /* 大屏手机（16 Pro Max 这类 430pt+）：正文字号与内边距略微放大，行宽不至于太松 */
+  /* 皮肤：碳黑。近黑底 + 荧光绿强调，恒为深色，不跟系统配色走 */
+  :root[data-skin="carbon"]{
+    --bg:#0B0C0E; --card:#121417; --fg:#EAE8DF; --dim:#6E726C; --line:#24272C;
+    --bubble:#171A1E; --accent:#C6F04E; --accent-fg:#0B0C0E; --accent-2:#9FE07C;
+    --ok:#9FE07C; --bad:#F07C6C; --warn:#E3BA5C;
+  }
+  /* 皮肤：跟随系统。浅色=纸面，深色=碳黑 */
+  @media (prefers-color-scheme: dark){
+    :root[data-skin="auto"]{
+      --bg:#0B0C0E; --card:#121417; --surface-2:#191C20; --surface-3:#22262B;
+      --fg:#EAE8DF; --dim:#6E726C; --line:#24272C; --line-2:#34383E;
+      --bubble:#171A1E; --accent:#C6F04E; --accent-fg:#0B0C0E; --accent-2:#9FE07C;
+      --ok:#9FE07C; --bad:#F07C6C; --warn:#E3BA5C;
+    }
+  }  /* 大屏手机（16 Pro Max 这类 430pt+）：正文字号与内边距略微放大，行宽不至于太松 */
   @media (min-width: 430px){
     main{padding-left:16px;padding-right:16px}
     .md{font-size:15.5px;line-height:1.65}
@@ -83,7 +104,11 @@
     padding:2px 6px;border-radius:6px;font-weight:600;transform:translateY(-10px)}
 
   /* ---------- 会话列表 ---------- */
-  .tabs{display:flex;gap:18px;padding:6px 2px 0;color:var(--dim);font-size:14px;border-bottom:1px solid var(--line);margin-bottom:8px}
+  .tbar{display:flex;align-items:center;gap:8px;padding:12px 2px 6px}
+  .tbar b{font-size:14px;font-weight:600}
+  .tbar span{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:10px;color:var(--dim)}
+  .tbar button{margin-left:auto;font-size:12px;padding:5px 10px;border:1px solid var(--line);
+    border-radius:8px;color:var(--dim);background:var(--card)}  .tabs{display:flex;gap:18px;padding:6px 2px 0;color:var(--dim);font-size:14px;border-bottom:1px solid var(--line);margin-bottom:8px}
   .tabs b{color:var(--dim);font-weight:550;position:relative;padding:0 0 8px;cursor:pointer;
     border-bottom:2px solid transparent;margin-bottom:-1px}
   .tabs b.on{color:var(--fg);font-weight:600;border-bottom-color:var(--accent)}
@@ -91,15 +116,98 @@
   .ghead{display:flex;align-items:center;gap:8px;padding:8px 2px;font-size:13px;color:var(--dim)}
   .ghead .gname{font-weight:600;color:var(--fg);font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .ghead .chev{font-size:10px;transition:transform .18s;color:var(--dim)}
+  .ghead .fico{display:grid;place-items:center;color:var(--dim)}
+  .ghead .fico svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;
+    stroke-linecap:round;stroke-linejoin:round}
   .ghead.closed .chev{transform:rotate(-90deg)}
-  .branch{font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:1px 7px;flex:none}
+  .ubadge{flex:none;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--accent);
+    color:var(--accent-fg);font-size:9.5px;font-weight:700;display:grid;place-items:center;
+    font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+  .ubdot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex:none;
+    box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 14%,transparent)}
+  .wsmark{flex:none;max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:9px;color:var(--dim);
+    border:1px solid var(--line);border-radius:5px;padding:1px 4px;margin-right:2px}  .branch{font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:1px 7px;flex:none}
   .count{font-size:11px;color:var(--dim);flex:none}
-  .row{display:flex;gap:10px;align-items:center;padding:9px 10px;border-radius:14px}
+
+  /* ---------- 底部 Tab 栏 ---------- */
+  .tabbar{flex:none;display:flex;gap:2px;padding:6px 10px calc(6px + var(--safe-b));
+    border-top:1px solid var(--line);background:color-mix(in srgb,var(--card) 94%,transparent);
+    backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+  .tabbar button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+    padding:6px 0 4px;border-radius:12px;color:var(--dim);font-size:10.5px;letter-spacing:.02em}
+  .tabbar button.on{color:var(--fg);font-weight:600}
+  .tabbar svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.6;
+    stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---------- 大标题头（会话 / 文件 / 设置） ---------- */
+  .hero{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+    padding:calc(12px + var(--safe-t)) 18px 0}
+  .hero h1{margin:0;font-size:30px;line-height:1.12;font-weight:650;letter-spacing:-.5px}
+  .hero .sub{margin-top:6px;font-size:10px;letter-spacing:.06em;text-transform:none;
+    color:var(--dim);font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+  .hero .acts{display:flex;gap:4px;padding-top:2px}
+
+  /* 会话行：标题下面补一行预览 */
+  .row .p{font-size:12.5px;line-height:1.4;color:var(--dim);margin-top:2px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* ---------- 设置页 ---------- */
+  /* ---------- 文件页 ---------- */
+  .rootrow{display:flex;gap:6px;padding:8px 16px 0;overflow-x:auto;white-space:nowrap}
+  .rootchip{flex:none;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;
+    padding:5px 9px;border-radius:8px;border:1px solid var(--line);color:var(--dim);background:var(--card)}
+  .rootchip.on{color:var(--fg);border-color:var(--accent);background:var(--bubble)}  .crumbrow{display:flex;align-items:center;gap:2px;padding:8px 16px 2px;overflow-x:auto;white-space:nowrap}
+  .crumbchip{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;color:var(--dim);
+    padding:4px 7px;border-radius:7px;flex:none}
+  .crumbchip.on{color:var(--fg);background:var(--bubble)}
+  .crumbsep{color:var(--line);font-size:10px;flex:none}
+  .fbody2{flex:1;overflow-y:auto;padding:2px 16px calc(80px + var(--safe-b))}
+  .fsect{display:flex;align-items:baseline;gap:8px;padding:16px 4px 6px}
+  .fsect b{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:9.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--dim);font-weight:600}
+  .fsect span{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:9.5px;color:var(--dim)}
+  .flrow{display:flex;align-items:center;gap:12px;padding:9px 4px;border-bottom:1px solid var(--line)}
+  .flrow:active{background:var(--bubble)}
+  .ftile{width:38px;height:38px;border-radius:10px;background:var(--card);border:1px solid var(--line);
+    display:grid;place-items:center;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+    font-size:8.5px;letter-spacing:.02em;color:var(--dim);flex:none}
+  .ftile.dir{background:var(--bubble);border-color:transparent}
+  .fname2{flex:1;min-width:0}
+  .fname2 b{display:block;font-size:14.5px;font-weight:550;letter-spacing:-.1px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fname2 span{display:block;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+    font-size:9.5px;color:var(--dim);margin-top:3px}
+  .flrow .chev{color:var(--dim);font-size:16px;flex:none}
+  .fselbox{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--line-2);flex:none;
+    display:grid;place-items:center;color:transparent;font-size:11px}
+  .flrow.sel .fselbox{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+  .fselbar{flex:none;display:flex;align-items:center;gap:10px;margin:8px 14px 0;padding:10px 12px;
+    border-radius:14px;background:var(--accent);color:var(--accent-fg)}
+  .fselbar .t{flex:1;font-size:12.5px;font-weight:600}
+  .fselbar button{font-size:12px;font-weight:600;padding:6px 10px;border-radius:9px;
+    background:color-mix(in srgb,var(--accent-fg) 16%,transparent);color:var(--accent-fg)}  .showhidden{display:block;width:100%;margin:18px 0 6px;padding:11px;border-radius:12px;
+    border:1px solid var(--line);background:var(--card);font-size:12.5px;color:var(--dim)}  .settings{flex:1;overflow-y:auto;padding:2px 16px calc(84px + var(--safe-b))}
+  .slabel{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);
+    font-family:ui-monospace,SFMono-Regular,Consolas,monospace;padding:18px 6px 6px}
+  .groupcard{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .srow{display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid var(--line);
+    width:100%;text-align:left}
+  .srow:last-child{border-bottom:0}
+  .srow:active{background:var(--bubble)}
+  .srow .st{flex:1;min-width:0}
+  .srow b{display:block;font-size:14px;font-weight:550;letter-spacing:-.1px}
+  .srow span{display:block;font-size:11.5px;color:var(--dim);margin-top:2px}
+  .srow .sv{flex:none;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+    font-size:11px;color:var(--dim)}
+  .row{display:flex;gap:10px;align-items:center;padding:11px 4px;border-radius:12px;
+    border-bottom:1px solid var(--line)}
   .row:active{background:var(--bubble)}
   .row .body{flex:1;min-width:0}
   .row .t{display:flex;align-items:center;gap:7px}
   .row .title{font-size:15px;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
-  .row .time{font-size:12px;color:var(--dim);flex:none}
+  .row .time{font-size:10.5px;color:var(--dim);flex:none;
+    font-family:ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.02em}
   .row .dot{margin-top:0}
   /* 文件夹里没有可显示的会话时（都被置顶/归档）给一句说明，别让分组像丢了 */
   .ghint{font-size:12px;color:var(--dim);padding:2px 10px 10px}
@@ -126,18 +234,18 @@
   .qprev{flex:1;min-width:0;font-size:13px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .qchev{flex:none;font-size:11px;color:var(--dim)}
   .qmini{font-size:11.5px;color:var(--dim);padding:3px 8px;border-radius:999px;border:1px solid var(--line);background:var(--bg)}
-  .qmini.primary{color:#fff;background:var(--accent);border-color:var(--accent)}
+  .qmini.primary{color:var(--accent-fg);background:var(--accent);border-color:var(--accent)}
   .qacts{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px}
   .qtext{font-size:14.5px;color:var(--fg);white-space:pre-wrap;word-break:break-word;opacity:.9}
 
   /* 每条消息下方的操作行（复制 / 分支） */
-  .mact{display:flex;gap:8px;margin-top:6px;font-size:12px;color:var(--dim)}
+  .mact{display:flex;gap:2px;margin-top:4px;font-size:11.5px;color:var(--dim);opacity:.8}
   .msg.user ~ .mact, .mact.right{justify-content:flex-end}
-  .mact button{display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border-radius:999px;
-    color:var(--dim);font-size:12px;background:var(--card);border:1px solid var(--line);line-height:1.1}
+  .mact button{display:inline-flex;align-items:center;gap:4px;padding:5px 8px;border-radius:7px;
+    color:var(--dim);font-size:11.5px;background:transparent;border:0;line-height:1.1}
   .mact button:active{background:var(--bubble);color:var(--fg)}
   .msg.user{display:flex;justify-content:flex-end}
-  .msg.user .bubble{background:var(--bubble);border-radius:var(--r-bubble);padding:9px 13px;
+  .msg.user .bubble{background:var(--bubble);border-radius:18px 18px 5px 18px;padding:9px 13px;
     max-width:82%;white-space:pre-wrap;word-break:break-word;font-size:15px}
   .md{font-size:15px;line-height:1.62;word-break:break-word}
   .md > :first-child{margin-top:0}
@@ -220,11 +328,21 @@
   .rproots{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 8px}
   .rproot{font-size:12px;padding:2px 10px;border:1px solid var(--line);border-radius:999px;
     background:var(--card);color:var(--dim)}
-  .rproot.on{color:#fff;background:var(--accent);border-color:var(--accent)}
+  .rproot.on{color:var(--accent-fg);background:var(--accent);border-color:var(--accent)}
 
   /* 全屏文件查看器 */
   .viewer{position:fixed;inset:0;z-index:1100;background:var(--bg);display:flex;flex-direction:column}
-  .vhead{display:flex;align-items:center;gap:6px;padding:calc(8px + var(--safe-t)) 10px 6px}
+  /* 查看器：恒深色，纸面/碳黑都一样 */
+  .viewer{--bg:#0B0C0E;--card:#121417;--fg:#EAE8DF;--dim:#6E726C;--line:#24272C;
+    --bubble:#171A1E;--accent:#C6F04E;--accent-fg:#0B0C0E;background:#0B0C0E;color:var(--fg)}
+  .viewer .vtitle{color:#F0EEE6}
+  .viewer .vmeta{color:#8E8C82}
+  .viewer .vbody{color:#E7E5DA}  .vfoot{flex:none;display:flex;gap:8px;padding:8px 12px calc(10px + var(--safe-b));
+    border-top:1px solid var(--line);background:#0B0C0E}
+  .vbtn{height:42px;padding:0 14px;border-radius:11px;border:1px solid var(--line);
+    color:var(--fg);font-size:12.5px}
+  .vgo{flex:1;height:42px;border-radius:11px;background:var(--fg);color:#0B0C0E;
+    font-size:13px;font-weight:600}  .vhead{display:flex;align-items:center;gap:6px;padding:calc(8px + var(--safe-t)) 10px 6px}
   .vtitle{flex:1;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center}
   .vmeta{font-size:11px;color:var(--dim);padding:0 14px 6px;overflow:hidden;
     text-overflow:ellipsis;white-space:nowrap}
@@ -277,6 +395,7 @@
   .httl{display:flex;align-items:center;gap:7px;min-width:0;max-width:100%}
   .httl .dot{margin:0}
   /* 标题下方的会话用量条 */
+  .dock .metabar{margin-top:7px;opacity:.92}
   .metabar{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;font-size:11px;color:var(--dim);
     padding:0 16px 7px;background:var(--bg)}
   .metabar b{font-weight:600;color:var(--fg)}
@@ -304,13 +423,13 @@
   .has-attn{position:relative}
   .has-attn::after{content:attr(data-attn-n);position:absolute;top:0;right:-2px;min-width:15px;height:15px;
     padding:0 3px;border-radius:8px;display:grid;place-items:center;font-size:9px;font-weight:700;line-height:1;
-    color:#fff;background:var(--accent);box-shadow:0 0 0 2px var(--bg);letter-spacing:0}
+    color:var(--accent-fg);background:var(--accent);box-shadow:0 0 0 2px var(--bg);letter-spacing:0}
   .has-attn.attn-pending::after{background:var(--warn);color:#1a1a1a}
   .has-attn.attn-failed::after{background:var(--bad)}
   .has-attn.attn-done::after{background:var(--accent)}
   .has-attn.attn-running::after{background:var(--ok)}
   /* 会话行右侧的三点菜单 */
-  .row .rowmore{flex:none;width:30px;height:30px;border-radius:50%;color:var(--dim);font-size:16px;
+  .row .rowmore{flex:none;width:30px;height:30px;border-radius:50%;color:var(--dim);font-size:16px;opacity:.55;
     display:grid;place-items:center;margin-right:-4px}
   .row .rowmore:active{background:var(--bubble)}
   .pinmark{font-size:10px;margin-right:2px;opacity:.85}
@@ -381,7 +500,8 @@
 
   .streamline{font-size:11.5px;color:var(--dim);padding:0 2px 4px}
   /* 运行状态：跟在对话流末尾，不再挂在输入框下面 */
-  .typing{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--dim);padding:8px 2px 10px}
+  .typing{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--dim);padding:8px 2px 10px;
+    font-family:ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.02em}
   .typing i{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:blink 1.1s infinite}
   .typing i:nth-child(2){animation-delay:.18s}
   .typing i:nth-child(3){animation-delay:.36s}
@@ -400,7 +520,7 @@
   .acts{display:flex;gap:8px;margin-top:11px}
   .btn{flex:1;text-align:center;padding:10px;border-radius:12px;border:1px solid var(--line);
     background:var(--card);font-size:14px;font-weight:600}
-  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
   .btn.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,var(--line))}
   .btn.no{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,var(--line))}
   .qblock{padding:8px 0 4px;border-top:1px dashed var(--line)}
@@ -443,6 +563,17 @@
   .composer .ta:empty::before{content:attr(data-ph);color:var(--dim);pointer-events:none}
   .composer textarea::placeholder{color:var(--dim)}
   .crow{display:flex;align-items:center;gap:8px;margin-top:8px}
+  .chips{display:flex;align-items:center;gap:6px;flex:1;min-width:0;overflow:hidden;flex-wrap:wrap;row-gap:6px;align-content:center}
+  .chip2{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 9px;border-radius:8px;flex:0 0 auto;min-width:0;
+    background:var(--bubble);color:var(--dim);font-size:11.5px;letter-spacing:-.1px;white-space:nowrap;
+    flex:none;max-width:60%}
+  .chip2:active{opacity:.7}
+  .chip2 b{font-weight:600;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .chip2.danger{background:var(--bad-bg);color:var(--bad)}
+  .chip2.danger .ci{color:var(--bad)}
+  .chip2.danger b{color:var(--bad)}  .chip2 .ci{display:grid;place-items:center;color:var(--dim)}
+  .chip2 .ci svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.6;
+    stroke-linecap:round;stroke-linejoin:round}
   .plus{width:30px;height:30px;border-radius:50%;background:var(--bubble);display:grid;place-items:center;font-size:17px;color:var(--dim);flex:none}
   .perm{height:30px;padding:0 9px;border-radius:999px;background:var(--bubble);border:1px solid var(--line);
     color:var(--dim);font-size:11.5px;display:inline-flex;align-items:center;gap:3px;flex:none;white-space:nowrap}
@@ -451,11 +582,11 @@
   .perm:active{background:var(--card)}
   .model{font-size:12.5px;color:var(--dim);display:flex;align-items:center;gap:6px;min-width:0;flex:1;
     overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-  .sendgroup{display:flex;align-items:center;gap:8px;flex:none}
+  .sendgroup{display:flex;align-items:center;gap:8px;flex:none;margin-left:auto}
   .model b{color:var(--fg);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .pill{font-size:11px;color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent);
     border-radius:6px;padding:1px 6px;flex:none}
-  .send{width:34px;height:34px;border-radius:50%;background:var(--accent);color:#fff;display:grid;
+  .send{width:34px;height:34px;border-radius:50%;background:var(--accent);color:var(--accent-fg);display:grid;
     place-items:center;font-size:16px;flex:none;margin-left:auto;box-shadow:0 2px 8px color-mix(in srgb,var(--accent) 35%,transparent)}
   .send:disabled{opacity:.4;box-shadow:none}
   .stop{width:34px;height:34px;border-radius:50%;background:var(--bubble);color:var(--bad);
@@ -477,17 +608,31 @@
   .ptr.on{opacity:1}
 
   /* ---------- sheet ---------- */
-  .mask{position:fixed;inset:0;background:rgba(0,0,0,.32);display:flex;align-items:flex-end;
-    justify-content:center;z-index:2000;animation:fade .16s ease}
+  .mask{position:fixed;inset:0;background:rgba(16,14,8,.34);backdrop-filter:blur(2px);
+    display:flex;align-items:flex-end;justify-content:center;z-index:2000;animation:fade .16s ease}
   @keyframes fade{from{opacity:0}to{opacity:1}}
-  .sheet{width:100%;max-width:560px;background:var(--card);border-radius:22px 22px 0 0;
-    padding:14px 12px calc(20px + var(--safe-b));animation:up .2s cubic-bezier(.22,1,.36,1)}
-  @keyframes up{from{transform:translateY(24px)}to{transform:translateY(0)}}
-  .sheet .item{display:flex;align-items:center;gap:12px;padding:14px 12px;border-radius:12px;font-size:15px}
-  .sheet .item:active{background:var(--bubble)}
-  .sheet .cancel{margin-top:8px;text-align:center;padding:13px;color:var(--dim);font-size:15px;
+  .sheet{width:100%;max-width:560px;background:var(--card);border-radius:26px 26px 0 0;
+    padding:8px 16px calc(12px + var(--safe-b));border-top:1px solid var(--line);
+    box-shadow:0 -20px 50px -20px rgba(30,24,10,.45);
+    animation:up .22s cubic-bezier(.22,1,.36,1)}
+  @keyframes up{from{transform:translateY(26px)}to{transform:translateY(0)}}
+  .sheet .grab{width:36px;height:4px;border-radius:2px;background:var(--line-2,var(--line));
+    margin:2px auto 14px}
+  .sheet .shead{font-size:18px;font-weight:650;letter-spacing:-.02em;padding:0 4px 10px}
+  .sheet .item .chk{margin-left:auto;color:var(--accent);display:grid;place-items:center;flex:none}
+  .sheet .item .chk svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2.2;
+    stroke-linecap:round;stroke-linejoin:round}
+  .sheet .sic svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;
+    stroke-linecap:round;stroke-linejoin:round}  .sheet .item{display:flex;align-items:center;gap:12px;padding:13px 4px;font-size:15px;
     border-top:1px solid var(--line)}
-  .sheet .ver{text-align:center;font-size:11.5px;color:var(--dim);opacity:.75;padding:7px 0 0}
+  .sheet .item:active{background:var(--bubble)}
+  .sheet .sic{width:30px;height:30px;border-radius:9px;background:var(--bubble);flex:none;
+    display:grid;place-items:center;font-size:14px;color:var(--dim);line-height:1}
+  .sheet .slabel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sheet .cancel{margin-top:10px;text-align:center;padding:12px;border-radius:12px;
+    border:1px solid var(--line);color:var(--dim);font-size:14px}
+  .sheet .ver{text-align:center;font-size:11px;color:var(--dim);opacity:.7;padding:6px 0 0;
+    font-family:ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.04em}
   .pair{min-height:100dvh;display:flex;flex-direction:column;justify-content:center;gap:12px;
     padding:28px;max-width:420px;margin:0 auto}
   .pair .btn{flex:none;width:100%}
@@ -520,7 +665,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v129';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v164';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -541,6 +686,14 @@ function applyTheme(mode) {
   if (v) document.documentElement.dataset.theme = v;
   else delete document.documentElement.dataset.theme;
   try { localStorage.setItem(THEME_KEY, v); } catch {}
+}
+
+// 皮肤：paper（纸面，跟系统浅/深）| carbon（碳黑，恒深色）。只换 token，不改结构。
+const SKIN_KEY = 'dsh.skin';
+function applySkin(id) {
+  const v = id === 'carbon' ? 'carbon' : (id === 'auto' ? 'auto' : 'paper');
+  document.documentElement.dataset.skin = v;
+  try { localStorage.setItem(SKIN_KEY, v); } catch {}
 }
 
 function saveListCache(sessions) {
@@ -1028,6 +1181,8 @@ const state = {
   archived: null,
   archivedError: '',
   filesPath: '',
+  filesSelecting: false,
+  filesSel: new Set(),
   filesListing: null,
   filesError: '',
   showHidden: false,
@@ -1273,6 +1428,66 @@ function showFatal(e) {
   } catch {}
 }
 
+const NAV_ICONS = {
+  chat: '<svg viewBox="0 0 24 24"><path d="M20 12.5c0 3.9-3.6 7-8 7-1 0-2-.15-2.9-.43L4 20.5l1.3-3.6C4.1 15.6 3.5 14.1 3.5 12.5c0-3.9 3.6-7 8.5-7s8 3.1 8 7z"/></svg>',
+  files: '<svg viewBox="0 0 24 24"><path d="M7 4.5h6.5L18 9v10.5H7z"/><path d="M13.5 4.5V9H18"/><path d="M4.5 7.5v12h9"/></svg>',
+  gear: '<svg viewBox="0 0 24 24"><path d="M3.5 8h9M17 8h3.5M3.5 16h3.5M11 16h9.5"/><circle cx="14.5" cy="8" r="2.2"/><circle cx="8.5" cy="16" r="2.2"/></svg>',
+  folder: '<svg viewBox="0 0 24 24"><path d="M3.5 7.5A1.5 1.5 0 015 6h4l2 2.5h8A1.5 1.5 0 0120.5 10v7A1.5 1.5 0 0119 18.5H5A1.5 1.5 0 013.5 17V7.5z"/></svg>',
+  pin: '<svg viewBox="0 0 24 24"><path d="M9 3.5h6l-1 5 3 3v1H7v-1l3-3-1-5z"/><path d="M12 12.5V20"/></svg>',
+  model: '<svg viewBox="0 0 24 24"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9L12 3.5z"/></svg>',
+  shield: '<svg viewBox="0 0 24 24"><path d="M12 3.5l7 2.6v5.4c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9V6.1l7-2.6z"/></svg>',
+  unlock: '<svg viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="9.5" rx="2"/><path d="M8 10.5V7.8a4 4 0 017.6-1.7"/></svg>',
+};
+
+function tabBar(active) {
+  const btn = (id, label, icon, run) => el('button', { class: active === id ? 'on' : '', onclick: run },
+    el('span', { html: NAV_ICONS[icon] }), el('span', { text: label }));
+  return el('nav', { class:'tabbar' },
+    btn('list', '会话', 'chat', () => { if (state.view !== 'list') { state.view = 'list'; render(); } }),
+    btn('files', '文件', 'files', () => {
+      state.view = 'files';
+      if (state.filesListing) render();
+      else loadFiles(state.sessionCwd || '');
+    }),
+    btn('settings', '设置', 'gear', () => { if (state.view !== 'settings') { state.view = 'settings'; render(); } }),
+  );
+}
+
+function heroHeader(title, sub, action) {
+  return el('div', { class:'hero' },
+    el('div', {}, el('h1', { text: title }), sub ? el('div', { class:'sub', text: sub }) : null),
+    action ? el('div', { class:'acts' }, action) : null);
+}
+
+function renderSettings(wrap) {
+  wrap.append(heroHeader('设置', 'DSH MOBILE · ' + APP_VERSION));
+  const skin = (() => { try { const v = localStorage.getItem('dsh.skin'); return v === 'carbon' ? '碳黑' : v === 'auto' ? '跟随系统' : '纸面'; } catch { return '纸面'; } })();
+  const theme = (() => { try { const t = localStorage.getItem('dsh.theme'); return t === 'light' ? '浅色' : t === 'dark' ? '深色' : '跟随系统'; } catch { return '跟随系统'; } })();
+  const row = (title, desc, value, run) => el('button', { class:'srow', onclick: run },
+    el('div', { class:'st' }, el('b', { text: title }), desc ? el('span', { text: desc }) : null),
+    value ? el('span', { class:'sv', text: value }) : null);
+  const card = rows => el('div', { class:'groupcard' }, ...rows);
+  const main = el('div', { class:'settings' });
+  main.append(el('div', { class:'slabel', text:'外观' }), card([
+    row('皮肤', '纸面 / 碳黑', skin, openSkinSheet),
+    row('主题', '跟随系统 / 浅色 / 深色', theme, openThemeSheet),
+  ]));
+  main.append(el('div', { class:'slabel', text:'通知' }), card([
+    row('通知提醒', '完成、审批与提问的推送', '', openPushSettings),
+    row('推送诊断', '检查订阅与最近投递', '', openPushDiag),
+  ]));
+  main.append(el('div', { class:'slabel', text:'连接' }), card([
+    row('连接信息', '当前线路、延迟与中转', '', openConnInfo),
+    row('统计', '会话数、词元与用量', '', openStats),
+    row('终端', '在浏览器打开 /agents/', '', () => { location.href = '/agents/'; }),
+  ]));
+  main.append(el('div', { class:'slabel', text:'应用' }), card([
+    row('版本', '构建与更新说明', APP_VERSION, openAbout),
+    row('重新加载', '清掉页面状态重新进入', '', reloadApp),
+    row('退出登录', '清除本机凭据', '', () => { localStorage.clear(); state.token = ''; state.view = 'list'; render(); }),
+  ]));
+  wrap.append(main);
+}
 function render() {
   root.replaceChildren();
   if (!state.token) return renderPair();
@@ -1280,8 +1495,10 @@ function render() {
     const wrap = el('div', { class:'app' });
     if (state.view === 'list') { ui.sessionId = null; renderList(wrap); }
     else if (state.view === 'files') renderFiles(wrap);
+    else if (state.view === 'settings') renderSettings(wrap);
     else if (state.view === 'git') renderGit(wrap);
     else renderSession(wrap);
+    if (state.view === 'list' || state.view === 'files' || state.view === 'settings') wrap.append(tabBar(state.view));
     root.append(wrap);
     paintOpenDrawer();
   } catch (e) {
@@ -1690,46 +1907,120 @@ async function loadFiles(path) {
 }
 
 function renderFiles(wrap) {
-  const back = el('button', { class:'ico', text:'‹', onclick: () => {
-    if (state.sessionId) { state.view = 'session'; render(); }
-    else { state.view = 'list'; render(); refreshAll(); }
-  }});
-  wrap.append(headerEl('文件', back, el('span')));
-
-  const main = el('main');
+  const back = state.sessionId ? el('button', { class:'ico', text:'‹', onclick: () => {
+    state.view = 'session'; render();
+  }}) : null;
+  const selBtn = el('button', { class:'ico', text: state.filesSelecting ? '取消' : '选择',
+    style:'width:auto;padding:0 8px;font-size:12.5px;font-weight:600', onclick: () => {
+      state.filesSelecting = !state.filesSelecting;
+      if (!state.filesSelecting) state.filesSel.clear();
+      render();
+    }});
   const L = state.filesListing;
+  const entriesAll = L ? (L.entries || []).filter(e => !e.hidden || state.showHidden) : [];
+  const dirsAll = entriesAll.filter(e => e.kind === 'folder');
+  const filesAll = entriesAll.filter(e => e.kind !== 'folder');
+  const wsName = (() => {
+    const w = workspaceOf(state.sessionId);
+    if (w) return w.title || w.path;
+    const p = String(state.sessionCwd || '');
+    return p ? p.split(/[\\/]/).filter(Boolean).pop() : '';
+  })();
+  const sub = L ? `${dirsAll.length} 个文件夹 · ${filesAll.length} 个文件` : '加载中…';
+  wrap.append(heroHeader('文件', (wsName ? wsName + ' · ' : '') + sub,
+    el('div', { style:'display:flex;gap:2px;align-items:center' }, selBtn, back)));
+
+  // 盘符 / 根目录切换（Windows 上就是 C: / D: / 主目录）
+  const rootRow = el('div', { class:'rootrow' });
+  const rootsNow = state.roots;
+  if (Array.isArray(rootsNow) && rootsNow.length) {
+    const curPath = String((L && L.path) || state.filesPath || '').replace(/[\\/]+$/, '');
+    const norm = (x) => String(x || '').replace(/[\\/]+/g, '/').replace(/\/+$/, '').toLowerCase();
+    for (const r of rootsNow) {
+      const on = norm(curPath) === norm(r.path) || norm(curPath).startsWith(norm(r.path) + '/');
+      rootRow.append(el('span', { class:'rootchip' + (on ? ' on' : ''), text: r.name || r.path,
+        onclick: () => loadFiles(r.path) }));
+    }
+  } else if (rootsNow === null) {
+    loadRoots().then(() => { if (state.view === 'files') render(); }).catch(() => {});
+  }
+  if (rootRow.children.length) wrap.append(rootRow);
+
+  const crumbs = el('div', { class:'crumbrow' });
+  const cr = (L && L.crumbs) || [];
+  cr.forEach((c, i) => {
+    if (i) crumbs.append(el('span', { class:'crumbsep', text:'/' }));
+    crumbs.append(el('span', { class:'crumbchip' + (i === cr.length - 1 ? ' on' : ''), text: c.name,
+      onclick: () => loadFiles(c.path) }));
+  });
+  if (cr.length) wrap.append(crumbs);
+
+  const main = el('div', { class:'fbody2' });
   if (!L) {
     main.append(el('div', { class:'empty', text: state.filesError || '加载中…' }));
     wrap.append(main);
     return;
   }
 
-  // 面包屑
-  const crumbs = el('div', { class:'crumbs' });
-  for (const c of (L.crumbs || [])) {
-    crumbs.append(el('span', { class:'crumb', text: c.name, onclick: () => loadFiles(c.path) }));
-  }
-  main.append(crumbs);
-
-  const entries = (L.entries || []).filter(e => !e.hidden || state.showHidden);
-  const dirs = entries.filter(e => e.kind === 'folder');
-  const files = entries.filter(e => e.kind !== 'folder');
-  for (const e of [...dirs, ...files]) {
-    main.append(el('div', { class:'frow', onclick: () => {
-      if (e.kind === 'folder') loadFiles(e.path);
-      else previewFile(e.path, e.name);
+  const extOf = (name) => {
+    const ext = String(name || '').split('.').pop().toLowerCase();
+    return ext && ext !== String(name).toLowerCase() ? ext.slice(0, 4).toUpperCase() : 'FILE';
+  };
+  const stamp = (t) => {
+    if (!t) return '';
+    const d = new Date(t); const p = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+  const row = (e, isDir) => {
+    const sel = state.filesSel.has(e.path);
+    return el('div', { class:'flrow' + (sel ? ' sel' : ''), onclick: () => {
+      if (state.filesSelecting) {
+        if (state.filesSel.has(e.path)) state.filesSel.delete(e.path); else state.filesSel.add(e.path);
+        render();
+        return;
+      }
+      if (isDir) loadFiles(e.path); else openViewer(e.path, e.name);
     }},
-      el('span', { class:'fico', text: e.kind === 'folder' ? '📁' : '📄' }),
-      el('span', { class:'fname', text: e.name }),
-    ));
+      state.filesSelecting ? el('span', { class:'fselbox', text:'✓' }) : null,
+      el('div', { class:'ftile' + (isDir ? ' dir' : '') }, el('span', { text: isDir ? 'DIR' : extOf(e.name) })),
+      el('div', { class:'fname2' },
+        el('b', { text: e.name }),
+        el('span', { text: stamp(e.modified) || (isDir ? '文件夹' : '文件') })),
+      state.filesSelecting ? null : el('span', { class:'chev', text:'›' }));
+  };
+
+  if (dirsAll.length) {
+    main.append(el('div', { class:'fsect' }, el('b', { text:'文件夹' }), el('span', { text:String(dirsAll.length) })));
+    for (const e of dirsAll) main.append(row(e, true));
   }
-  if (!entries.length) main.append(el('div', { class:'empty', text:'空目录' }));
-
-  main.append(el('div', { class:'cmeta', style:'text-align:center;padding:12px 0',
-    text:'显示隐藏文件' , onclick: () => { state.showHidden = !state.showHidden; render(); } }));
+  if (filesAll.length) {
+    main.append(el('div', { class:'fsect' }, el('b', { text:'文件' }), el('span', { text:String(filesAll.length) })));
+    for (const e of filesAll) main.append(row(e, false));
+  }
+  if (!entriesAll.length) main.append(el('div', { class:'empty', text:'空目录' }));
+  main.append(el('button', { class:'showhidden', text: state.showHidden ? '隐藏隐藏文件' : '显示隐藏文件',
+    onclick: () => { state.showHidden = !state.showHidden; render(); } }));
   wrap.append(main);
-}
 
+  if (state.filesSelecting) {
+    const paths = [...state.filesSel];
+    wrap.append(el('div', { class:'fselbar' },
+      el('span', { class:'t', text: paths.length ? `已选 ${paths.length} 个` : '选择要引用的文件' }),
+      el('button', { text:'引用到会话', onclick: () => {
+        if (!paths.length) { toast('先选几个文件'); return; }
+        const ta = ui && ui.ta;
+        if (!ta) { toast('要先进一个会话，才能把文件引用进去'); return; }
+        const base = (ta.innerText || '').replace(/\u00a0/g, '');
+        const refs = paths.map(p => (/\s/.test(p) ? `"${p}"` : p)).join(' ').trim();
+        if (!refs) { toast('先选文件或文件夹'); return; }
+        ta.textContent = (base.trim() ? base.replace(/\s*$/, '') + ' ' : '') + refs;
+        try { saveDraft(state.sessionId, ta.textContent); } catch {}
+        state.filesSelecting = false; state.filesSel.clear();
+        toast(`已引用 ${paths.length} 个文件`);
+        render();
+      }})));
+  }
+}
 async function previewFile(path, name) {
   const mask = el('div', { class:'mask', onclick: (e) => { if (e.target === mask) mask.remove(); } });
   const box = el('div', { class:'sheet', style:'max-height:80vh;overflow:auto' },
@@ -2031,7 +2322,21 @@ async function openViewer(path, name) {
       if (await copyText(raw)) toast('已复制全文'); else toast('复制失败');
     } }));
 
-  mask.append(head, meta, tools, findbar, pre);
+  const foot = el('div', { class:'vfoot' },
+    el('button', { class:'vbtn', text:'复制全文', onclick: async () => {
+      if (await copyText(raw)) toast('已复制全文'); else toast('复制失败');
+    }}),
+    el('button', { class:'vgo', text:'引用到会话', onclick: () => {
+      const ta = ui && ui.ta;
+      if (!ta) { toast('要先进一个会话，才能引用文件'); return; }
+      const ref = /\s/.test(path) ? `"${path}"` : path;
+      const base = (ta.innerText || '').replace(/\u00a0/g, '');
+      ta.textContent = (base.trim() ? base.replace(/\s*$/, '') + ' ' : '') + ref;
+      try { saveDraft(state.sessionId, ta.textContent); } catch {}
+      close();
+      toast('已引用到输入框');
+    }}));
+  mask.append(head, meta, tools, findbar, pre, foot);
   document.body.append(mask);
 
   try {
@@ -2292,6 +2597,16 @@ function pushHeartbeat() {
   } catch {}
 }
 
+function openSkinSheet() {
+  const cur = (() => { try { return localStorage.getItem(SKIN_KEY) || 'paper'; } catch { return 'paper'; } })();
+  const mark = k => cur === k ? '✓ ' : '';
+  openSheet([
+    { label: mark('auto') + '跟随系统', icon:'🌓', run: () => { applySkin('auto'); toast('皮肤：跟随系统'); } },
+    { label: mark('paper') + '纸面', icon:'◐', run: () => { applySkin('paper'); toast('皮肤：纸面'); } },
+    { label: mark('carbon') + '碳黑', icon:'◑', run: () => { applySkin('carbon'); toast('皮肤：碳黑'); } },
+  ], '皮肤');
+}
+
 function openThemeSheet() {
   const cur = (() => { try { return localStorage.getItem(THEME_KEY) || ''; } catch { return ''; } })();
   const mark = k => cur === k ? '✓ ' : '';
@@ -2343,6 +2658,7 @@ async function openAbout() {
     : '中转';
   openSheet([
     { label:'连接方式', icon:'⇄', run: openConnectionSheet },
+    { label:'皮肤', icon:'◐', run: openSkinSheet },
     { label:'主题', icon:'🎨', run: openThemeSheet },
     { label:'版本自检', icon:'🩺', run: openVersionCheck },
     { label:'通知提醒', icon:'🔔', run: openPushSettings },
@@ -2700,6 +3016,39 @@ function appendTermGroup(main) {
   }
   main.append(box);
 }
+function renderTerminalTab(main) {
+  const items = termAgents.items || [];
+  main.append(el('div', { class:'tbar' },
+    el('b', { text:'终端' }),
+    el('span', { text:String(items.length) }),
+    el('button', { text:'新建终端', onclick: () => newTerminal() })));
+  if (!items.length) {
+    main.append(el('div', { class:'empty', text:'还没有终端会话' }));
+    return;
+  }
+  // 按 agent（claude / codex / dsh …）分组，一眼能看出这个终端在跑什么
+  const groups = new Map();
+  for (const it of items) {
+    const k = (it.agent || '未标注').trim();
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(it);
+  }
+  for (const [name, list] of groups) {
+    main.append(el('div', { class:'fsect' }, el('b', { text:name }), el('span', { text:String(list.length) })));
+    for (const it of list) {
+      const stTxt = it.status === 'working' ? '运行中' : it.status === 'blocked' ? '等你确认' : '空闲';
+      const dotCls = 'dot' + (it.status === 'working' ? ' run' : it.status === 'blocked' ? ' pending' : '');
+      main.append(el('div', { class:'row', onclick: () => openTerminal(it.paneId) },
+        el('span', { class: dotCls }),
+        el('div', { class:'body' },
+          el('div', { class:'t' },
+            el('span', { class:'title', text: it.label || 'tab' }),
+            el('span', { class:'time', text: stTxt })),
+          it.cwd ? el('div', { class:'p', text: it.cwd }) : null),
+        el('button', { class:'rowmore', text:'×', title:'关闭终端', onclick: (ev) => { ev.stopPropagation(); askCloseTerminal(it); } })));
+    }
+  }
+}
 function askCloseTerminal(it) {
   openSheet([
     { label: '\u5173\u95ED\u7EC8\u7AEF\uFF08' + it.label + '\uFF09', icon: '\u00D7', run: () => closeTerminal(it) },
@@ -2844,22 +3193,24 @@ function renderList(wrap, opts = {}) {
     { label:'退出登录', icon:'⏏', run: () => { localStorage.clear(); state.token=''; state.view='list'; render(); } },
   ]) });
   const plus = el('button', { class:'ico', text:'＋', onclick: openNewSessionSheet });
-  if (!opts.noHeader) wrap.append(headerEl('会话', menu, plus));
+  if (!opts.noHeader) wrap.append(heroHeader('会话', state.sessions.length + ' 个会话 · ' + state.workspaces.length + ' 个工作区', el('div', { style:'display:flex;gap:2px' }, plus, menu)));
 
   const main = el('main');
   // 「已归档」页的数据来自 archived=1；当前宿主只返回归档子集，
   // 老宿主返回全量，loadArchived() 会按「是否出现默认列表里的会话」判断并做差集兜底。
   const tabs = el('div', { class:'tabs' },
-    el('b', { class: state.tab === 'archived' ? '' : 'on', text:'全部会话', onclick: () => { state.tab = 'all'; render(); } }),
+    el('b', { class: state.tab === 'all' ? 'on' : '', text:'全部会话', onclick: () => { state.tab = 'all'; render(); } }),
     el('b', { class: state.tab === 'archived' ? 'on' : '', text:'已归档', onclick: () => {
       state.tab = 'archived'; state.archived = null; render(); loadArchived();
     } }),
+    termToken() ? el('b', { class: state.tab === 'terminal' ? 'on' : '', text:'终端', onclick: () => {
+      state.tab = 'terminal'; render(); loadTermAgents();
+    } }) : null,
   );
-  main.append(tabs);
 
   // 搜索：服务端内容检索在这个部署里是关闭的（openAt "never"），
   // 所以本地过滤标题 / 最近一条，并把范围扩到已缓存的消息正文（见 buildSearchResults）
-  const searchInput = el('input', { type:'search', placeholder:'搜索会话（标题 / 预览 / 已缓存消息）…' });
+  const searchInput = el('input', { type:'search', placeholder:'搜索标题或最近一条' });
   searchInput.value = state.searchQ || '';
   searchInput.addEventListener('input', () => {
     const q = searchInput.value.trim().toLowerCase();
@@ -2871,7 +3222,14 @@ function renderList(wrap, opts = {}) {
   });
   // 归档页不显示搜索框：本地搜索的数据源是 state.sessions（不含归档），
   // 摆在那里输入也搜不到东西（以前就是个死控件）
-  if (state.tab !== 'archived') main.append(el('div', { class:'searchrow' }, searchInput));
+  if (state.tab === 'all') main.append(el('div', { class:'searchrow' }, searchInput));
+  main.append(tabs);
+
+  if (state.tab === 'terminal') {
+    renderTerminalTab(main);
+    wrap.append(main);
+    return;
+  }
 
   if (state.tab === 'archived') {
     const items = state.archived;
@@ -2926,8 +3284,10 @@ function renderList(wrap, opts = {}) {
       el('div', { class:'body' },
         el('div', { class:'t' },
           s.pinned && !opts.hidePin ? el('span', { class:'pinmark', text:'📌' }) : null,
+          opts.showWs ? el('span', { class:'wsmark', text: (workspaceOf(s.sessionId) || {}).title || '' }) : null,
           el('span', { class:'title', text: s.title || '(无标题)' }),
           el('span', { class:'time', text: fmtTime(s.updatedAt) })),
+        s.lastMessage && s.lastMessage.text ? el('div', { class:'p', text: plain(String(s.lastMessage.text)).replace(/\s+/g, ' ').trim() }) : null,
       ),
       more);
     // 长按（或桌面右键）出菜单：重命名 / 置顶
@@ -2942,6 +3302,26 @@ function renderList(wrap, opts = {}) {
   }
 
   // 全局置顶：跨工作区聚合到最上方；置顶会话不再在各自文件夹里重复出现
+  // 顶部未读区：跨工作区把所有未读聚合一份，省得挨个文件夹翻
+  const unreadItems = state.sessions.filter(isUnread)
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  if (unreadItems.length) {
+    const ubKey = 'unread:top';
+    const ubClosed = state.collapsed.has(ubKey);
+    const ubHead = el('div', { class: `ghead${ubClosed ? ' closed' : ''}`, onclick: () => {
+      if (state.collapsed.has(ubKey)) state.collapsed.delete(ubKey); else state.collapsed.add(ubKey);
+      localStorage.setItem(LS.collapsed, JSON.stringify([...state.collapsed]));
+      render();
+    }},
+      el('span', { class:'chev', text:'▼' }),
+      el('span', { class:'ubdot' }),
+      el('span', { class:'gname', text:'未读' }),
+      el('span', { class:'count', style:'margin-left:auto', text:String(unreadItems.length) }),
+    );
+    const ubBox = el('div', { class:'group' }, ubHead);
+    if (!ubClosed) for (const s of unreadItems) ubBox.append(sessionRow(s, { hidePin:true, showWs:true }));
+    main.append(ubBox);
+  }
   const pinnedItems = state.sessions.filter(s => s.pinned)
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   if (pinnedItems.length) {
@@ -2953,7 +3333,7 @@ function renderList(wrap, opts = {}) {
       render();
     }},
       el('span', { class:'chev', text:'▼' }),
-      el('span', { text:'📌' }),
+      el('span', { class:'fico', html:NAV_ICONS.pin }),
       el('span', { class:'gname', text:'置顶' }),
       el('span', { class:'count', style:'margin-left:auto', text: String(pinnedItems.length) }),
     );
@@ -2992,9 +3372,13 @@ function renderList(wrap, opts = {}) {
       render();
     }},
       el('span', { class:'chev', text:'▼' }),
-      el('span', { text:'📁' }),
+      el('span', { class:'fico', html:NAV_ICONS.folder }),
       el('span', { class:'gname', text: g.name || '(未命名)' }),
       g.git && g.git.branch ? el('span', { class:'branch', text: g.git.branch }) : null,
+      (() => {
+        const u = g.items.filter(isUnread).length;
+        return u ? el('span', { class:'ubadge', text: String(u) }) : null;
+      })(),
       el('span', { class:'count', style:'margin-left:auto', text: String(g.items.length) }),
     );
     // 长按分组头 → 工作区菜单（重命名 / 删除 / 在此新建）
@@ -3022,7 +3406,6 @@ function renderList(wrap, opts = {}) {
     }
     main.append(box);
   }
-  appendTermGroup(main);
   if (!opts.noPull) installPullToRefresh(main);
   wrap.append(main);
 }
@@ -3394,11 +3777,10 @@ function renderSession(wrap) {
   ]) });
   wrap.append(headerEl(el('span', { class:'httl' }, dot, el('span', { class:'httltext', text: state.sessionTitle })), back, more));
   const metabar = el('div', { class:'metabar' });
-  wrap.append(metabar);
 
   // 标题下的会话用量（数据来自 /session/stats 的 sessionStats）
   function paintMeta() {
-    if (!metabar.isConnected) return;
+    if (!metabar) return;
     const s = state.sessStats;
     const c = state.ctxInfo || {};
     metabar.replaceChildren();
@@ -3677,6 +4059,8 @@ function renderSession(wrap) {
       }});
       state.busy = true;
       await loadMessages();
+      // 发完就收键盘：多数人是发完去读回复，不是连发
+      try { ta.blur(); } catch {}
     } catch (e) {
       state.messages = state.messages.filter(m => m.id !== tmp.id);
       // 发送失败要把内容和附件还回去：网络抖一下不该把用户打的东西吞掉
@@ -3685,7 +4069,8 @@ function renderSession(wrap) {
       renderAttach();
       paintSession();
       toast('发送失败：' + String(e.message || e) + '（内容已保留）');
-    } finally { state.sending = false; sendBtn.disabled = false; ta.focus(); }
+      try { ta.focus(); } catch {}
+    } finally { state.sending = false; sendBtn.disabled = false; }
   }
 
   // contenteditable 没有 input 事件里的 value，粘贴要自己净化成纯文本
@@ -3725,8 +4110,18 @@ function renderSession(wrap) {
     renderAttach();
   });
 
-  const modelRow = el('div', { class:'model', style:'cursor:pointer', onclick: () => openModelPicker() },
-    state.model ? el('b', { text: state.model }) : el('span', { text:'DeepSeek' }), el('span', { text:'⌄' }));
+  // 三颗 chip：工作区 / 模型 / 推理等级（都是现成数据，不造指标）
+  const wsSel = workspaceOf(state.sessionId);
+  const wsName = (wsSel && (wsSel.title || wsSel.path)) ||
+    (state.sessionCwd ? String(state.sessionCwd).split(/[\\/]/).filter(Boolean).pop() : '工作区');
+  const modelShort = String(state.model || '模型').split(' · ')[0].replace(/^DeepSeek[- ]?/i, '');
+  const effortNow = (state.modelMeta && state.modelMeta.reasoningEffort) || '推理';
+  const modelRow = el('button', { class:'chip2', onclick: () => openModelPicker() },
+    el('span', { class:'ci', html:NAV_ICONS.model }), el('b', { text: modelShort }));
+  const effortRow = el('button', { class:'chip2', onclick: () => openModelPicker() },
+    el('b', { text: effortNow }));
+
+
   // 中断运行：正在跑的时候才出现
   const stopBtn = el('button', { class:'stop', text:'■', title:'中断运行', onclick: async () => {
     if (!confirm('中断这次运行？')) return;
@@ -3747,13 +4142,17 @@ function renderSession(wrap) {
     };
     return map[name] || { icon:'🛡', short:name ? String(name).slice(0, 4) : '权限', label:name || '未知', desc:'' };
   };
-  const permBtn = el('button', { type:'button', class:'perm', title:'调整会话权限', onclick: () => openPermissionPicker() }, '🛡 权限');
+  const permBtn = el('button', { type:'button', class:'chip2 permchip', title:'调整会话权限', onclick: () => openPermissionPicker() });
   function paintPerm() {
     const m = permMeta(state.permCurrent);
-    permBtn.textContent = m.icon + ' ' + m.short;
+    const danger = state.permCurrent === 'danger-full-access';
+    const icon = danger ? NAV_ICONS.unlock : NAV_ICONS.shield;
+    permBtn.innerHTML = `<span class="ci">${icon}</span><b>${m.short}</b>`;
     permBtn.title = '会话权限：' + m.label;
-    permBtn.classList.toggle('danger', state.permCurrent === 'danger-full-access');
+    permBtn.classList.toggle('danger', danger);
   }
+  const chips = el('div', { class:'chips' }, modelRow, effortRow, permBtn);
+  paintPerm();
   async function choosePermission(name, label) {
     if (name === 'danger-full-access') {
       openInfoBox('开启完全访问？', [
@@ -3813,10 +4212,9 @@ function renderSession(wrap) {
     el('div', { class:'composer' }, ta,
       el('div', { class:'crow' },
         el('button', { class:'plus', text:'+', onclick: () => fileInput.click() }),
-        permBtn,
-        modelRow,
-        el('div', { class:'sendgroup' }, stopBtn, sendBtn))),
+        chips,        el('div', { class:'sendgroup' }, stopBtn, sendBtn))),
     fileInput,
+    metabar,
   );
 
   // 回到底部 + 新消息提示
@@ -3849,12 +4247,11 @@ function renderSession(wrap) {
     try { new ResizeObserver(syncDockH).observe(dock); } catch {}
   }
 
-  ui = { sessionId: state.sessionId, body, listWrap, cardsWrap, ta, sendBtn, stopBtn, strip, dot, modelEl: modelRow,
+  ui = { sessionId: state.sessionId, body, listWrap, cardsWrap, ta, sendBtn, stopBtn, strip, dot, modelEl: modelRow, effortEl: effortRow,
     qDock, jump, updateJump, loadStats: loadSessionStats, keys: [], nodes: [], cardsKey: '', prevCount: undefined, atBottom: true };
   paintSession({ scroll:'bottom' });
-  // 进会话直接定位到底部 + 聚焦输入框（iOS 上焦点可能被系统拦，忽略即可）
+  // 进会话只定位到底部，不自动聚焦输入框：多数时候是进来看内容的，弹键盘会挡住正文
   requestAnimationFrame(() => { body.scrollTop = body.scrollHeight; });
-  setTimeout(() => { try { ta.focus({ preventScroll: true }); } catch {} }, 120);
 }
 
 // 把「纯工具调用」的连续消息合并成一行步骤，避免一屏都是 ⚙ chip
@@ -4219,7 +4616,7 @@ function renderCard(c) {
     }
     if (d.command) card.append(el('pre', { text: d.command }));
     const acts = el('div', { class:'acts' },
-      el('button', { class:'btn ok', onclick: () => respondApproval(d, 'allowed-once', c) }, '允许一次'));
+      el('button', { class:'btn primary', onclick: () => respondApproval(d, 'allowed-once', c) }, '允许一次'));
     if (d.rememberable) {
       // 第三颗按钮上直接写清"对什么不再问"（Ovis 的做法），别让人猜"这一类"是哪一类
       acts.append(el('button', { class:'btn', style:'font-size:13px;line-height:1.25;padding:8px',
@@ -4357,15 +4754,68 @@ function installPullToRefresh(scroller) {
 }
 
 // ---------------------------------------------------------------- sheet
+const SHEET_ICONS = {
+  '🌓': 'theme', '☀️': 'sun', '🌙': 'moon', '🎨': 'palette', '🛡': 'shield', '🔓': 'unlock',
+  '🤖': 'dot', '📁': 'folder', '📊': 'bars', '⏱': 'clock', '🔔': 'bell', '🩺': 'pulse',
+  '🔗': 'link', '⌘': 'term', 'ⓘ': 'info', '↻': 'refresh', '⟳': 'refresh', '⏏': 'logout',
+  '📌': 'pin', '◈': 'spark', '☑': 'check', '☐': 'box', '↩': 'back', '×': 'close',
+};
+const SHEET_CHECK = '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></svg>';
+
+function sheetIconSVG(name) {
+  const P = {
+    theme: '<circle cx="12" cy="12" r="8"/><path d="M12 4v16"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/>',
+    moon: '<path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5z"/>',
+    palette: '<path d="M12 3.5a8.5 8.5 0 000 17c1.2 0 1.8-.9 1.8-1.9 0-1.9 1.4-2.4 2.7-2.4h1.2a2.8 2.8 0 002.8-2.8c0-5.5-4-9.9-8.5-9.9z"/>',
+    shield: '<path d="M12 3.5l7 2.6v5.4c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9V6.1l7-2.6z"/>',
+    unlock: '<rect x="4.5" y="10.5" width="15" height="9.5" rx="2"/><path d="M8 10.5V7.8a4 4 0 017.6-1.7"/>',
+    dot: '<circle cx="12" cy="12" r="2"/>',
+    folder: '<path d="M3.5 7.5A1.5 1.5 0 015 6h4l2 2.5h8A1.5 1.5 0 0120.5 10v7A1.5 1.5 0 0119 18.5H5A1.5 1.5 0 013.5 17V7.5z"/>',
+    bars: '<path d="M5 19V11M12 19V5M19 19v-6"/>',
+    clock: '<circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/>',
+    bell: '<path d="M6.5 10a5.5 5.5 0 0111 0c0 4 1.5 5.5 1.5 5.5H5s1.5-1.5 1.5-5.5z"/><path d="M10 19a2 2 0 004 0"/>',
+    pulse: '<path d="M3 12h4l2-4 3 8 2-4h7"/>',
+    link: '<path d="M10 14a4 4 0 005.7 0l2.8-2.8a4 4 0 00-5.7-5.7L11.5 6.8"/><path d="M14 10a4 4 0 00-5.7 0L5.5 12.8a4 4 0 005.7 5.7l1.3-1.3"/>',
+    term: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M7.5 10l2.2 2.2-2.2 2.2M12.5 14.5h4"/>',
+    info: '<circle cx="12" cy="12" r="8"/><path d="M12 11v5M12 8h.01"/>',
+    refresh: '<path d="M19 12a7 7 0 11-2-4.9M19 4v4h-4"/>',
+    logout: '<path d="M14 5.5H6.5v13H14M12 12h8M17 8.5l3.5 3.5-3.5 3.5"/>',
+    pin: '<path d="M9 3.5h6l-1 5 3 3v1H7v-1l3-3-1-5z"/><path d="M12 12.5V20"/>',
+    spark: '<path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9L12 3.5z"/>',
+    check: '<path d="M5 12.5l4.5 4.5L19 7"/>',
+    box: '<rect x="4.5" y="4.5" width="15" height="15" rx="3"/>',
+    back: '<path d="M9 6l-5 6 5 6"/><path d="M4 12h14"/>',
+    close: '<path d="M6 6l12 12M18 6L6 18"/>',
+  };
+  const d = P[name];
+  return d ? '<svg viewBox="0 0 24 24">' + d + '</svg>' : '';
+}
+
 function openSheet(items, footerText) {
   const mask = el('div', { class:'mask', onclick: (e) => { if (e.target === mask) close(); } });
   const sheet = el('div', { class:'sheet' });
+  sheet.append(el('div', { class:'grab' }));
+  const txt = String(footerText || '');
+  const isVer = !txt || /^版本\s/.test(txt);
+  if (!isVer) sheet.append(el('div', { class:'shead', text: txt }));
   for (const it of items) {
+    let label = String(it.label == null ? '' : it.label);
+    let checked = !!it.checked;
+    if (label.startsWith('✓ ')) { checked = true; label = label.slice(2); }
+    let icon = null;
+    const raw = String(it.icon || '').trim();
+    if (raw) {
+      const name = SHEET_ICONS[raw];
+      if (name) icon = el('span', { class:'sic', html: sheetIconSVG(name) });
+      else if (!/[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/u.test(raw)) icon = el('span', { class:'sic', text: raw });
+    }
     sheet.append(el('div', { class:'item', onclick: () => { close(); it.run(); } },
-      el('span', { style:'width:22px;text-align:center;color:var(--dim)', text: it.icon || '' }),
-      el('span', { text: it.label })));
+      icon,
+      el('span', { class:'slabel', text: label }),
+      checked ? el('span', { class:'chk', html: SHEET_CHECK }) : null));
   }
-  sheet.append(el('div', { class:'ver', text: footerText || `版本 ${APP_VERSION}` }));
+  if (isVer) sheet.append(el('div', { class:'ver', text: txt || `版本 ${APP_VERSION}` }));
   sheet.append(el('div', { class:'cancel', text:'取消', onclick: close }));
   function close() { mask.remove(); }
   mask.append(sheet);
@@ -4498,7 +4948,11 @@ async function loadModel() {
       if (cur.reasoningEffort) label += ` · ${cur.reasoningEffort}`;
     }
     state.model = label;
-    if (ui.modelEl) ui.modelEl.replaceChildren(el('b', { text: label || '模型' }), el('span', { text:'⌄' }));
+    if (ui.modelEl) {
+      const b = ui.modelEl.querySelector('b');
+      if (b) b.textContent = String(label || '模型').split(' · ')[0].replace(/^DeepSeek[- ]?/i, '');
+    }
+    if (ui.effortEl) ui.effortEl.textContent = (cur && cur.reasoningEffort) || '推理';
   } catch {}
 }
 

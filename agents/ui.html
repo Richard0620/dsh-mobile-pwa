@@ -993,6 +993,9 @@
     } catch {}
     const agp = document.getElementById('agp');
     if (agp && h > 200) agp.style.height = h + 'px';
+    // 键盘弹起（可见高度明显小于窗口）时去掉底部 home indicator 留白
+    const kb = h < (window.innerHeight - 120);
+    document.documentElement.classList.toggle('kb', kb);
   }
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', fitViewport);
