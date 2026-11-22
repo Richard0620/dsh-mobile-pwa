@@ -195,7 +195,7 @@ function readBody(req, limit = 65536) {
 
 function send(res, code, body, type = "application/json; charset=utf-8") {
   const buf = Buffer.isBuffer(body) ? body : Buffer.from(body);
-  res.writeHead(code, { "content-type": type, "content-length": buf.length, "cache-control": "no-store" });
+  res.writeHead(code, { "content-type": type, "content-length": buf.length, "cache-control": "no-store", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff" });
   res.end(buf);
 }
 

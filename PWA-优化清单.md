@@ -338,7 +338,7 @@ node --check $env:TEMP\app.mjs
 
 ### P0 · 可用性（先做）
 
-- [x] A1 token 透传：PWA 打开终端 iframe 时带 `?token=`；agents 页 401 自动重试一次，不再弹输入框
+- [x] A1 token 透传：改为 iframe 加载后 postMessage 握手（不进 URL/日志，v15）；agents 页缺 token 时向父页面请求
 - [x] A2 单头部：embed 模式隐藏 iframe 里的「终端」标题与版本号，只留 `对话/终端`、`新会话`
 - [x] A3 按键行只在终端模式显示；chat 模式隐藏 Enter/Esc/Tab/↑/↓/Ctrl-C 那一排
 - [x] A4 键盘适配：`100dvh` + `visualViewport`，键盘弹出时 composer 贴底、聊天区不被遮挡
@@ -387,7 +387,7 @@ node --check $env:TEMP\app.mjs
 
 - [x] D1 bridge 串行队列与并发限制（DSH_MAX_CONCURRENT=1，v15）
 - [x] D2 `dsh-chat.json` 存储上限与清理（单 pane 保留最近 200 条，v15）
-- [ ] D3 token 存储安全：减少 query 传递、支持轮换
+- [x] D3 token 存储安全：query 传递已移除（postMessage 握手 + no-referrer，v15）；轮换/设备凭据见 D12
 - [ ] D4 SSE 心跳、断线清理、超时
 - [x] D5 子进程超时/取消（5 分钟超时 + `/dsh/stop` kill，v15）
 - [ ] D6 agents 页单文件拆分（当前 ~700 行）
@@ -396,6 +396,8 @@ node --check $env:TEMP\app.mjs
 - [x] D9 禁止 `commit-tree` 提交（会留下 staged 假象、且曾丢过文件），一律在 worktree 里正常 commit（v15）
 - [x] D10 提交前跑 `agents/smoke.ps1`，防 v14 那种丢端点事故（v15）
 - [x] D11 自启路径耦合：Startup 的 `agents-bridge.lnk` 指向 `pwa-e`，worktree 不能随意删；写进 `agents/README`（v15）
+- [ ] D12 token 轮换与设备级凭据（替代共享 token，P2）
+- [x] D13 token.txt 与 env 不一致导致 smoke 401；`start.ps1` 启动时同步（v15）
 
 ### 验收方式
 

@@ -172,7 +172,7 @@
       <div class="title">终端</div>
       <div class="sub" id="conn">connecting…</div>
     </div>
-    <span class="ver">v14</span>
+    <span class="ver">v15</span>
     <span class="grow"></span>
     <div class="seg" id="seg"><button id="vChat">对话</button><button id="vTerm">终端</button></div>
     <button class="chip" id="resetBtn" style="display:none">新会话</button>
@@ -249,6 +249,7 @@
   let chatSig = '';
   let dshState = null;   // {exists, busy, messages, sessionId, ...} for the current pane
   let autoChatPane = '';
+  let started = false;
 
   function E(tag, props = {}, text = '') {
     const n = document.createElement(tag);
@@ -608,7 +609,9 @@
   $('#sel').onchange = (e) => select(e.target.value);
 
   function boot() {
-    if (!token) { gate(true); return; }
+    if (started) return;
+    if (!token) { gate(true); requestToken(); return; }
+    started = true;
     gate(false);
     renderView();
     load().catch((e) => conn(false, e.message));
@@ -619,6 +622,21 @@
     setInterval(() => load().catch(() => {}), 4000);
     fitViewport();
   }
+
+  function requestToken() {
+    try {
+      if (window.parent && window.parent !== window) window.parent.postMessage({ type: 'agents-token-request' }, location.origin);
+    } catch {}
+  }
+
+  window.addEventListener('message', (ev) => {
+    if (ev.origin !== location.origin) return;
+    const d = ev.data || {};
+    if (d.type !== 'agents-token' || typeof d.token !== 'string' || !d.token) return;
+    token = d.token;
+    try { localStorage.setItem('bridge_token', token); } catch {}
+    if (!started) boot(); else gate(false);
+  });
 
   function fitViewport() {
     const vv = window.visualViewport;

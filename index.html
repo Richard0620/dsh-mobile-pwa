@@ -2709,9 +2709,24 @@ async function closeTerminal(it) {
     el('b', { text: '\u7EC8\u7AEF' }),
     el('span', { style: 'flex:1' }),
     el('button', { class: 'ico', text: '\u2715', onclick: () => mask.remove() }));
-  const frame = el('iframe', { class: 'termframe', src: '/agents/?embed=1&pane=' + encodeURIComponent(paneId || '') + '&token=' + encodeURIComponent(termToken() || '') + '&v=' + encodeURIComponent(APP_VERSION) });
+  const frame = el('iframe', { class: 'termframe', src: '/agents/?embed=1&pane=' + encodeURIComponent(paneId || '') + '&v=' + encodeURIComponent(APP_VERSION) });
   mask.append(bar, frame);
   document.body.append(mask);
+  frame.addEventListener('load', () => {
+    try { frame.contentWindow.postMessage({ type: 'agents-token', token: termToken() }, location.origin); } catch {}
+  });
+}
+
+// 子 iframe（/agents/）没有 token 时向父页面要；父页面用 postMessage 回传，避免 token 进 URL 和访问日志。
+if (!window._agentsTokenListener) {
+  window._agentsTokenListener = true;
+  window.addEventListener('message', (ev) => {
+    if (ev.origin !== location.origin) return;
+    const d = ev.data || {};
+    if (d.type !== 'agents-token-request') return;
+    const t = termToken();
+    if (t && ev.source) ev.source.postMessage({ type: 'agents-token', token: t }, location.origin);
+  });
 }
 // 本地搜索：标题 / 最近一条 / **已缓存的消息正文**。
 // 服务端 session/search 在这个部署里是关的（openAt "never"），所以正文只能搜本机
