@@ -157,7 +157,14 @@
   .fname2 span{display:block;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
     font-size:9.5px;color:var(--dim);margin-top:3px}
   .flrow .chev{color:var(--dim);font-size:16px;flex:none}
-  .showhidden{display:block;width:100%;margin:18px 0 6px;padding:11px;border-radius:12px;
+  .fselbox{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--line-2);flex:none;
+    display:grid;place-items:center;color:transparent;font-size:11px}
+  .flrow.sel .fselbox{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+  .fselbar{flex:none;display:flex;align-items:center;gap:10px;margin:8px 14px 0;padding:10px 12px;
+    border-radius:14px;background:var(--accent);color:var(--accent-fg)}
+  .fselbar .t{flex:1;font-size:12.5px;font-weight:600}
+  .fselbar button{font-size:12px;font-weight:600;padding:6px 10px;border-radius:9px;
+    background:color-mix(in srgb,var(--accent-fg) 16%,transparent);color:var(--accent-fg)}  .showhidden{display:block;width:100%;margin:18px 0 6px;padding:11px;border-radius:12px;
     border:1px solid var(--line);background:var(--card);font-size:12.5px;color:var(--dim)}  .settings{flex:1;overflow-y:auto;padding:2px 16px calc(10px + var(--safe-b))}
   .slabel{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);
     font-family:ui-monospace,SFMono-Regular,Consolas,monospace;padding:18px 6px 6px}
@@ -599,7 +606,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v136';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v138';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1115,6 +1122,8 @@ const state = {
   archived: null,
   archivedError: '',
   filesPath: '',
+  filesSelecting: false,
+  filesSel: new Set(),
   filesListing: null,
   filesError: '',
   showHidden: false,
@@ -1842,6 +1851,12 @@ function renderFiles(wrap) {
     if (state.sessionId) { state.view = 'session'; render(); }
     else { state.view = 'list'; render(); refreshAll(); }
   }});
+  const selBtn = el('button', { class:'ico', text: state.filesSelecting ? '取消' : '选择',
+    style:'width:auto;padding:0 8px;font-size:12.5px;font-weight:600', onclick: () => {
+      state.filesSelecting = !state.filesSelecting;
+      if (!state.filesSelecting) state.filesSel.clear();
+      render();
+    }});
   const L = state.filesListing;
   const entriesAll = L ? (L.entries || []).filter(e => !e.hidden || state.showHidden) : [];
   const dirsAll = entriesAll.filter(e => e.kind === 'folder');
@@ -1853,9 +1868,9 @@ function renderFiles(wrap) {
     return p ? p.split(/[\\/]/).filter(Boolean).pop() : '';
   })();
   const sub = L ? `${dirsAll.length} 个文件夹 · ${filesAll.length} 个文件` : '加载中…';
-  wrap.append(heroHeader('文件', (wsName ? wsName + ' · ' : '') + sub, back));
+  wrap.append(heroHeader('文件', (wsName ? wsName + ' · ' : '') + sub,
+    el('div', { style:'display:flex;gap:2px;align-items:center' }, selBtn, back)));
 
-  // 路径 chips：点任意一级跳回该层
   const crumbs = el('div', { class:'crumbrow' });
   const cr = (L && L.crumbs) || [];
   cr.forEach((c, i) => {
@@ -1878,18 +1893,26 @@ function renderFiles(wrap) {
   };
   const stamp = (t) => {
     if (!t) return '';
-    const d = new Date(t);
-    const p = n => String(n).padStart(2, '0');
+    const d = new Date(t); const p = n => String(n).padStart(2, '0');
     return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
   };
-  const row = (e, isDir) => el('div', { class:'flrow', onclick: () => {
-    if (isDir) loadFiles(e.path); else previewFile(e.path, e.name);
-  }},
-    el('div', { class:'ftile' + (isDir ? ' dir' : '') }, el('span', { text: isDir ? 'DIR' : extOf(e.name) })),
-    el('div', { class:'fname2' },
-      el('b', { text: e.name }),
-      el('span', { text: stamp(e.modified) || (isDir ? '文件夹' : '文件') })),
-    el('span', { class:'chev', text:'›' }));
+  const row = (e, isDir) => {
+    const sel = state.filesSel.has(e.path);
+    return el('div', { class:'flrow' + (sel ? ' sel' : ''), onclick: () => {
+      if (state.filesSelecting) {
+        if (state.filesSel.has(e.path)) state.filesSel.delete(e.path); else state.filesSel.add(e.path);
+        render();
+        return;
+      }
+      if (isDir) loadFiles(e.path); else previewFile(e.path, e.name);
+    }},
+      state.filesSelecting ? el('span', { class:'fselbox', text:'✓' }) : null,
+      el('div', { class:'ftile' + (isDir ? ' dir' : '') }, el('span', { text: isDir ? 'DIR' : extOf(e.name) })),
+      el('div', { class:'fname2' },
+        el('b', { text: e.name }),
+        el('span', { text: stamp(e.modified) || (isDir ? '文件夹' : '文件') })),
+      state.filesSelecting ? null : el('span', { class:'chev', text:'›' }));
+  };
 
   if (dirsAll.length) {
     main.append(el('div', { class:'fsect' }, el('b', { text:'文件夹' }), el('span', { text:String(dirsAll.length) })));
@@ -1900,10 +1923,28 @@ function renderFiles(wrap) {
     for (const e of filesAll) main.append(row(e, false));
   }
   if (!entriesAll.length) main.append(el('div', { class:'empty', text:'空目录' }));
-
   main.append(el('button', { class:'showhidden', text: state.showHidden ? '隐藏隐藏文件' : '显示隐藏文件',
     onclick: () => { state.showHidden = !state.showHidden; render(); } }));
   wrap.append(main);
+
+  if (state.filesSelecting) {
+    const paths = [...state.filesSel];
+    wrap.append(el('div', { class:'fselbar' },
+      el('span', { class:'t', text: paths.length ? `已选 ${paths.length} 个` : '选择要引用的文件' }),
+      el('button', { text:'引用到会话', onclick: () => {
+        if (!paths.length) { toast('先选几个文件'); return; }
+        const ta = ui && ui.ta;
+        if (!ta) { toast('要先进一个会话，才能把文件引用进去'); return; }
+        const base = (ta.innerText || '').replace(/\u00a0/g, '');
+        const refs = paths.map(p => (/\s/.test(p) ? `"${p}"` : p)).join(' ').trim();
+        if (!refs) { toast('先选文件或文件夹'); return; }
+        ta.textContent = (base.trim() ? base.replace(/\s*$/, '') + ' ' : '') + refs;
+        try { saveDraft(state.sessionId, ta.textContent); } catch {}
+        state.filesSelecting = false; state.filesSel.clear();
+        toast(`已引用 ${paths.length} 个文件`);
+        render();
+      }})));
+  }
 }
 async function previewFile(path, name) {
   const mask = el('div', { class:'mask', onclick: (e) => { if (e.target === mask) mask.remove(); } });
