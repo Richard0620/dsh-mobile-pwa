@@ -384,7 +384,9 @@
   /* 抽屉底部：图标按钮一行放下（通知入口收进「设置」里，不再占一格） */
   .drfoot.icons{flex-wrap:nowrap;justify-content:space-around;align-items:center;gap:4px;
     padding:8px 10px calc(8px + var(--safe-b))}
-  .drfoot .drbtn .bi{display:inline-flex;align-items:center}
+  .drfoot .drbtn > svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.6;
+    stroke-linecap:round;stroke-linejoin:round;flex:none}
+  .drfoot.icons .drbtn > svg{width:21px;height:21px}  .drfoot .drbtn .bi{display:inline-flex;align-items:center}
   .drfoot .drbtn .bi svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.6;
     stroke-linecap:round;stroke-linejoin:round}
   .drfoot.icons .drbtn .bi svg{width:21px;height:21px}
