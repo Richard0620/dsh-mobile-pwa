@@ -2567,7 +2567,6 @@ function openDrawer() {
     iconBtn('gear', '设置', () => { closeDrawer(); openAbout(); }),
     iconBtn('bars', '统计', () => { closeDrawer(); openStats(); }),
     iconBtn('folder', '文件', () => { closeDrawer(); openFileDrawer(state.sessionCwd || ''); }),
-    iconBtn('term', '终端', () => { closeDrawer(); location.href = '/agents/'; }),
     iconBtn('refresh', '重载', () => { closeDrawer(); reloadApp(); }),
   );
 
