@@ -205,7 +205,9 @@
   .row:active{background:var(--bubble)}
   .row .body{flex:1;min-width:0}
   .row .t{display:flex;align-items:center;gap:7px}
+  .row .tmain{flex:1;min-width:0;display:flex;align-items:center;gap:7px}
   .row .title{font-size:15px;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+  .row .tmain .title{flex:0 1 auto;min-width:0}
   .row .time{font-size:10.5px;color:var(--dim);flex:none;
     font-family:ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.02em}
   .row .dot{margin-top:0}
@@ -357,6 +359,11 @@
   .vcount{font-size:11px;color:var(--dim);min-width:48px;text-align:center}
   .vbody{flex:1;overflow:auto;margin:0;padding:6px 8px calc(16px + var(--safe-b));
     font:12px/1.55 ui-monospace,Consolas,monospace;counter-reset:vline}
+  .viewer .vmd{display:none;flex:1;overflow:auto;padding:12px 14px calc(18px + var(--safe-b));
+    font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;color:#E7E5DA}
+  .viewer .vmd .md{font-size:15px;line-height:1.65;color:#E7E5DA}
+  .viewer .vmd .md code{background:#1b1f27;color:#e6e9ef}
+  .viewer .vmd .md pre.code{margin:10px 0}
   .vbody .vline{counter-increment:vline;white-space:pre-wrap;word-break:break-word;
     padding-left:3.4em;text-indent:-3.4em}
   .vbody.nowrap .vline{white-space:pre;text-indent:0;padding-left:0}
@@ -470,6 +477,13 @@
     border-radius:50%;background:rgba(255,255,255,.16);color:#fff;display:grid;place-items:center;font-size:15px}
   .lightbox .lbhint{position:absolute;bottom:calc(20px + var(--safe-b));left:0;right:0;text-align:center;
     color:rgba(255,255,255,.62);font-size:12px;pointer-events:none}
+  .lightbox .lbcount{position:absolute;top:calc(15px + var(--safe-t));left:50%;transform:translateX(-50%);
+    z-index:3;color:#fff;font-size:12px;padding:3px 10px;border-radius:999px;
+    background:rgba(0,0,0,.55);pointer-events:none;white-space:nowrap}
+  .lightbox .lbnav{position:absolute;top:50%;transform:translateY(-50%);width:36px;height:46px;
+    border-radius:12px;background:rgba(255,255,255,.14);color:#fff;display:grid;place-items:center;
+    font-size:24px;line-height:1;z-index:2}
+  .lightbox .lbnav.prev{left:10px}.lightbox .lbnav.next{right:10px}
   .md .imgph{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--dim);
     border:1px dashed var(--line);border-radius:8px;padding:2px 8px;margin:2px 0}
   /* 视频/文件附件：上传后正文里只有一条路径，气泡里渲染成文件卡 */
@@ -665,7 +679,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v164';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v165';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1165,7 +1179,6 @@ const state = {
   poll: null,
   lastPaint: 0,
   pending: [],
-  debug: false,
   unseen: 0,
   foreign: new Map(),
   attn: 0,
@@ -1519,17 +1532,6 @@ function paintOpenDrawer() {
 
 // 键盘适配：iOS 上键盘不改变 layout viewport，只改 visualViewport。
 // 用它的高度设 --vvh，让 .app 正好等于可见区域，输入框就贴在键盘上方，不会留一条缝。
-// 键盘诊断：把 iOS 实际给的几何值显示在输入框上方（菜单里开关）
-function debugText() {
-  const vv = window.visualViewport;
-  const de = document.documentElement;
-  const dock = document.querySelector('.dock');
-  const pad = dock ? getComputedStyle(dock).paddingBottom : '-';
-  return `ih=${window.innerHeight} vv=${vv ? Math.round(vv.height) : '-'} off=${vv ? Math.round(vv.offsetTop) : '-'} `
-    + `sy=${Math.round(window.scrollY)} app=${Math.round((document.querySelector('.app') || {}).clientHeight || 0)} `
-    + `dockPad=${pad} kb=${de.classList.contains('kb-open') ? 1 : 0} maxH=${window.__maxH || '-'} vvh=${de.style.getPropertyValue('--vvh') || '-'}`;
-}
-
 function installViewportSync() {
   const vv = window.visualViewport;
   const de = document.documentElement;
@@ -1570,7 +1572,6 @@ function installViewportSync() {
       setTimeout(pin, 260);
       setTimeout(pin, 700);
     }
-    if (state.debug && ui.strip) ui.strip.textContent = debugText();
   };
   vv && vv.addEventListener('resize', apply);
   vv && vv.addEventListener('scroll', apply);
@@ -2294,11 +2295,27 @@ async function openViewer(path, name) {
   const title = el('b', { class:'vtitle', text: name || path });
   const meta = el('div', { class:'vmeta' });
   const pre = el('pre', { class:'vbody' });
+  const isMd = /\.(md|markdown)$/i.test(name || path);
+  const mdBody = el('div', { class:'vmd md' });
+  let mdMode = isMd;
   const findbar = el('div', { class:'vfind' });
   let raw = '';
   let wrapOn = true;
 
   const close = () => mask.remove();
+  const mdToggle = isMd ? el('button', { class:'vtool', text:'源码', onclick: () => {
+    mdMode = !mdMode;
+    syncView();
+  } }) : null;
+  function syncView() {
+    pre.style.display = mdMode ? 'none' : '';
+    mdBody.style.display = mdMode ? 'block' : 'none';
+    if (mdToggle) {
+      mdToggle.textContent = mdMode ? '源码' : '预览';
+      mdToggle.classList.toggle('on', mdMode);
+    }
+    findbar.classList.remove('on');
+  }
   const head = el('div', { class:'vhead' },
     el('button', { class:'ico', text:'‹', onclick: close }),
     title,
@@ -2308,15 +2325,17 @@ async function openViewer(path, name) {
     } }));
 
   const tools = el('div', { class:'vtools' },
+    mdToggle,
     el('button', { class:'vtool on', text:'折行', onclick: (e) => {
       wrapOn = !wrapOn;
       e.target.classList.toggle('on', wrapOn);
       pre.classList.toggle('nowrap', !wrapOn);
     } }),
     el('button', { class:'vtool', text:'查找', onclick: () => {
-      findbar.classList.toggle('on');
+      if (mdMode) { mdMode = false; syncView(); }
+      findbar.classList.add('on');
       const inp = findbar.querySelector('input');
-      if (findbar.classList.contains('on') && inp) inp.focus();
+      if (inp) inp.focus();
     } }),
     el('button', { class:'vtool', text:'复制全文', onclick: async () => {
       if (await copyText(raw)) toast('已复制全文'); else toast('复制失败');
@@ -2336,7 +2355,7 @@ async function openViewer(path, name) {
       close();
       toast('已引用到输入框');
     }}));
-  mask.append(head, meta, tools, findbar, pre, foot);
+  mask.append(head, meta, tools, findbar, pre, mdBody, foot);
   document.body.append(mask);
 
   try {
@@ -2346,8 +2365,14 @@ async function openViewer(path, name) {
     return;
   }
   const ext = String(name || path).split('.').pop().toLowerCase();
-  meta.textContent = `${path} · ${ext}${raw.length > 40000 ? ' · 已截断到 4 万字符' : ''}`;
+  const metaText = `${path} · ${ext}${raw.length > 40000 ? ' · 已截断到 4 万字符' : ''}`;
+  meta.textContent = metaText + (isMd ? ' · Markdown 预览' : '');
   const content = raw.length > 40000 ? raw.slice(0, 40000) : raw;
+  if (isMd) {
+    mdBody.innerHTML = mdToHtml(content);
+    decorateCodeCopies(mdBody);
+  }
+  syncView();
 
   // 逐行渲染（带行号），行内做轻量高亮
   const lines = content.split('\n');
@@ -3284,8 +3309,9 @@ function renderList(wrap, opts = {}) {
       el('div', { class:'body' },
         el('div', { class:'t' },
           s.pinned && !opts.hidePin ? el('span', { class:'pinmark', text:'📌' }) : null,
-          opts.showWs ? el('span', { class:'wsmark', text: (workspaceOf(s.sessionId) || {}).title || '' }) : null,
-          el('span', { class:'title', text: s.title || '(无标题)' }),
+          el('div', { class:'tmain' },
+            el('span', { class:'title', text: s.title || '(无标题)' }),
+            opts.showWs ? el('span', { class:'wsmark', text: (workspaceOf(s.sessionId) || {}).title || '' }) : null),
           el('span', { class:'time', text: fmtTime(s.updatedAt) })),
         s.lastMessage && s.lastMessage.text ? el('div', { class:'p', text: plain(String(s.lastMessage.text)).replace(/\s+/g, ' ').trim() }) : null,
       ),
@@ -3421,13 +3447,22 @@ let ui = { sessionId:null, body:null, listWrap:null, cardsWrap:null, ta:null, se
 //   - touch-action:none + 非 passive 的 touchmove：否则 iOS Safari 会把双指手势抢去缩放整个页面
 //   - 双击/拖动后的合成 click 不能顺手关掉浮层（用 moved / lastToggle 挡掉）
 //   - 平移边界按「图片显示尺寸 × (scale-1)/2」夹住，放大后不会把图拖出屏幕找不回来
-function openImageFull(src) {
-  const img = el('img', { src, alt: '' });
-  const hint = el('div', { class:'lbhint', text:'双指缩放 · 双击放大 · 点空白处关闭' });
+function openImageFull(src, gallery, startIndex) {
+  const list = (Array.isArray(gallery) && gallery.length ? gallery : [src]).slice();
+  let idx = Number.isInteger(startIndex) ? startIndex : list.indexOf(src);
+  if (idx < 0 || idx >= list.length) idx = 0;
+  const img = el('img', { src: list[idx], alt: '' });
+  const count = el('div', { class:'lbcount', text: list.length > 1 ? `${idx + 1} / ${list.length}` : '' });
+  const hint = el('div', { class:'lbhint' });
+  const prevBtn = list.length > 1 ? el('button', { class:'lbnav prev', text:'‹', onclick: (e) => { e.stopPropagation(); show(idx - 1); } }) : null;
+  const nextBtn = list.length > 1 ? el('button', { class:'lbnav next', text:'›', onclick: (e) => { e.stopPropagation(); show(idx + 1); } }) : null;
   const mask = el('div', { class:'lightbox' },
     img,
     el('div', { class:'lbclose', text:'✕', onclick: (e) => { e.stopPropagation(); mask.remove(); } }),
+    count,
     hint,
+    prevBtn,
+    nextBtn,
   );
   document.body.append(mask);
 
@@ -3436,6 +3471,7 @@ function openImageFull(src) {
   let mode = '', sx = 0, sy = 0, ox = 0, oy = 0;
   let pinchDist = 0, pinchScale = 1;
   let moved = false, lastTap = 0, lastToggle = 0;
+  let swipeDx = 0, swipeDy = 0;
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 
@@ -3449,9 +3485,17 @@ function openImageFull(src) {
     img.style.transform = `translate3d(${tx}px,${ty}px,0) scale(${scale})`;
     hint.textContent = scale > 1.01
       ? '放大中 · 单指拖动 · 双击还原'
-      : '双指缩放 · 双击放大 · 点空白处关闭';
+      : (list.length > 1 ? '左右滑动切换 · 双指缩放 · 点空白处关闭' : '双指缩放 · 双击放大 · 点空白处关闭');
   }
   function reset() { scale = 1; tx = 0; ty = 0; apply(); }
+  function show(i) {
+    if (list.length < 2) return;
+    idx = (i + list.length) % list.length;
+    img.src = list[idx];
+    count.textContent = `${idx + 1} / ${list.length}`;
+    reset();
+  }
+  apply();
   function toggleZoom() {
     lastToggle = Date.now();
     if (scale > 1.01) reset();
@@ -3460,6 +3504,7 @@ function openImageFull(src) {
 
   mask.addEventListener('touchstart', (e) => {
     moved = false;
+    swipeDx = 0; swipeDy = 0;
     if (e.touches.length >= 2) {
       mode = 'pinch';
       pinchDist = dist(e.touches[0], e.touches[1]);
@@ -3485,6 +3530,8 @@ function openImageFull(src) {
         e.preventDefault();
         tx = ox + dx; ty = oy + dy;
         apply();
+      } else {
+        swipeDx = dx; swipeDy = dy;
       }
     }
   }, { passive: false });
@@ -3496,6 +3543,10 @@ function openImageFull(src) {
       return;
     }
     mode = '';
+    if (scale <= 1.01 && Math.abs(swipeDx) > 60 && Math.abs(swipeDx) > Math.abs(swipeDy)) {
+      show(idx + (swipeDx < 0 ? 1 : -1));
+      return;
+    }
     if (moved) return;
     const t = e.changedTouches && e.changedTouches[0];
     if (t && t.target === img) {
@@ -3523,6 +3574,14 @@ function openImageFull(src) {
 
 // 正文图：dsh-local-image 的编号 → 字节。带鉴权头所以只能 fetch 成 data URL，<img src> 直接引会 401。
 const imgCache = new Map();
+// 同一 .mholder（一条回复/一条用户消息）里的图片作为一组，支持大图里左右滑动
+function openImageFromNode(node) {
+  const holder = node.closest('.mholder') || node.closest('.msg') || document;
+  const els = [...holder.querySelectorAll('img')].filter(i => i.src && (i.dataset.lid || i.dataset.att || i.closest('.md') || i.closest('.imgrow')));
+  const list = els.map(i => i.src);
+  const idx = Math.max(0, els.indexOf(node));
+  openImageFull(list[idx] || node.src, list, idx);
+}
 async function hydrateImages(rootEl) {
   for (const node of [...rootEl.querySelectorAll('img[data-lid]')]) {
     if (node.dataset.loaded) continue;
@@ -3536,7 +3595,7 @@ async function hydrateImages(rootEl) {
         imgCache.set(id, url);
       }
       node.src = url;
-      node.addEventListener('click', () => openImageFull(node.src));
+      node.addEventListener('click', () => openImageFromNode(node));
     } catch (e) {
       node.replaceWith(el('span', { class:'imgph', text:'🖼 图片取不回来' }));
     }
@@ -3614,7 +3673,7 @@ async function hydrateAttachments(rootEl) {
         attCache.set(id, url);
       }
       node.src = url;
-      node.addEventListener('click', () => openImageFull(node.src));
+      node.addEventListener('click', () => openImageFromNode(node));
     } catch {
       node.replaceWith(el('span', { class:'imgph', text:'🖼 图片已不可读' }));
     }
@@ -3765,13 +3824,7 @@ function renderSession(wrap) {
   const more = el('button', { class:'ico', text:'⋯', onclick: () => openSheet([
     { label:'刷新消息', icon:'⟳', run: () => loadMessages(true) },
     { label:'文件', icon:'📁', run: () => openFileDrawer(state.sessionCwd || '') },
-    { label:'会话权限', icon:'🛡', run: openPermissionPicker },
     { label:'重新加载', icon:'↻', run: reloadApp },
-    { label:'键盘诊断', icon:'⌨', run: () => {
-      state.debug = !state.debug;
-      if (ui.strip) ui.strip.textContent = state.debug ? debugText() : '';
-      if (state.debug) setInterval(() => { if (state.debug && ui.strip) ui.strip.textContent = debugText(); }, 400);
-    } },
     { label:'恢复链接', icon:'🔗', run: openRecovery },
     { label:'回到列表', icon:'‹', run: () => { state.live?.close(); clearInterval(state.poll); state.view='list'; ui.sessionId=null; render(); refreshAll(); } },
   ]) });
@@ -4796,9 +4849,9 @@ function openSheet(items, footerText) {
   const mask = el('div', { class:'mask', onclick: (e) => { if (e.target === mask) close(); } });
   const sheet = el('div', { class:'sheet' });
   sheet.append(el('div', { class:'grab' }));
-  const txt = String(footerText || '');
-  const isVer = !txt || /^版本\s/.test(txt);
-  if (!isVer) sheet.append(el('div', { class:'shead', text: txt }));
+  const txt = String(footerText || '').trim();
+  const isVer = /^版本\s/.test(txt);
+  if (txt && !isVer) sheet.append(el('div', { class:'shead', text: txt }));
   for (const it of items) {
     let label = String(it.label == null ? '' : it.label);
     let checked = !!it.checked;
