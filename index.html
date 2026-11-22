@@ -16,29 +16,42 @@
   try {
     var t = localStorage.getItem('dsh.theme');
     if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+    var sk = localStorage.getItem('dsh.skin');
+    if (sk === 'carbon' || sk === 'paper') document.documentElement.dataset.skin = sk;
   } catch (e) {}
 </script>
 <style>
   :root{
-    --bg:#f7f7f8; --card:#ffffff; --fg:#111318; --dim:#8a8f98; --line:#e9e9ee;
-    --bubble:#ededf0; --accent:#2f6bff; --accent-2:#5b8cff; --ok:#2ea043; --bad:#e5484d; --warn:#b58100;
     --r-card:24px; --r-bubble:20px;
     --safe-t: env(safe-area-inset-top, 0px); --safe-b: env(safe-area-inset-bottom, 0px);
+    /* 皮肤：纸面（默认）。暖灰纸面 + 墨黑强调，层级靠字重与 1px 细线 */
+    --bg:#F6F5F1; --card:#FFFFFF; --fg:#1A1A16; --dim:#8C8A7F; --line:#E5E2D8;
+    --bubble:#ECEAE2; --accent:#1A1A16; --accent-fg:#FFFFFF; --accent-2:#5E5D54;
+    --ok:#2E6B3F; --bad:#A33B31; --warn:#8A5A12;
   }
   @media (prefers-color-scheme: dark){
-    :root{
-      --bg:#0e1014; --card:#171a20; --fg:#e8eaee; --dim:#8d94a0; --line:#242933;
-      --bubble:#22262e; --accent:#4f8cff; --accent-2:#6ea4ff; --ok:#3fb950; --bad:#f85149; --warn:#d29922;
+    :root:not([data-theme="light"]):not([data-skin="carbon"]){
+      --bg:#0E0E0B; --card:#171714; --fg:#F0EEE6; --dim:#7B786D; --line:#2A2A23;
+      --bubble:#24241E; --accent:#F0EEE6; --accent-fg:#171714; --accent-2:#ACA99D;
+      --ok:#7CBF90; --bad:#E0837A; --warn:#D9AC57;
     }
   }
   /* 手动主题：覆盖系统配色；auto 时不设 data-theme，仍走上面的媒体查询 */
-  :root[data-theme="dark"]{
-    --bg:#0e1014; --card:#171a20; --fg:#e8eaee; --dim:#8d94a0; --line:#242933;
-    --bubble:#22262e; --accent:#4f8cff; --accent-2:#6ea4ff; --ok:#3fb950; --bad:#f85149; --warn:#d29922;
+  :root[data-theme="dark"]:not([data-skin="carbon"]){
+    --bg:#0E0E0B; --card:#171714; --fg:#F0EEE6; --dim:#7B786D; --line:#2A2A23;
+    --bubble:#24241E; --accent:#F0EEE6; --accent-fg:#171714; --accent-2:#ACA99D;
+    --ok:#7CBF90; --bad:#E0837A; --warn:#D9AC57;
   }
-  :root[data-theme="light"]{
-    --bg:#f7f7f8; --card:#ffffff; --fg:#111318; --dim:#8a8f98; --line:#e9e9ee;
-    --bubble:#ededf0; --accent:#2f6bff; --accent-2:#5b8cff; --ok:#2ea043; --bad:#e5484d; --warn:#b58100;
+  :root[data-theme="light"]:not([data-skin="carbon"]){
+    --bg:#F6F5F1; --card:#FFFFFF; --fg:#1A1A16; --dim:#8C8A7F; --line:#E5E2D8;
+    --bubble:#ECEAE2; --accent:#1A1A16; --accent-fg:#FFFFFF; --accent-2:#5E5D54;
+    --ok:#2E6B3F; --bad:#A33B31; --warn:#8A5A12;
+  }
+  /* 皮肤：碳黑。近黑底 + 荧光绿强调，恒为深色，不跟系统配色走 */
+  :root[data-skin="carbon"]{
+    --bg:#0B0C0E; --card:#121417; --fg:#EAE8DF; --dim:#6E726C; --line:#24272C;
+    --bubble:#171A1E; --accent:#C6F04E; --accent-fg:#0B0C0E; --accent-2:#9FE07C;
+    --ok:#9FE07C; --bad:#F07C6C; --warn:#E3BA5C;
   }
   /* 大屏手机（16 Pro Max 这类 430pt+）：正文字号与内边距略微放大，行宽不至于太松 */
   @media (min-width: 430px){
@@ -126,7 +139,7 @@
   .qprev{flex:1;min-width:0;font-size:13px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .qchev{flex:none;font-size:11px;color:var(--dim)}
   .qmini{font-size:11.5px;color:var(--dim);padding:3px 8px;border-radius:999px;border:1px solid var(--line);background:var(--bg)}
-  .qmini.primary{color:#fff;background:var(--accent);border-color:var(--accent)}
+  .qmini.primary{color:var(--accent-fg);background:var(--accent);border-color:var(--accent)}
   .qacts{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px}
   .qtext{font-size:14.5px;color:var(--fg);white-space:pre-wrap;word-break:break-word;opacity:.9}
 
@@ -220,7 +233,7 @@
   .rproots{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 8px}
   .rproot{font-size:12px;padding:2px 10px;border:1px solid var(--line);border-radius:999px;
     background:var(--card);color:var(--dim)}
-  .rproot.on{color:#fff;background:var(--accent);border-color:var(--accent)}
+  .rproot.on{color:var(--accent-fg);background:var(--accent);border-color:var(--accent)}
 
   /* 全屏文件查看器 */
   .viewer{position:fixed;inset:0;z-index:1100;background:var(--bg);display:flex;flex-direction:column}
@@ -304,7 +317,7 @@
   .has-attn{position:relative}
   .has-attn::after{content:attr(data-attn-n);position:absolute;top:0;right:-2px;min-width:15px;height:15px;
     padding:0 3px;border-radius:8px;display:grid;place-items:center;font-size:9px;font-weight:700;line-height:1;
-    color:#fff;background:var(--accent);box-shadow:0 0 0 2px var(--bg);letter-spacing:0}
+    color:var(--accent-fg);background:var(--accent);box-shadow:0 0 0 2px var(--bg);letter-spacing:0}
   .has-attn.attn-pending::after{background:var(--warn);color:#1a1a1a}
   .has-attn.attn-failed::after{background:var(--bad)}
   .has-attn.attn-done::after{background:var(--accent)}
@@ -400,7 +413,7 @@
   .acts{display:flex;gap:8px;margin-top:11px}
   .btn{flex:1;text-align:center;padding:10px;border-radius:12px;border:1px solid var(--line);
     background:var(--card);font-size:14px;font-weight:600}
-  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
   .btn.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,var(--line))}
   .btn.no{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,var(--line))}
   .qblock{padding:8px 0 4px;border-top:1px dashed var(--line)}
@@ -450,7 +463,7 @@
   .model b{color:var(--fg);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .pill{font-size:11px;color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent);
     border-radius:6px;padding:1px 6px;flex:none}
-  .send{width:34px;height:34px;border-radius:50%;background:var(--accent);color:#fff;display:grid;
+  .send{width:34px;height:34px;border-radius:50%;background:var(--accent);color:var(--accent-fg);display:grid;
     place-items:center;font-size:16px;flex:none;margin-left:auto;box-shadow:0 2px 8px color-mix(in srgb,var(--accent) 35%,transparent)}
   .send:disabled{opacity:.4;box-shadow:none}
   .stop{width:34px;height:34px;border-radius:50%;background:var(--bubble);color:var(--bad);
@@ -504,7 +517,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v123';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v124';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -525,6 +538,14 @@ function applyTheme(mode) {
   if (v) document.documentElement.dataset.theme = v;
   else delete document.documentElement.dataset.theme;
   try { localStorage.setItem(THEME_KEY, v); } catch {}
+}
+
+// 皮肤：paper（纸面，跟系统浅/深）| carbon（碳黑，恒深色）。只换 token，不改结构。
+const SKIN_KEY = 'dsh.skin';
+function applySkin(id) {
+  const v = id === 'carbon' ? 'carbon' : 'paper';
+  document.documentElement.dataset.skin = v;
+  try { localStorage.setItem(SKIN_KEY, v); } catch {}
 }
 
 function saveListCache(sessions) {
@@ -2275,6 +2296,15 @@ function pushHeartbeat() {
   } catch {}
 }
 
+function openSkinSheet() {
+  const cur = (() => { try { return localStorage.getItem(SKIN_KEY) || 'paper'; } catch { return 'paper'; } })();
+  const mark = k => cur === k ? '✓ ' : '';
+  openSheet([
+    { label: mark('paper') + '纸面', icon:'◐', run: () => { applySkin('paper'); toast('皮肤：纸面'); } },
+    { label: mark('carbon') + '碳黑', icon:'◑', run: () => { applySkin('carbon'); toast('皮肤：碳黑'); } },
+  ], '皮肤');
+}
+
 function openThemeSheet() {
   const cur = (() => { try { return localStorage.getItem(THEME_KEY) || ''; } catch { return ''; } })();
   const mark = k => cur === k ? '✓ ' : '';
@@ -2326,6 +2356,7 @@ async function openAbout() {
     : '中转';
   openSheet([
     { label:'连接方式', icon:'⇄', run: openConnectionSheet },
+    { label:'皮肤', icon:'◐', run: openSkinSheet },
     { label:'主题', icon:'🎨', run: openThemeSheet },
     { label:'版本自检', icon:'🩺', run: openVersionCheck },
     { label:'通知提醒', icon:'🔔', run: openPushSettings },
