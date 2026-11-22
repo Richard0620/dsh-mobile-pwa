@@ -52,7 +52,8 @@ mkdir -p "$STAGE"
 cp index.html sw.js manifest.webmanifest "$STAGE"/
 cp icon-192.png icon-512.png icon-maskable-512.png apple-touch-icon.png icon-dsh.ico "$STAGE"/
 
-rsync -a --delete "$STAGE"/ "$TARGET"/
+# 保留 /preview/ 分支预览目录，不被主站部署清掉
+rsync -a --delete --exclude 'preview/' "$STAGE"/ "$TARGET"/
 
 {
   echo "app=$APP"
