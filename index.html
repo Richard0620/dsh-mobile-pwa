@@ -1191,6 +1191,7 @@ const state = {
   filesPath: '',
   filesSelecting: false,
   filesSel: new Set(),
+  subPage: '',
   filesListing: null,
   filesError: '',
   showHidden: false,
@@ -1467,6 +1468,99 @@ function heroHeader(title, sub, action) {
     action ? el('div', { class:'acts' }, action) : null);
 }
 
+async function renderSubPage(wrap) {
+  const page = state.subPage || 'conn';
+  const titles = { conn:'连接', push:'通知', pushdiag:'推送诊断', about:'关于' };
+  const back = el('button', { class:'ico', text:'‹', title:'返回设置', onclick: () => {
+    state.view = 'settings'; state.subPage = ''; render();
+  }});
+  wrap.append(heroHeader(titles[page] || '设置', '', back));
+  const main = el('div', { class:'settings' });
+  wrap.append(main);
+
+  const group = (...rows) => el('div', { class:'groupcard' }, ...rows);
+  const row = (title, desc, value, run) => el('button', { class:'srow', onclick: run },
+    el('div', { class:'st' }, el('b', { text: title }), desc ? el('span', { text: desc }) : null),
+    value ? el('span', { class:'sv', text: value }) : null);
+  const sw = (title, desc, on, run) => el('div', { class:'srow' },
+    el('div', { class:'st' }, el('b', { text: title }), desc ? el('span', { text: desc }) : null),
+    el('span', { class:'tgl' + (on ? ' on' : ''), onclick: run }));
+
+  if (page === 'conn') {
+    const modeLabel = state.mode === 'auto' ? '自动' : state.mode === 'lan' ? '仅局域网' : '仅中转';
+    const info = state.netInfo || {};
+    main.append(el('div', { class:'slabel', text:'连接方式' }), group(
+      row('自动', '通了局域网就直连，断了回中转', state.mode === 'auto' ? '✓' : '', () => { setNetMode('auto'); render(); }),
+      row('仅中转', '始终走公网中转', state.mode === 'relay' ? '✓' : '', () => { setNetMode('relay'); render(); }),
+      row('仅局域网', '只走局域网直连（需要证书）', state.mode === 'lan' ? '✓' : '', () => { setNetMode('lan'); render(); }),
+    ));
+    main.append(el('div', { class:'slabel', text:'当前线路' }), group(
+      row('线路', info.channel === 'lan' ? '局域网直连' : '公网中转', info.channel === 'lan' ? (info.ms ? info.ms + 'ms' : '') : '', null),
+      row('探测时间', info.at ? new Date(info.at).toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit' }) : '还没探测', '', null),
+      row('高级设置', '手填局域网地址 / 稳定名字', '', () => openConnectionSheet()),
+    ));
+    main.append(el('div', { class:'slabel', text:'其他' }), group(
+      row('恢复链接', '粘一条带 token 的链接重新登录', '', openRecovery),
+      row('重新加载', '清掉页面状态重新进入', '', reloadApp),
+    ));
+    return;
+  }
+
+  if (page === 'push') {
+    let st = 'off';
+    try { st = await pushStatus(); } catch {}
+    const label = { on:'已开启，这台设备会收到推送', off:'未开启', denied:'系统里被拒绝，请去 设置 → 通知 打开',
+      unsupported:'浏览器不支持 Web Push（iOS 16.4+ 且需添加到主屏）', nosw:'Service Worker 没注册上',
+      installing:'SW 正在激活，稍后再看' }[st] || st;
+    main.append(el('div', { class:'slabel', text:'推送' }), group(
+      sw('通知提醒', label, st === 'on', async () => { if (st === 'on') await disablePush(); else await enablePush(); render(); }),
+      sw('完成时总是推送', '后台跑完也推一条，不只审批', alwaysDone(), () => { setAlwaysDone(!alwaysDone()); pushHeartbeat(); render(); }),
+    ));
+    main.append(el('div', { class:'slabel', text:'排查' }), group(
+      row('推送诊断', 'SW、权限、最近投递', '', () => { state.subPage = 'pushdiag'; render(); }),
+      row('重新检测', '重新读一遍当前状态', '', () => render()),
+    ));
+    return;
+  }
+
+  if (page === 'pushdiag') {
+    const rows = [];
+    try { rows.push(['通知状态', await pushStatus()]); } catch { rows.push(['通知状态', 'err']); }
+    rows.push(['权限', (typeof Notification !== 'undefined' ? Notification.permission : '-')]);
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      rows.push(['SW 作用域', reg ? (reg.scope || '-') : '未注册']);
+      rows.push(['SW 状态', reg ? (reg.active ? 'active' : (reg.installing ? 'installing' : 'waiting')) : '-']);
+      const c = await caches.open('dsh-open');
+      rows.push(['dsh-open 条目', String((await c.keys()).length)]);
+    } catch { rows.push(['缓存', '读不到']); }
+    main.append(el('div', { class:'slabel', text:'状态' }), group(
+      ...rows.map(([k, v]) => row(k, '', String(v), null))));
+    return;
+  }
+
+  // about
+  let devices = '';
+  try { const r = await api('/api/mobile/v1/paired-devices'); devices = String((r.devices || r.items || []).length); } catch {}
+  main.append(el('div', { class:'slabel', text:'应用' }), group(
+    row('版本', '构建与缓存', APP_VERSION, null),
+    row('已配对设备', '在电脑端可移除', devices ? devices + ' 台' : '', null),
+    row('版本自检', '本地版本 / SW 缓存 / 线上版本戳', '', openVersionCheck),
+    row('清除缓存并重载', '删掉 Cache Storage 与 SW 后重载', '', async () => {
+      try {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      } catch {}
+      location.reload();
+    }),
+  ));
+  main.append(el('div', { class:'slabel', text:'其他' }), group(
+    row('恢复链接', '重新登录', '', openRecovery),
+    row('重新加载', '清页面状态再进', '', reloadApp),
+  ));
+}
 function renderSettings(wrap) {
   wrap.append(heroHeader('设置', 'DSH MOBILE · ' + APP_VERSION));
   const skin = (() => { try { const v = localStorage.getItem('dsh.skin'); return v === 'carbon' ? '碳黑' : v === 'auto' ? '跟随系统' : '纸面'; } catch { return '纸面'; } })();
@@ -1481,16 +1575,16 @@ function renderSettings(wrap) {
     row('主题', '跟随系统 / 浅色 / 深色', theme, openThemeSheet),
   ]));
   main.append(el('div', { class:'slabel', text:'通知' }), card([
-    row('通知提醒', '完成、审批与提问的推送', '', openPushSettings),
-    row('推送诊断', '检查订阅与最近投递', '', openPushDiag),
+    row('通知提醒', '推送开关、完成提醒', '', () => { state.view = 'sub'; state.subPage = 'push'; render(); }),
+    row('推送诊断', '检查订阅与最近投递', '', () => { state.view = 'sub'; state.subPage = 'pushdiag'; render(); }),
   ]));
   main.append(el('div', { class:'slabel', text:'连接' }), card([
-    row('连接信息', '当前线路、延迟与中转', '', openConnInfo),
+    row('连接', '自动 / 仅中转 / 仅局域网', '', () => { state.view = 'sub'; state.subPage = 'conn'; render(); }),
     row('统计', '会话数、词元与用量', '', openStats),
     row('终端', '在浏览器打开 /agents/', '', () => { location.href = '/agents/'; }),
   ]));
   main.append(el('div', { class:'slabel', text:'应用' }), card([
-    row('版本', '构建与更新说明', APP_VERSION, openAbout),
+    row('关于', '版本、设备、缓存', APP_VERSION, () => { state.view = 'sub'; state.subPage = 'about'; render(); }),
     row('重新加载', '清掉页面状态重新进入', '', reloadApp),
     row('退出登录', '清除本机凭据', '', () => { localStorage.clear(); state.token = ''; state.view = 'list'; render(); }),
   ]));
@@ -1504,6 +1598,7 @@ function render() {
     if (state.view === 'list') { ui.sessionId = null; renderList(wrap); }
     else if (state.view === 'files') renderFiles(wrap);
     else if (state.view === 'settings') renderSettings(wrap);
+    else if (state.view === 'sub') renderSubPage(wrap);
     else if (state.view === 'git') renderGit(wrap);
     else renderSession(wrap);
     if (state.view === 'list' || state.view === 'files' || state.view === 'settings') wrap.append(tabBar(state.view));
@@ -3764,7 +3859,11 @@ function paint() {
 }
 
 function renderSession(wrap) {
-  const back = el('button', { class:'ico', text:'☰', 'data-bell':'', onclick: openDrawer, title:'会话列表' });
+  const back = el('button', { class:'ico', text:'‹', title:'返回会话列表', onclick: () => {
+    try { state.live && state.live.close(); } catch {}
+    clearInterval(state.poll);
+    state.view = 'list'; ui.sessionId = null; render(); refreshAll();
+  }});
   const dot = el('span', {
     class: state.stream === 'open' ? 'dot run' : 'dot',
     title: state.stream === 'open' ? '实时已连接' : '连接中…',
