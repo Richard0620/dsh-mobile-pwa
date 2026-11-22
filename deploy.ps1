@@ -1,4 +1,4 @@
-﻿# Deploy DSH Mobile PWA from GitHub (the server pulls; no local scp).
+# Deploy DSH Mobile PWA from GitHub (the server pulls; no local scp).
 #
 #   ./deploy.ps1                # static PWA from origin/main
 #   ./deploy.ps1 -Push          # static PWA + Web Push service (restarts dsh-push ~1s)
@@ -36,6 +36,7 @@ if ($head -ne $main) {
   Write-Error 'local HEAD 与 origin/main 不一致：先推 feature 分支、开 PR、合并，再 git merge --ff-only origin/main。'
   exit 1
 }
+
 
 ssh @opt $hostName "bash /opt/dsh-mobile-deploy.sh $Ref"
 

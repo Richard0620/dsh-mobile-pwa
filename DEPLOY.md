@@ -309,3 +309,24 @@ VERSION 里现在有 `ref` 与 `source=github`，能对应到具体提交。
 2. **`.env` 永不入库**：`.gitignore` 已含 `*.env`、`push/node_modules/`。
 3. **GitHub 凭据**走 Windows 凭据管理器，不落盘到仓库。
 4. 新增服务时：密钥放服务器 `/etc/<svc>.env`，代码里只读环境变量。
+## 8443 限流（2026-11-22）
+
+Caddy v2 核心没有限流模块（`caddy list-modules` 无 rate_limit），所以在 ufw 层做：
+
+`/etc/ufw/before.rules` 的 *filter 段末尾（COMMIT 之前）加了一条：
+
+```
+-A ufw-before-input -p tcp --dport 8443 -m conntrack --ctstate NEW \
+  -m hashlimit --hashlimit-name dsh8443 --hashlimit-above 120/min \
+  --hashlimit-burst 40 --hashlimit-mode srcip --hashlimit-htable-expire 60000 -j DROP
+```
+
+含义：**每个源 IP** 新建连接超过 2/秒（突发 40）就丢，持续 60 秒窗口。
+已建立的连接（SSE、隧道、HTTP/2）不受影响。
+
+查命中：`iptables -L ufw-before-input -n -v --line-numbers | grep 8443`
+撤销：删掉那行 → `ufw reload`
+
+## 上游 issue
+
+插件 `utils.mux` 不产帧的 bug 已反馈：https://github.com/WNLUO/dsh-mobile-plugin/issues/36
