@@ -1,4 +1,4 @@
-# Deploy DSH Mobile PWA from GitHub (the server pulls; no local scp).
+﻿# Deploy DSH Mobile PWA from GitHub (the server pulls; no local scp).
 #
 #   ./deploy.ps1                # static PWA from origin/main
 #   ./deploy.ps1 -Push          # static PWA + Web Push service (restarts dsh-push ~1s)
