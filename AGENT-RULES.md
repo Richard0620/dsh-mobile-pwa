@@ -230,3 +230,40 @@ UTF-8 当 ANSI 读，中文字节会把下一行语法一起带坏（实测 11 �
 $b=[System.IO.File]::ReadAllBytes('lan-cert.ps1'); $b[0] -eq 239   # 必须是 True
 $e=$null; [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path .\lan-cert.ps1),[ref]$null,[ref]$e); $e.Count  # 必须是 0
 ```
+
+## 发布流程（2026-11-22 用户确认，优先级最高）
+
+功能开发完不再直接合并、直接部署，按下面 5 步走，**每一步都不能跳过**：
+
+1. **功能分支开发**
+   在自己的 worktree（如 `pwa-f`）和 feature 分支上改，小步提交。
+
+2. **先上 preview 验收**
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File D:\Vibe\PWA\pwa-d\preview\deploy-preview.ps1 `
+     -Branch <branch> -Repo <worktree目录>
+   # → https://dsh.easymana.online:8443/preview/<slug>/
+   ```
+   预览只写 `/srv/dsh-mobile/preview/<slug>/`，有自己的 manifest / SW scope / `dsh-preview-*` 缓存，
+   **不碰主站的 index.html 和 sw.js**。真机看完，用户明确说"可以合并"才进第 3 步。
+
+3. **合并到本地 master**
+   用户同意后：`git switch master; git merge <branch>`，冲突按"功能都保留"手工解，跑 `node --check`。
+
+4. **本地 master → GitHub main**
+   `main` 有保护（必须 PR、禁 force-push）：推 feature 分支 → 开 PR（base=main）→ 合并 →
+   本地 `git fetch origin && git merge --ff-only origin/main`，确认 `master` 与 `origin/main` 同一提交。
+   **不要为了省事去改仓库保护设置**，除非用户在当次明确同意。
+
+5. **部署（只认 GitHub main）**
+   ```powershell
+   .\deploy.ps1          # 服务器从 origin/main 拉取；必要时 -Push
+   .\deploy.ps1 -Force   # 仅本地 HEAD 与 origin/main 不一致时使用，先问用户
+   ```
+   部署脚本会先校验本地 HEAD == origin/main，之后写 `/srv/dsh-mobile/VERSION`。
+
+硬约束：
+
+- 没经过 preview 验收的功能，不得合并到 master。
+- 没合进 GitHub main 的代码，不得部署到线上。
+- 预览环境可以随时覆盖重发；线上部署每次都要用户点头。
