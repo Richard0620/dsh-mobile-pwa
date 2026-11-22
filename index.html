@@ -704,7 +704,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v177';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v179';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -957,6 +957,14 @@ async function consumePendingOpen() {
     window.__lastPending = { ...j, consumed: true };
     return true;
   } catch (e) { window.__lastPending = 'err:' + (e && e.message); return false; }
+}
+
+// 冷启动点通知：SW 的 notificationclick 可能比页面 boot 稍晚写便条，
+// 单次读取会正好错过（真机表现为"点了通知还是停在列表"）。多次重试兜住这个时序。
+function consumePendingOpenSoon() {
+  for (const ms of [0, 250, 600, 1200, 2400, 4000]) {
+    setTimeout(() => { consumePendingOpen().catch(() => {}); }, ms);
+  }
 }
 
 // 推送诊断：把 SW/权限/缓存里那张"便条"都摊开，冷启动点通知后看一眼就知道卡在哪
@@ -5425,7 +5433,7 @@ function subscribeDevice() {
     // 锁了「仅局域网」就先定通道再拉数据；自动档放到后台探，别拖慢首屏
     if (state.mode === 'lan') await applyNetMode({ silent: true });
     state.booted = true;
-    consumePendingOpen();                          // 先按本地缓存的列表直接跳，别等网络
+    consumePendingOpenSoon();                      // 冷启动点通知：多次重试读便条
     refreshAll().catch(() => {}).then(() => { consumePendingOpen(); });
     subscribeDevice();
     if (state.mode === 'auto') applyNetMode({ silent: true }).catch(() => {});
@@ -5448,7 +5456,7 @@ document.addEventListener('visibilitychange', () => {
     (async () => {
       // 回前台先确认通道：从公司网络回到家、或手机刚连上 Wi-Fi，都靠这一下切过去
       try { await applyNetMode(); } catch {}
-      consumePendingOpen();                          // 先按本地缓存的列表直接跳，别等网络
+      consumePendingOpenSoon();                      // 冷启动点通知：多次重试读便条
       refreshAll().catch(() => {}).then(() => { consumePendingOpen(); });
       syncBadge();
       pushHeartbeat();

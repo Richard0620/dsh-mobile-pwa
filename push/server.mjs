@@ -186,7 +186,7 @@ const server = http.createServer(async (req, res) => {
         }
       }
     }
-    console.log('[notify]', payload.kind || '-', JSON.stringify(payload.title || ''), 'badge=' + (payload.badge === undefined ? '-' : payload.badge));
+    console.log('[notify]', payload.kind || '-', JSON.stringify(payload.title || ''), 'badge=' + (payload.badge === undefined ? '-' : payload.badge), 'sid=' + (payload.sessionId || '-'));
     const results = await broadcast(payload);
     return json(res, 200, { ok: true, ...results });
   }
