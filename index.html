@@ -134,7 +134,31 @@
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
   /* ---------- 设置页 ---------- */
-  .settings{flex:1;overflow-y:auto;padding:2px 16px calc(10px + var(--safe-b))}
+  /* ---------- 文件页 ---------- */
+  .crumbrow{display:flex;align-items:center;gap:2px;padding:8px 16px 2px;overflow-x:auto;white-space:nowrap}
+  .crumbchip{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;color:var(--dim);
+    padding:4px 7px;border-radius:7px;flex:none}
+  .crumbchip.on{color:var(--fg);background:var(--bubble)}
+  .crumbsep{color:var(--line);font-size:10px;flex:none}
+  .fbody2{flex:1;overflow-y:auto;padding:2px 16px calc(10px + var(--safe-b))}
+  .fsect{display:flex;align-items:baseline;gap:8px;padding:16px 4px 6px}
+  .fsect b{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:9.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--dim);font-weight:600}
+  .fsect span{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:9.5px;color:var(--dim)}
+  .flrow{display:flex;align-items:center;gap:12px;padding:9px 4px;border-bottom:1px solid var(--line)}
+  .flrow:active{background:var(--bubble)}
+  .ftile{width:38px;height:38px;border-radius:10px;background:var(--card);border:1px solid var(--line);
+    display:grid;place-items:center;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+    font-size:8.5px;letter-spacing:.02em;color:var(--dim);flex:none}
+  .ftile.dir{background:var(--bubble);border-color:transparent}
+  .fname2{flex:1;min-width:0}
+  .fname2 b{display:block;font-size:14.5px;font-weight:550;letter-spacing:-.1px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fname2 span{display:block;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+    font-size:9.5px;color:var(--dim);margin-top:3px}
+  .flrow .chev{color:var(--dim);font-size:16px;flex:none}
+  .showhidden{display:block;width:100%;margin:18px 0 6px;padding:11px;border-radius:12px;
+    border:1px solid var(--line);background:var(--card);font-size:12.5px;color:var(--dim)}  .settings{flex:1;overflow-y:auto;padding:2px 16px calc(10px + var(--safe-b))}
   .slabel{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);
     font-family:ui-monospace,SFMono-Regular,Consolas,monospace;padding:18px 6px 6px}
   .groupcard{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
@@ -575,7 +599,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v130';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v132';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1818,42 +1842,69 @@ function renderFiles(wrap) {
     if (state.sessionId) { state.view = 'session'; render(); }
     else { state.view = 'list'; render(); refreshAll(); }
   }});
-  wrap.append(headerEl('文件', back, el('span')));
-
-  const main = el('main');
   const L = state.filesListing;
+  const entriesAll = L ? (L.entries || []).filter(e => !e.hidden || state.showHidden) : [];
+  const dirsAll = entriesAll.filter(e => e.kind === 'folder');
+  const filesAll = entriesAll.filter(e => e.kind !== 'folder');
+  const wsName = (() => {
+    const w = workspaceOf(state.sessionId);
+    if (w) return w.title || w.path;
+    const p = String(state.sessionCwd || '');
+    return p ? p.split(/[\\/]/).filter(Boolean).pop() : '';
+  })();
+  const sub = L ? `${dirsAll.length} 个文件夹 · ${filesAll.length} 个文件` : '加载中…';
+  wrap.append(heroHeader('文件', (wsName ? wsName + ' · ' : '') + sub, back));
+
+  // 路径 chips：点任意一级跳回该层
+  const crumbs = el('div', { class:'crumbrow' });
+  const cr = (L && L.crumbs) || [];
+  cr.forEach((c, i) => {
+    if (i) crumbs.append(el('span', { class:'crumbsep', text:'/' }));
+    crumbs.append(el('span', { class:'crumbchip' + (i === cr.length - 1 ? ' on' : ''), text: c.name,
+      onclick: () => loadFiles(c.path) }));
+  });
+  if (cr.length) wrap.append(crumbs);
+
+  const main = el('div', { class:'fbody2' });
   if (!L) {
     main.append(el('div', { class:'empty', text: state.filesError || '加载中…' }));
     wrap.append(main);
     return;
   }
 
-  // 面包屑
-  const crumbs = el('div', { class:'crumbs' });
-  for (const c of (L.crumbs || [])) {
-    crumbs.append(el('span', { class:'crumb', text: c.name, onclick: () => loadFiles(c.path) }));
-  }
-  main.append(crumbs);
+  const extOf = (name) => {
+    const ext = String(name || '').split('.').pop().toLowerCase();
+    return ext && ext !== String(name).toLowerCase() ? ext.slice(0, 4).toUpperCase() : 'FILE';
+  };
+  const stamp = (t) => {
+    if (!t) return '';
+    const d = new Date(t);
+    const p = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+  const row = (e, isDir) => el('div', { class:'flrow', onclick: () => {
+    if (isDir) loadFiles(e.path); else previewFile(e.path, e.name);
+  }},
+    el('div', { class:'ftile' + (isDir ? ' dir' : '') }, el('span', { text: isDir ? 'DIR' : extOf(e.name) })),
+    el('div', { class:'fname2' },
+      el('b', { text: e.name }),
+      el('span', { text: stamp(e.modified) || (isDir ? '文件夹' : '文件') })),
+    el('span', { class:'chev', text:'›' }));
 
-  const entries = (L.entries || []).filter(e => !e.hidden || state.showHidden);
-  const dirs = entries.filter(e => e.kind === 'folder');
-  const files = entries.filter(e => e.kind !== 'folder');
-  for (const e of [...dirs, ...files]) {
-    main.append(el('div', { class:'frow', onclick: () => {
-      if (e.kind === 'folder') loadFiles(e.path);
-      else previewFile(e.path, e.name);
-    }},
-      el('span', { class:'fico', text: e.kind === 'folder' ? '📁' : '📄' }),
-      el('span', { class:'fname', text: e.name }),
-    ));
+  if (dirsAll.length) {
+    main.append(el('div', { class:'fsect' }, el('b', { text:'文件夹' }), el('span', { text:String(dirsAll.length) })));
+    for (const e of dirsAll) main.append(row(e, true));
   }
-  if (!entries.length) main.append(el('div', { class:'empty', text:'空目录' }));
+  if (filesAll.length) {
+    main.append(el('div', { class:'fsect' }, el('b', { text:'文件' }), el('span', { text:String(filesAll.length) })));
+    for (const e of filesAll) main.append(row(e, false));
+  }
+  if (!entriesAll.length) main.append(el('div', { class:'empty', text:'空目录' }));
 
-  main.append(el('div', { class:'cmeta', style:'text-align:center;padding:12px 0',
-    text:'显示隐藏文件' , onclick: () => { state.showHidden = !state.showHidden; render(); } }));
+  main.append(el('button', { class:'showhidden', text: state.showHidden ? '隐藏隐藏文件' : '显示隐藏文件',
+    onclick: () => { state.showHidden = !state.showHidden; render(); } }));
   wrap.append(main);
 }
-
 async function previewFile(path, name) {
   const mask = el('div', { class:'mask', onclick: (e) => { if (e.target === mask) mask.remove(); } });
   const box = el('div', { class:'sheet', style:'max-height:80vh;overflow:auto' },
