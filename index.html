@@ -384,7 +384,13 @@
   /* 抽屉底部：图标按钮一行放下（通知入口收进「设置」里，不再占一格） */
   .drfoot.icons{flex-wrap:nowrap;justify-content:space-around;align-items:center;gap:4px;
     padding:8px 10px calc(8px + var(--safe-b))}
-  .drfoot.icons .drbtn{width:46px;height:42px;padding:0;border-radius:12px;font-size:19px;
+  .drfoot .drbtn .bi{display:inline-flex;align-items:center}
+  .drfoot .drbtn .bi svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.6;
+    stroke-linecap:round;stroke-linejoin:round}
+  .drfoot.icons .drbtn .bi svg{width:21px;height:21px}
+  .rplist .fico svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.6;
+    stroke-linecap:round;stroke-linejoin:round}
+  .rplist .fico.dir{color:var(--dim)}  .drfoot.icons .drbtn{width:46px;height:42px;padding:0;border-radius:12px;font-size:19px;
     display:grid;place-items:center;color:var(--fg);background:var(--card)}
   .drfoot.icons .drbtn:active{background:var(--bubble)}
 
@@ -665,7 +671,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v164';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v168';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -2154,8 +2160,7 @@ async function openFileDrawer(path, opts = {}) {
           }
           if (isDir) nav(e.path); else openViewer(e.path, e.name);
         }},
-          el('span', { class:'fico',
-            text: st.selecting ? (sel ? '☑' : '☐') : (isDir ? '📁' : fileIcon(e.kind, e.name)) }),
+          el('span', { class:'fico' + (isDir ? ' dir' : ''), html: st.selecting ? sheetIconSVG(sel ? 'check' : 'box') : sheetIconSVG(isDir ? 'folder' : 'file') }),
           el('span', { class:'fname', text: e.name }),
           st.selecting ? null : el('span', { class:'chev', text:'›' }));
       };
@@ -2208,10 +2213,10 @@ async function openFileDrawer(path, opts = {}) {
           if (!st.path) { toast('还没进到目录里'); return; }
           if (typeof opts.onPick === 'function') { const keep = await opts.onPick(st.path); if (keep !== false) closeRPanel(); return; }
           if (await createWorkspaceAt(st.path)) closeRPanel();
-        } }, '✓ 用这个文件夹'),
-        el('button', { class:'drbtn', onclick: mkdir }, '📁 新建文件夹'),
-        el('button', { class:'drbtn', onclick: () => { st.showHidden = !st.showHidden; nav(st.path); } }, '👁 隐藏文件'),
-        el('button', { class:'drbtn', onclick: manual }, '⌨ 手输路径'),
+        } }, el('span', { class:'bi', html: sheetIconSVG('check') }), '用这个文件夹'),
+        el('button', { class:'drbtn', onclick: mkdir }, el('span', { class:'bi', html: sheetIconSVG('folder') }), '新建文件夹'),
+        el('button', { class:'drbtn', onclick: () => { st.showHidden = !st.showHidden; nav(st.path); } }, el('span', { class:'bi', html: sheetIconSVG('eye') }), '隐藏文件'),
+        el('button', { class:'drbtn', onclick: manual }, el('span', { class:'bi', html: sheetIconSVG('file') }), '手输路径'),
       );
       return;
     }
@@ -2227,7 +2232,7 @@ async function openFileDrawer(path, opts = {}) {
       return;
     }
     foot.append(
-      el('button', { class:'drbtn', onclick: () => pickUploadToDir(st.path, () => nav(st.path)) }, '⬆ 上传'),
+      el('button', { class:'drbtn', onclick: () => pickUploadToDir(st.path, () => nav(st.path)) }, el('span', { class:'bi', html: sheetIconSVG('upload') }), '上传'),
       el('button', { class:'drbtn', onclick: async () => {
         const name = prompt('新文件夹名字');
         if (!name || !name.trim()) return;
@@ -2235,8 +2240,8 @@ async function openFileDrawer(path, opts = {}) {
           await api('/api/mobile/v1/directory/create', { method:'POST', body: { path: st.path, name: name.trim() } });
           nav(st.path);
         } catch (e) { toast('新建失败：' + (e.message || e)); }
-      } }, '📁 新建文件夹'),
-      el('button', { class:'drbtn', onclick: () => { st.showHidden = !st.showHidden; nav(st.path); } }, '👁 隐藏文件'),
+      } }, el('span', { class:'bi', html: sheetIconSVG('folder') }), '新建文件夹'),
+      el('button', { class:'drbtn', onclick: () => { st.showHidden = !st.showHidden; nav(st.path); } }, el('span', { class:'bi', html: sheetIconSVG('eye') }), '隐藏文件'),
     );
   }
   paintFoot();
@@ -2408,15 +2413,15 @@ function openDrawer() {
   renderList(listBox, { noHeader: true, noPull: true });
 
   // 图标化的一行底部操作。通知入口并入「设置」里的「通知提醒」，不再单独占位。
-  const iconBtn = (icon, label, run) => el('button', {
-    class:'drbtn', title:label, 'aria-label':label, onclick: run,
-  }, icon);
+  const iconBtn = (name, label, run) => el('button', {
+    class:'drbtn', title:label, 'aria-label':label, onclick: run, html: sheetIconSVG(name),
+  });
   const foot = el('div', { class:'drfoot icons' },
-    iconBtn('⚙', '设置', () => { closeDrawer(); openAbout(); }),
-    iconBtn('📊', '统计', () => { closeDrawer(); openStats(); }),
-    iconBtn('📂', '文件', () => { closeDrawer(); openFileDrawer(state.sessionCwd || ''); }),
-    iconBtn('⌘', '终端', () => { closeDrawer(); location.href = '/agents/'; }),
-    iconBtn('↻', '重载', () => { closeDrawer(); reloadApp(); }),
+    iconBtn('gear', '设置', () => { closeDrawer(); openAbout(); }),
+    iconBtn('bars', '统计', () => { closeDrawer(); openStats(); }),
+    iconBtn('folder', '文件', () => { closeDrawer(); openFileDrawer(state.sessionCwd || ''); }),
+    iconBtn('term', '终端', () => { closeDrawer(); location.href = '/agents/'; }),
+    iconBtn('refresh', '重载', () => { closeDrawer(); reloadApp(); }),
   );
 
   panel.append(head, listBox, foot);
@@ -4787,6 +4792,12 @@ function sheetIconSVG(name) {
     box: '<rect x="4.5" y="4.5" width="15" height="15" rx="3"/>',
     back: '<path d="M9 6l-5 6 5 6"/><path d="M4 12h14"/>',
     close: '<path d="M6 6l12 12M18 6L6 18"/>',
+    gear: '<circle cx="12" cy="12" r="3.2"/><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4M16.6 16.6L18 18M18 6l-1.4 1.4M7.4 16.6L6 18"/>',
+    upload: '<path d="M12 16V5M7.5 9.5L12 5l4.5 4.5M5 19h14"/>',
+    eye: '<path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.6"/>',
+    plus: '<path d="M12 5.5v13M5.5 12h13"/>',
+    file: '<path d="M7 4.5h6.5L18 9v10.5H7z"/><path d="M13.5 4.5V9H18"/>',
+    code: '<path d="M9 7.5L4.5 12 9 16.5M15 7.5L19.5 12 15 16.5"/>',
   };
   const d = P[name];
   return d ? '<svg viewBox="0 0 24 24">' + d + '</svg>' : '';
