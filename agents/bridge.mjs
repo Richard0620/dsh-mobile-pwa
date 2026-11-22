@@ -33,15 +33,24 @@ const CLAUDE_ROOT = join(process.env.USERPROFILE || homedir(), ".claude", "proje
 // ---- DSH chat: one persisted headless session per pane, driven by this bridge ----
 const DSH_CHAT_FILE = join(process.env.LOCALAPPDATA || "", "agents-bridge", "dsh-chat.json");
 const DSH_BIN = join(process.env.APPDATA || "", "npm", "node_modules", "@deepseek-ai", "dsh", "lib", "bin.js");
+const DSH_MAX_MESSAGES = 200;
+const DSH_MAX_CONCURRENT = 1;
+const DSH_TIMEOUT_MS = 5 * 60 * 1000;
+const dshChildren = new Map(); // pane -> { child, timer, stopped }
+const dshQueue = [];
+let dshRunning = 0;
 let dshStore = {};
 try { dshStore = JSON.parse(readFileSync(DSH_CHAT_FILE, "utf8")) || {}; } catch { dshStore = {}; }
 function saveDshStore() {
   try {
+    for (const e of Object.values(dshStore)) {
+      if (Array.isArray(e.messages) && e.messages.length > DSH_MAX_MESSAGES) e.messages = e.messages.slice(-DSH_MAX_MESSAGES);
+    }
     mkdirSync(dirname(DSH_CHAT_FILE), { recursive: true });
     writeFileSync(DSH_CHAT_FILE, JSON.stringify(dshStore));
   } catch {}
 }
-function dshTurn(entry, text) {
+function dshTurn(entry, text, pane) {
   return new Promise((resolve) => {
     const args = [DSH_BIN, "--profile", "headless", "--json"];
     if (entry.sessionId) args.push("--session-id", entry.sessionId);
@@ -50,14 +59,27 @@ function dshTurn(entry, text) {
     try {
       child = spawn(process.execPath, args, { cwd: entry.cwd || process.cwd(), windowsHide: true });
     } catch (e) {
-      return resolve({ text: "", sid: "", err: String(e), code: -1 });
+      return resolve({ text: "", sid: "", err: String(e), code: -1, stopped: false });
     }
     let out = "";
     let err = "";
+    let timedOut = false;
+    const rec = { child, stopped: false };
+    if (pane) dshChildren.set(pane, rec);
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try { child.kill(); } catch {}
+    }, DSH_TIMEOUT_MS);
     child.stdout.on("data", (d) => { out += d.toString("utf8"); });
     child.stderr.on("data", (d) => { err += d.toString("utf8"); });
-    child.on("error", (e) => resolve({ text: "", sid: "", err: String(e), code: -1 }));
+    child.on("error", (e) => {
+      clearTimeout(timer);
+      if (pane) dshChildren.delete(pane);
+      resolve({ text: "", sid: "", err: String(e), code: -1, stopped: !!rec.stopped });
+    });
     child.on("close", (code) => {
+      clearTimeout(timer);
+      if (pane) dshChildren.delete(pane);
       let sid = "";
       let final = null;
       for (const line of out.split(/\r?\n/)) {
@@ -68,9 +90,37 @@ function dshTurn(entry, text) {
           if (o.type === "final") final = o;
         } catch {}
       }
-      resolve({ text: (final && final.text) || "", sid, err, code });
+      if (timedOut) err = (err ? err + "\n" : "") + "timeout after " + Math.round(DSH_TIMEOUT_MS / 60000) + " min";
+      resolve({ text: (final && final.text) || "", sid, err, code, stopped: !!rec.stopped });
     });
   });
+}
+
+function drainDshQueue() {
+  if (dshRunning >= DSH_MAX_CONCURRENT) return;
+  const job = dshQueue.shift();
+  if (!job) return;
+  dshRunning++;
+  (async () => {
+    const r = await dshTurn(job.entry, job.text, job.pane);
+    if (r.sid) job.entry.sessionId = r.sid;
+    if (r.text) {
+      job.entry.messages.push({ role: "assistant", text: r.text, time: new Date().toISOString() });
+    } else {
+      const msg = r.stopped ? "\u5DF2\u505C\u6B62" : ((r.err || "").trim() || ("exit " + r.code));
+      job.entry.error = msg.slice(0, 4000);
+      job.entry.messages.push({ role: "assistant", text: "\u26A0\uFE0F " + msg, time: new Date().toISOString() });
+    }
+    job.entry.busy = false;
+    saveDshStore();
+    dshRunning--;
+    drainDshQueue();
+  })();
+}
+
+function enqueueDsh(entry, text, pane) {
+  dshQueue.push({ entry, text, pane });
+  drainDshQueue();
 }
 
 function encodeProjectDir(cwd) {
@@ -337,19 +387,7 @@ const server = http.createServer(async (req, res) => {
       e.messages.push({ role: "user", text: body.text, time: new Date().toISOString() });
       saveDshStore();
       const entry = e;
-      (async () => {
-        const r = await dshTurn(entry, body.text);
-        if (r.sid) entry.sessionId = r.sid;
-        if (r.text) {
-          entry.messages.push({ role: "assistant", text: r.text, time: new Date().toISOString() });
-        } else {
-          const msg = (r.err || "").trim() || ("exit " + r.code);
-          entry.error = msg.slice(0, 4000);
-          entry.messages.push({ role: "assistant", text: "\u26A0\uFE0F " + msg, time: new Date().toISOString() });
-        }
-        entry.busy = false;
-        saveDshStore();
-      })();
+      enqueueDsh(entry, body.text, body.pane);
       return send(res, 200, JSON.stringify({ ok: true, busy: true }));
     }
     if (req.method === "POST" && url.pathname === "/dsh/reset") {
@@ -363,6 +401,23 @@ const server = http.createServer(async (req, res) => {
         e.error = "";
         saveDshStore();
       }
+      return send(res, 200, JSON.stringify({ ok: true }));
+    }
+    if (req.method === "POST" && url.pathname === "/dsh/stop") {
+      const body = JSON.parse((await readBody(req)) || "{}");
+      if (!body.pane) return send(res, 400, JSON.stringify({ error: "pane required" }));
+      const e = dshStore[body.pane];
+      if (!e) return send(res, 404, JSON.stringify({ error: "no dsh session" }));
+      for (let i = dshQueue.length - 1; i >= 0; i--) if (dshQueue[i].pane === body.pane) dshQueue.splice(i, 1);
+      const rec = dshChildren.get(body.pane);
+      if (rec) {
+        rec.stopped = true;
+        try { rec.child.kill(); } catch {}
+      } else {
+        e.busy = false;
+      }
+      e.error = "stopped";
+      saveDshStore();
       return send(res, 200, JSON.stringify({ ok: true }));
     }
     return send(res, 404, JSON.stringify({ error: "not found" }));

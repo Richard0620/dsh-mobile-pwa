@@ -383,13 +383,19 @@ node --check $env:TEMP\app.mjs
 
 ### 技术债
 
-- [ ] D1 bridge 串行队列与并发限制（多 pane 同时 headless 的资源控制）
-- [ ] D2 `dsh-chat.json` 存储上限与清理
+> **技术债预算（2026-11-21 起）**：每个功能 commit 至少附带一项债；没带需在 commit message 里说明原因。未完成债项超过 10 条时，暂停新功能先清债。
+
+- [x] D1 bridge 串行队列与并发限制（DSH_MAX_CONCURRENT=1，v15）
+- [x] D2 `dsh-chat.json` 存储上限与清理（单 pane 保留最近 200 条，v15）
 - [ ] D3 token 存储安全：减少 query 传递、支持轮换
 - [ ] D4 SSE 心跳、断线清理、超时
-- [ ] D5 子进程超时/取消
+- [x] D5 子进程超时/取消（5 分钟超时 + `/dsh/stop` kill，v15）
 - [ ] D6 agents 页单文件拆分（当前 ~700 行）
 - [ ] D7 录屏/截图回归：每次 P0 修完补一段手机验证
+- [ ] D8 工作区纪律：agents 改动只在 `pwa-e`，`pwa`/master 保持干净
+- [ ] D9 禁止 `commit-tree` 提交（会留下 staged 假象、且曾丢过文件），一律在 worktree 里正常 commit
+- [ ] D10 提交前跑 `agents/smoke.ps1`，防 v14 那种丢端点事故
+- [ ] D11 自启路径耦合：Startup 的 `agents-bridge.lnk` 指向 `pwa-e`，worktree 不能随意删；写进 `agents/README`
 
 ### 验收方式
 
