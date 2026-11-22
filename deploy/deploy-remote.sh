@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 # DSH Mobile PWA - deploy from GitHub to /srv/dsh-mobile
 #
-#   ./deploy.sh            deploy origin/main
-#   ./deploy.sh v123       deploy a tag
-#   ./deploy.sh <commit>   deploy a commit
+#   ./deploy.sh            deploy origin/main (the only allowed ref)
 #
 # Target dir always equals exactly the runtime files of one commit.
 set -euo pipefail
@@ -12,6 +10,12 @@ REPO=/srv/dsh-mobile-src
 TARGET=/srv/dsh-mobile
 STAGE=/tmp/dsh-mobile-stage
 REF="${1:-origin/main}"
+
+if [ "$REF" != "origin/main" ]; then
+  echo "refusing deploy: only origin/main is allowed (got $REF)" >&2
+  echo "feature branches must be tested via /preview/ and merged to main first" >&2
+  exit 2
+fi
 
 cd "$REPO"
 
