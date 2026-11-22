@@ -21,14 +21,18 @@ cd "$REPO"
 
 git fetch --all --tags --prune --quiet
 
-# self-install: keep the /opt copies in sync with the repo version
+# self-install: keep the /opt copies in sync with the repo version.
+# Use cp-to-temp + mv (NOT cp over the running file): bash reads a script
+# incrementally, truncating/replacing it in place can corrupt the current run.
 if [ -f "$REPO/deploy/deploy-remote.sh" ]; then
-  cp "$REPO/deploy/deploy-remote.sh" /opt/dsh-mobile-deploy.sh
-  chmod +x /opt/dsh-mobile-deploy.sh
+  cp "$REPO/deploy/deploy-remote.sh" /opt/.dsh-mobile-deploy.sh.new
+  chmod +x /opt/.dsh-mobile-deploy.sh.new
+  mv -f /opt/.dsh-mobile-deploy.sh.new /opt/dsh-mobile-deploy.sh
 fi
 if [ -f "$REPO/deploy/deploy-push.sh" ]; then
-  cp "$REPO/deploy/deploy-push.sh" /opt/dsh-push-deploy.sh
-  chmod +x /opt/dsh-push-deploy.sh
+  cp "$REPO/deploy/deploy-push.sh" /opt/.dsh-push-deploy.sh.new
+  chmod +x /opt/.dsh-push-deploy.sh.new
+  mv -f /opt/.dsh-push-deploy.sh.new /opt/dsh-push-deploy.sh
 fi
 
 if ! git rev-parse --verify --quiet "$REF" >/dev/null; then
