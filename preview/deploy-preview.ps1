@@ -119,6 +119,8 @@ try {
   $deployedAt = (Get-Date).ToString('o')
   $meta = [ordered]@{ branch=$Branch; slug=$Slug; app=$app; sw=$newCache; commit=$commit; deployedAt=$deployedAt; url="/preview/$Slug/" }
   [IO.File]::WriteAllText((Join-Path $build 'preview.json'), ($meta | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))
+  $ver = "app=$app`nsw=$newCache`ncommit=$commit`nref=preview/$Slug`ndeployed_at=$deployedAt`nsource=preview`n"
+  [IO.File]::WriteAllText((Join-Path $build 'VERSION'), $ver, (New-Object Text.UTF8Encoding($false)))
 
   Invoke-Remote "rm -rf $Root/$Slug && mkdir -p $Root/$Slug"
   $files = @(Get-ChildItem -Path $build -File | ForEach-Object { $_.FullName })
