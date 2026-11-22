@@ -3714,9 +3714,19 @@ function renderSession(wrap) {
   }
   async function choosePermission(name, label) {
     if (name === 'danger-full-access') {
-      const ok = confirm('开启「完全访问」后，工具调用不再逐次审批，可能直接读写任意文件。确定？');
-      if (!ok) return;
+      openInfoBox('开启完全访问？', [
+        ['影响', '工具调用不再逐次审批，可以直接执行'],
+        ['沙箱', 'danger-full-access：可读写任意路径'],
+        ['建议', '只在需要时临时开启，用完切回工作区写入'],
+      ], [
+        { label:'开启完全访问', run: () => applyPermission(name, label) },
+        { label:'取消', run: () => {} },
+      ]);
+      return;
     }
+    await applyPermission(name, label);
+  }
+  async function applyPermission(name, label) {
     try {
       // 先确认宿主确实注册了 /permission：不认识时 /session/send 会把整行当普通消息发给模型
       const cmds = await api('/api/mobile/v1/commands?sessionId=' + encodeURIComponent(state.sessionId));
