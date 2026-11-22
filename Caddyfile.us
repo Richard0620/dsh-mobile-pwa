@@ -54,9 +54,9 @@ dsh.easymana.online:8443 {
 
 	# ---- 闈欐€?PWA ----
 	# ---- 预览分支：/preview/<branch>/ 目录索引 ----
-	handle /preview/* {
-		root * /srv/dsh-mobile
-		try_files {path} {path}index.html /index.html
+	handle_path /preview/* {
+		root * /srv/dsh-preview
+		try_files {path} {path}index.html
 		file_server
 
 		header {

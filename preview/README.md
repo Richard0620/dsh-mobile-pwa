@@ -4,7 +4,7 @@
 
 ## 它做什么
 
-- 把任意本地 Git 分支的 `index.html` / `sw.js` / 图标部署到 VPS 的 `/srv/dsh-mobile/preview/<slug>/`
+- 把任意本地 Git 分支的 `index.html` / `sw.js` / 图标部署到 VPS 的 `/srv/dsh-preview/<slug>/`
 - 每个分支是独立的 PWA：独立 manifest（`start_url`/`scope`/`id` 都在子目录）、独立 SW scope、独立缓存前缀 `dsh-preview-`
 - 不改 `/srv/dsh-mobile/index.html` 和 `sw.js`，线上 main 完全不受影响
 - 手机 Safari 打开分支 → 分享 → 添加到主屏幕，就是该分支的独立图标
