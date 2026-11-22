@@ -257,3 +257,29 @@ tailscale funnel status               # 确认公网地址
 - [ ] 宿主机 18787 只监听 `127.0.0.1`（插件默认如此，别改成 `0.0.0.0` 直接裸奔）；
 - [ ] 桌面端「设置 → 移动端」里，`pwa-probe` 之类的调试设备已删除；
 - [ ] 手机上不再需要的设备凭据已吊销（`/api/mobile/v1/paired-devices/revoke`）。
+
+## git 部署（2026-11-21 起）
+
+线上不再由本地 scp，而是**服务器自己从 GitHub 拉**：
+
+```
+/srv/dsh-mobile-src      git clone（服务端，跟踪 origin/main）
+/opt/dsh-mobile-deploy.sh  部署脚本：checkout ref -> 暂存 -> rsync 到 /srv/dsh-mobile
+/srv/dsh-mobile          运行时目录（精确等于某个提交的 8 个文件 + VERSION）
+```
+
+本机用法：
+
+```powershell
+./deploy.ps1              # 部署 origin/main（要求本地 HEAD == origin/main）
+./deploy.ps1 -Ref v123    # 回滚/发布到指定 tag
+./deploy.ps1 -Ref abc1234 # 指定提交
+```
+
+线上查版本：
+
+```
+ssh root@38.189.61.57 cat /srv/dsh-mobile/VERSION
+```
+
+VERSION 里现在有 `ref` 与 `source=github`，能对应到具体提交。
