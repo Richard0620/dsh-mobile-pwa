@@ -477,8 +477,9 @@
     border-radius:50%;background:rgba(255,255,255,.16);color:#fff;display:grid;place-items:center;font-size:15px}
   .lightbox .lbhint{position:absolute;bottom:calc(20px + var(--safe-b));left:0;right:0;text-align:center;
     color:rgba(255,255,255,.62);font-size:12px;pointer-events:none}
-  .lightbox .lbcount{position:absolute;top:calc(15px + var(--safe-t));left:0;right:0;text-align:center;
-    color:rgba(255,255,255,.8);font-size:12px;pointer-events:none}
+  .lightbox .lbcount{position:absolute;top:calc(15px + var(--safe-t));left:50%;transform:translateX(-50%);
+    z-index:3;color:#fff;font-size:12px;padding:3px 10px;border-radius:999px;
+    background:rgba(0,0,0,.55);pointer-events:none;white-space:nowrap}
   .lightbox .lbnav{position:absolute;top:50%;transform:translateY(-50%);width:36px;height:46px;
     border-radius:12px;background:rgba(255,255,255,.14);color:#fff;display:grid;place-items:center;
     font-size:24px;line-height:1;z-index:2}
