@@ -108,7 +108,14 @@
   .ghead .fico svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;
     stroke-linecap:round;stroke-linejoin:round}
   .ghead.closed .chev{transform:rotate(-90deg)}
-  .branch{font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:1px 7px;flex:none}
+  .ubadge{flex:none;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--accent);
+    color:var(--accent-fg);font-size:9.5px;font-weight:700;display:grid;place-items:center;
+    font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+  .ubdot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex:none;
+    box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 14%,transparent)}
+  .wsmark{flex:none;max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:9px;color:var(--dim);
+    border:1px solid var(--line);border-radius:5px;padding:1px 4px;margin-right:2px}  .branch{font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:1px 7px;flex:none}
   .count{font-size:11px;color:var(--dim);flex:none}
 
   /* ---------- 底部 Tab 栏 ---------- */
@@ -631,7 +638,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v152';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v154';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -3176,6 +3183,7 @@ function renderList(wrap, opts = {}) {
       el('div', { class:'body' },
         el('div', { class:'t' },
           s.pinned && !opts.hidePin ? el('span', { class:'pinmark', text:'📌' }) : null,
+          opts.showWs ? el('span', { class:'wsmark', text: (workspaceOf(s.sessionId) || {}).title || '' }) : null,
           el('span', { class:'title', text: s.title || '(无标题)' }),
           el('span', { class:'time', text: fmtTime(s.updatedAt) })),
         s.lastMessage && s.lastMessage.text ? el('div', { class:'p', text: plain(String(s.lastMessage.text)).replace(/\s+/g, ' ').trim() }) : null,
@@ -3193,6 +3201,26 @@ function renderList(wrap, opts = {}) {
   }
 
   // 全局置顶：跨工作区聚合到最上方；置顶会话不再在各自文件夹里重复出现
+  // 顶部未读区：跨工作区把所有未读聚合一份，省得挨个文件夹翻
+  const unreadItems = state.sessions.filter(isUnread)
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  if (unreadItems.length) {
+    const ubKey = 'unread:top';
+    const ubClosed = state.collapsed.has(ubKey);
+    const ubHead = el('div', { class: `ghead${ubClosed ? ' closed' : ''}`, onclick: () => {
+      if (state.collapsed.has(ubKey)) state.collapsed.delete(ubKey); else state.collapsed.add(ubKey);
+      localStorage.setItem(LS.collapsed, JSON.stringify([...state.collapsed]));
+      render();
+    }},
+      el('span', { class:'chev', text:'▼' }),
+      el('span', { class:'ubdot' }),
+      el('span', { class:'gname', text:'未读' }),
+      el('span', { class:'count', style:'margin-left:auto', text:String(unreadItems.length) }),
+    );
+    const ubBox = el('div', { class:'group' }, ubHead);
+    if (!ubClosed) for (const s of unreadItems) ubBox.append(sessionRow(s, { hidePin:true, showWs:true }));
+    main.append(ubBox);
+  }
   const pinnedItems = state.sessions.filter(s => s.pinned)
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   if (pinnedItems.length) {
@@ -3246,6 +3274,10 @@ function renderList(wrap, opts = {}) {
       el('span', { class:'fico', html:NAV_ICONS.folder }),
       el('span', { class:'gname', text: g.name || '(未命名)' }),
       g.git && g.git.branch ? el('span', { class:'branch', text: g.git.branch }) : null,
+      (() => {
+        const u = g.items.filter(isUnread).length;
+        return u ? el('span', { class:'ubadge', text: String(u) }) : null;
+      })(),
       el('span', { class:'count', style:'margin-left:auto', text: String(g.items.length) }),
     );
     // 长按分组头 → 工作区菜单（重命名 / 删除 / 在此新建）
