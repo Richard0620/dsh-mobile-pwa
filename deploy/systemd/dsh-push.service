@@ -1,0 +1,14 @@
+[Unit]
+Description=DSH Push (Web Push sender for the mobile PWA)
+After=network.target
+
+[Service]
+Type=simple
+# 密钥只存在服务器的 /etc/dsh-push.env（不入库）
+EnvironmentFile=/etc/dsh-push.env
+ExecStart=/usr/bin/node /opt/dsh-push/server.mjs
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -17,6 +17,16 @@ cd "$REPO"
 
 git fetch --all --tags --prune --quiet
 
+# self-install: keep the /opt copies in sync with the repo version
+if [ -f "$REPO/deploy/deploy-remote.sh" ]; then
+  cp "$REPO/deploy/deploy-remote.sh" /opt/dsh-mobile-deploy.sh
+  chmod +x /opt/dsh-mobile-deploy.sh
+fi
+if [ -f "$REPO/deploy/deploy-push.sh" ]; then
+  cp "$REPO/deploy/deploy-push.sh" /opt/dsh-push-deploy.sh
+  chmod +x /opt/dsh-push-deploy.sh
+fi
+
 if ! git rev-parse --verify --quiet "$REF" >/dev/null; then
   echo "unknown ref: $REF" >&2
   exit 1
