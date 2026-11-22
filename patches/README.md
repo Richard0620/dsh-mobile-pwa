@@ -51,3 +51,22 @@
 3. 没变还消失 → 检查是不是别的会话覆盖过这个文件（`git log` 里搜 push-notify）
 
 重贴后**必须重启 DSH** 才生效（Node 模块加载后不热更新）。
+## 第二个补丁：`mirror/pusher.cjs` 的完成推送兜底（2026-11-22）
+
+**症状**：审批推送一直正常，「已完成」推送一条都不发。
+
+**根因**：完成推送唯一的触发点是宿主事件流 `ctx.apiProxy.events.mux()` 里的 `turn/end` 帧。
+实测该接口在本机 DSH 版本里一帧都不产出（埋点只有 init，没有任何 frame/event 行），
+所以 `notifyTurnEnded` 永远不被调用。
+
+**修法**：不依赖事件流，在 `processBgQueue`（每 500ms 后台 tick）里扫会话清单，
+发现某会话 `lastTurn.status` 是 completed/failed 且这一轮没补推过，就调一次 `notifyTurnEnded`。
+
+- 首次扫描只登记不推送（避免重启后把历史会话全推一遍）
+- 用 `sessionId:turn:status` 去重，最多保留 800 条
+- 代码位置：`sweepTurnEnds()` 定义 + `processBgQueue` 内调用
+
+**升级风险**：同样会被插件升级覆盖。重贴步骤：覆盖 `mirror/pusher.cjs` → `node --check` → 重启 DSH。
+
+**验证**：任意会话跑完一轮后，`journalctl -u dsh-push -n 5` 应出现
+`[notify] completed "DSH · 已完成 · <会话名>"`。
