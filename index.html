@@ -2709,7 +2709,7 @@ async function closeTerminal(it) {
     el('b', { text: '\u7EC8\u7AEF' }),
     el('span', { style: 'flex:1' }),
     el('button', { class: 'ico', text: '\u2715', onclick: () => mask.remove() }));
-  const frame = el('iframe', { class: 'termframe', src: '/agents/?embed=1&pane=' + encodeURIComponent(paneId || '') });
+  const frame = el('iframe', { class: 'termframe', src: '/agents/?embed=1&pane=' + encodeURIComponent(paneId || '') + '&token=' + encodeURIComponent(termToken() || '') + '&v=' + encodeURIComponent(APP_VERSION) });
   mask.append(bar, frame);
   document.body.append(mask);
 }

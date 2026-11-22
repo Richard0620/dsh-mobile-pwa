@@ -24,7 +24,7 @@
   }
   .agp *{box-sizing:border-box}
   .agp button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
-  .agp .hdr{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--card);flex:0 0 auto}
+  .agp .hdr{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--card);flex:0 0 auto}
   .agp .dot{width:9px;height:9px;border-radius:50%;background:var(--bad);flex:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--bad) 18%,transparent)}
   .agp .dot.on{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 16%,transparent)}
   .agp .title{font-weight:650;font-size:16px;letter-spacing:.2px}
@@ -68,7 +68,7 @@
   .agp .seg{display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:10px;background:var(--bg);flex:none}
   .agp .seg button{padding:4px 9px;border-radius:8px;font-size:12px;color:var(--dim)}
   .agp .seg button.on{background:var(--card);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
-  .agp .chat{flex:1;min-height:0;overflow:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px;-webkit-overflow-scrolling:touch}
+  .agp .chat{flex:1;min-height:0;overflow:auto;padding:10px 12px;display:flex;flex-direction:column;gap:10px;-webkit-overflow-scrolling:touch}
   .agp .bubble{max-width:88%;padding:9px 12px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
   .agp .bubble.user{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:5px}
   .agp .bubble.assistant{align-self:flex-start;background:var(--card);border:1px solid var(--line);border-bottom-left-radius:5px}
@@ -95,6 +95,9 @@
   .agp.embed .hdr{display:flex;padding:6px 10px;gap:8px}
   .agp.embed .hdr .title{font-size:14px}
   .agp.embed .hdr .sub{display:none}
+  .agp.embed .hdr > div:first-of-type{display:none}
+  .agp.embed .ver{display:none}
+  .agp.embed .hdr .grow{flex:1}
   .agp.embed .nav{display:none}
   .agp.embed .mobar{display:none}
   .agp.embed .termwrap{padding-top:8px}
@@ -108,7 +111,7 @@
     .agp .composer{padding:8px 10px calc(10px + env(safe-area-inset-bottom))}
   }
   /* chat bubbles, ported from the PWA */
-  .agp .msg{display:flex;flex-direction:column;margin:0 0 2px}
+  .agp .msg{display:flex;flex-direction:column;margin:0}
   .agp .msg.user{align-items:flex-end}
   .agp .msg.assistant{align-items:flex-start}
   .agp .msg .bubble{max-width:88%;padding:9px 13px;border-radius:16px;font-size:15px;line-height:1.62;
@@ -117,7 +120,7 @@
   .agp .msg.assistant .md{width:100%;max-width:none;padding:0;background:none;border:0}
   .agp .msg.assistant .bubble{border-bottom-left-radius:5px}
   .agp .msg .bubble.md{white-space:normal}
-  .agp .mtime{font-size:10.5px;color:var(--dim);margin:3px 6px 10px}
+  .agp .mtime{font-size:10.5px;color:var(--dim);margin:2px 6px 8px}
   .agp .md{font-size:15px;line-height:1.62;word-break:break-word}
   .agp .md > :first-child{margin-top:0}
   .agp .md > :last-child{margin-bottom:0}
@@ -169,7 +172,7 @@
       <div class="title">终端</div>
       <div class="sub" id="conn">connecting…</div>
     </div>
-    <span class="ver">v13</span>
+    <span class="ver">v14</span>
     <span class="grow"></span>
     <div class="seg" id="seg"><button id="vChat">对话</button><button id="vTerm">终端</button></div>
     <button class="chip" id="resetBtn" style="display:none">新会话</button>
@@ -530,6 +533,7 @@
     const isChat = viewMode === 'chat';
     $('#termwrap').style.display = isChat ? 'none' : 'flex';
     $('#chat').style.display = isChat ? 'flex' : 'none';
+    $('.keys').style.display = isChat ? 'none' : 'flex';
     $('#vChat').classList.toggle('on', isChat);
     $('#vTerm').classList.toggle('on', !isChat);
     $('#txt').placeholder = isChat ? (dshActive() ? '发消息给 DSH，Enter 发送' : (currentAgent() ? '发消息给 agent，Enter 发送' : '先选择启动方式')) : '输入命令，Enter 发送';
@@ -613,7 +617,20 @@
     setInterval(() => { if (viewMode === 'chat') chatTick(); }, 2000);
     setInterval(() => { if (viewMode === 'chat' && dshActive()) chatTick(); }, 1500);
     setInterval(() => load().catch(() => {}), 4000);
+    fitViewport();
   }
+
+  function fitViewport() {
+    const vv = window.visualViewport;
+    const h = vv ? Math.round(vv.height) : window.innerHeight;
+    const agp = document.getElementById('agp');
+    if (agp && h > 200) agp.style.height = h + 'px';
+  }
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', fitViewport);
+    window.visualViewport.addEventListener('scroll', fitViewport);
+  }
+  window.addEventListener('resize', fitViewport);
 
   // --- minimal markdown renderer, same rules as the PWA ---
   function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
