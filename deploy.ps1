@@ -7,7 +7,8 @@
 # Requires: local HEAD == origin/main (unless -Force), so what is live is traceable.
 param(
   [string]$Ref = 'origin/main',
-  [switch]$Force
+  [switch]$Force,
+  [switch]$Push
 )
 
 $ErrorActionPreference = 'Stop'
@@ -25,5 +26,5 @@ if (-not $Force -and $head -ne $main) {
   exit 1
 }
 
-ssh @opt $hostName "bash /opt/dsh-mobile-deploy.sh $Ref"
+ssh @opt $hostName "bash /opt/dsh-mobile-deploy.sh $Ref"`nif ($Push) {`n  Write-Host "--- push service ---"`n  ssh @opt $hostName "bash /opt/dsh-push-deploy.sh $Ref"`n}
 ssh @opt $hostName "cat /srv/dsh-mobile/VERSION"
