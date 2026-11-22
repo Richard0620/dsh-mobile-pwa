@@ -704,7 +704,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v179';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v181';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -967,6 +967,17 @@ function consumePendingOpenSoon() {
   }
 }
 
+// 前台点通知：SW 的 postMessage 可能丢（页面未受控），所以可见时定周期读一次便条。
+// 便条只在「点了通知」时才写（SW 的 notificationclick），不会误跳。
+let pendingWatchStarted = false;
+function consumePendingOpenWatch() {
+  if (pendingWatchStarted) return;
+  pendingWatchStarted = true;
+  setInterval(() => {
+    if (document.visibilityState === 'visible' && state.token) consumePendingOpen().catch(() => {});
+  }, 2000);
+  try { window.addEventListener('focus', () => { consumePendingOpen().catch(() => {}); }); } catch {}
+}
 // 推送诊断：把 SW/权限/缓存里那张"便条"都摊开，冷启动点通知后看一眼就知道卡在哪
 async function openPushDiag() {
   const rows = [];
@@ -5434,6 +5445,7 @@ function subscribeDevice() {
     if (state.mode === 'lan') await applyNetMode({ silent: true });
     state.booted = true;
     consumePendingOpenSoon();                      // 冷启动点通知：多次重试读便条
+    consumePendingOpenWatch();                     // 前台点通知也兜住（2 秒轮询便条）
     refreshAll().catch(() => {}).then(() => { consumePendingOpen(); });
     subscribeDevice();
     if (state.mode === 'auto') applyNetMode({ silent: true }).catch(() => {});
