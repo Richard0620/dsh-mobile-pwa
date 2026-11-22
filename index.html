@@ -229,11 +229,11 @@
   /* 每条消息下方的操作行（复制 / 分支） */
   .mact{display:flex;gap:2px;margin-top:4px;font-size:11.5px;color:var(--dim);opacity:.8}
   .msg.user ~ .mact, .mact.right{justify-content:flex-end}
-  .mact button{display:inline-flex;align-items:center;gap:4px;padding:5px 9px;border-radius:8px;
-    color:var(--dim);font-size:12px;background:var(--card);border:1px solid var(--line);line-height:1.1}
+  .mact button{display:inline-flex;align-items:center;gap:4px;padding:5px 8px;border-radius:7px;
+    color:var(--dim);font-size:11.5px;background:transparent;border:0;line-height:1.1}
   .mact button:active{background:var(--bubble);color:var(--fg)}
   .msg.user{display:flex;justify-content:flex-end}
-  .msg.user .bubble{background:var(--bubble);border-radius:var(--r-bubble);padding:9px 13px;
+  .msg.user .bubble{background:var(--bubble);border-radius:18px 18px 5px 18px;padding:9px 13px;
     max-width:82%;white-space:pre-wrap;word-break:break-word;font-size:15px}
   .md{font-size:15px;line-height:1.62;word-break:break-word}
   .md > :first-child{margin-top:0}
@@ -638,7 +638,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v156';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v158';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1880,10 +1880,9 @@ async function loadFiles(path) {
 }
 
 function renderFiles(wrap) {
-  const back = el('button', { class:'ico', text:'‹', onclick: () => {
-    if (state.sessionId) { state.view = 'session'; render(); }
-    else { state.view = 'list'; render(); refreshAll(); }
-  }});
+  const back = state.sessionId ? el('button', { class:'ico', text:'‹', onclick: () => {
+    state.view = 'session'; render();
+  }}) : null;
   const selBtn = el('button', { class:'ico', text: state.filesSelecting ? '取消' : '选择',
     style:'width:auto;padding:0 8px;font-size:12.5px;font-weight:600', onclick: () => {
       state.filesSelecting = !state.filesSelecting;
