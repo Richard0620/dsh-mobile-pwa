@@ -736,7 +736,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v189';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v190';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1593,10 +1593,47 @@ async function renderSubPage(wrap) {
       row('仅中转', '始终走公网中转', state.mode === 'relay' ? '✓' : '', () => { setNetMode('relay'); render(); }),
       row('仅局域网', '只走局域网直连（需要证书）', state.mode === 'lan' ? '✓' : '', () => { setNetMode('lan'); render(); }),
     ));
+    // 诊断数据：中转延迟现测一次，其余取宿主的 connection-info（不造指标）
+    let ci = null;
+    let relayLabel = '不可达';
+    let relayMs = 0;
+    try { ci = await api('/api/mobile/v1/connection-info'); } catch {}
+    const t0 = performance.now();
+    try {
+      const h = await api('/api/mobile/v1/health');
+      relayMs = Math.round(performance.now() - t0);
+      relayLabel = h.service === 'dsh-mobile-relay' ? '正常（中转）'
+        : h.service === 'dsh-mobile-plugin' ? '正常（直连宿主）'
+        : (h.service || '正常');
+    } catch (e) { relayLabel = String(e.message || e); }
+
     main.append(el('div', { class:'slabel', text:'当前线路' }), group(
       row('线路', info.channel === 'lan' ? '局域网直连' : '公网中转', info.channel === 'lan' ? (info.ms ? info.ms + 'ms' : '') : '', null),
       row('探测时间', info.at ? new Date(info.at).toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit' }) : '还没探测', '', null),
       row('高级设置', '手填局域网地址 / 稳定名字', '', () => openConnectionSheet()),
+    ));
+    const lan = (ci && ((ci.lanUrls && ci.lanUrls.length) ? ci.lanUrls : ci.lanCandidates)) || [];
+    const direct = [(ci && ci.directUrl), (ci && ci.tcpUrl)].filter(Boolean).join(' / ');
+    const v6 = (ci && ci.ipv6Candidates) || [];
+    main.append(el('div', { class:'slabel', text:'中转' }), group(
+      row('中转地址', (ci && (ci.relayUrl || (ci.relayUrls || [])[0])) || '未配置', '', null),
+      row('中转状态', relayLabel, relayMs ? relayMs + 'ms' : '', null),
+    ));
+    main.append(el('div', { class:'slabel', text:'直连' }), group(
+      row('局域网直连', lan.length ? lan[0].url : '同网才有，当前没有可用地址',
+        lan.length && lan[0].interface ? lan[0].interface : '', null),
+      row('公网直连', direct || '未设置', direct ? '' : '可在「高级设置」里手填', null),
+      row('IPv6', v6.length ? v6[0].url : '无', '', null),
+    ));
+    main.append(el('div', { class:'slabel', text:'实例' }), group(
+      row('设备名', (ci && ci.name) || '未知', '', null),
+      row('实例 ID', String(state.instanceId || '').slice(0, 8) || '未知', '', null),
+      row('最近上报', ci && ci.lastSeen ? fmtTime(ci.lastSeen) : '—', '', null),
+      row('复制诊断', '整份连接信息 JSON，出问题直接发出去', '', async () => {
+        try { await navigator.clipboard.writeText(JSON.stringify({ relayLabel, relayMs, ci }, null, 2)); toast('已复制连接信息'); }
+        catch { toast('复制失败'); }
+      }),
+      row('重新测速', '重跑一次健康检查', '', () => render()),
     ));
     main.append(el('div', { class:'slabel', text:'其他' }), group(
       row('恢复链接', '粘一条带 token 的链接重新登录', '', openRecovery),
@@ -2115,42 +2152,10 @@ async function createWorkspaceAt(path) {
 }
 
 // 连接信息：延迟 + 中转健康
-async function openConnInfo() {
-  const t0 = performance.now();
-  let relayLabel = '中转不可达';
-  let info = null;
-  try {
-    const r = await api('/api/mobile/v1/health');
-    // 走中转时 service 是 dsh-mobile-relay；直连宿主时是插件自己，翻成人话
-    relayLabel = r.service === 'dsh-mobile-relay' ? '正常（中转）'
-      : r.service === 'dsh-mobile-plugin' ? '正常（直连宿主）'
-      : (r.service || '正常');
-  } catch (e) { relayLabel = String(e.message || e); }
-  const relayMs = Math.round(performance.now() - t0);
-  try { info = await api('/api/mobile/v1/connection-info'); } catch {}
-  // 四类线路分开写清楚：中转 / 局域网直连 / 公网直连 / IPv6。
-  // 以前这里只有一句「延迟 xx ms」，出问题时没法判断手机到底走的哪条路。
-  const rows = [];
-  const relay = (info && (info.relayUrl || (info.relayUrls || [])[0])) || '未配置';
-  rows.push(['中转', relay]);
-  rows.push(['中转状态', `${relayLabel} · ${relayMs}ms`]);
-  const lan = (info && (info.lanUrls && info.lanUrls.length ? info.lanUrls : info.lanCandidates)) || [];
-  rows.push(['局域网直连', lan.length ? (lan[0].url + (lan[0].interface ? `（${lan[0].interface}）` : '')) : '同网才有，当前没有可用地址']);
-  if (lan.length > 1) rows.push(['其它内网地址', lan.slice(1).map(u => u.url).join('\n')]);
-  const direct = [(info && info.directUrl), (info && info.tcpUrl)].filter(Boolean).join(' / ');
-  rows.push(['公网直连', direct || '未设置（可在「连接」里手填）']);
-  const v6 = (info && info.ipv6Candidates) || [];
-  rows.push(['IPv6', v6.length ? v6[0].url : '无']);
-  rows.push(['实例', `${(info && info.name) || '?'} · ${(state.instanceId || '?').slice(0, 8)}`]);
-  if (info && info.lastSeen) rows.push(['最近上报', fmtTime(info.lastSeen)]);
-  openInfoBox('连接信息', rows, [
-    { label:'重新测速', run: openConnInfo },
-    { label:'恢复链接', run: openRecovery },
-    { label:'复制诊断', run: async () => {
-      try { await navigator.clipboard.writeText(JSON.stringify({ relayLabel, relayMs, info }, null, 2)); toast('已复制连接信息'); }
-      catch { toast('复制失败'); }
-    } },
-  ]);
+// 连接信息就是「设置 → 连接」那一页：诊断数据和连接方式放同一处，
+// 用同一套 groupcard/srow 样式（以前这里是个临时 sheet，和新设计规范不一致）
+function openConnInfo() {
+  state.view = 'sub'; state.subPage = 'conn'; render();
 }
 
 // 文件读取：这个接口直接回原文，不是 JSON 信封，所以单独走 raw
