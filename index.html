@@ -732,7 +732,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v184';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v185';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1247,6 +1247,8 @@ const state = {
   model: null,
   permCurrent: '',
   busy: false,
+  // 本轮开始的时间戳（0 = 没在跑，或这一轮是「打开时已经在跑」——那种不显示计时，免得从 0 起算误导）
+  busySince: 0,
   stream: 'idle',
   poll: null,
   lastPaint: 0,
@@ -3991,6 +3993,35 @@ async function hydrateAttachments(rootEl) {
   }
 }
 
+// 运行计时：只在客户端亲眼看到「这一轮开始」时计时；
+// 打开页面时已经在跑的会话不计时（没有起点，从 0 起算反而误导）
+function markBusy(on) {
+  const now = !!on;
+  if (now && !state.busy) state.busySince = Date.now();
+  if (!now) state.busySince = 0;
+  state.busy = now;
+}
+function fmtElapsed(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+function busyText() {
+  if (!state.busy) return '';
+  return state.busySince ? `深度求索中… ${fmtElapsed(Date.now() - state.busySince)}` : '深度求索中…';
+}
+let busyTicker = null;
+function syncBusyTicker() {
+  const want = !!(state.busy && state.busySince && state.view === 'session' && ui.strip);
+  if (want && !busyTicker) {
+    busyTicker = setInterval(() => {
+      if (!state.busy || !ui.strip) { clearInterval(busyTicker); busyTicker = null; return; }
+      if (state.stream === 'open') ui.strip.textContent = busyText();
+    }, 1000);
+  } else if (!want && busyTicker) {
+    clearInterval(busyTicker); busyTicker = null;
+  }
+}
+
 function paintSession({ scroll = 'auto' } = {}) {
   if (!ui.body || !ui.body.isConnected) return;
   state.lastPaint = Date.now();
@@ -4109,9 +4140,10 @@ function paintSession({ scroll = 'auto' } = {}) {
   // 运行状态只保留 dock 里这一份；对话流末尾不再重复一次
   if (ui.strip) {
     ui.strip.textContent = state.stream === 'open'
-      ? (state.busy ? '深度求索中…' : '')
+      ? busyText()
       : (state.stream ? '实时连接断开，重连中…' : '');
   }
+  syncBusyTicker();
   if (scroll === 'bottom' || atBottom) {
     ui.atBottom = true;
     requestAnimationFrame(() => {
@@ -4425,7 +4457,7 @@ function renderSession(wrap) {
       await api('/api/mobile/v1/session/send', { method:'POST', body: {
         sessionId: state.sessionId, content: blocks, clientMessageId: uuid(),
       }});
-      state.busy = true;
+      markBusy(true);
       await loadMessages();
       // 发完就收键盘：多数人是发完去读回复，不是连发
       try { ta.blur(); } catch {}
@@ -4495,7 +4527,7 @@ function renderSession(wrap) {
     if (!confirm('中断这次运行？')) return;
     try {
       await api('/api/mobile/v1/session/stop', { method:'POST', body: { sessionId: state.sessionId } });
-      state.busy = false; paintSession();
+      markBusy(false); paintSession();
     } catch (e) { toast('取消失败：' + (e.message || e)); }
   }});
   const qDock = el('div', { class:'qdock' });
@@ -5277,7 +5309,7 @@ async function syncRunning() {
     if (!s) return;
     const running = !!s.running;
     if (running !== state.busy) {
-      state.busy = running;
+      markBusy(running);
       if (state.view === 'session') { paintSession(); try { ui.loadStats?.(); } catch {} }
     }
   } catch {}
@@ -5308,7 +5340,7 @@ function openSession(s) {
   state.view = 'session';
   state.sessionId = s.sessionId;
   state.sessionTitle = s.title || '(无标题)';
-  state.messages = []; state.cards = []; state.lastSeq = 0; state.busy = !!s.running;
+  state.messages = []; state.cards = []; state.lastSeq = 0; state.busy = !!s.running; state.busySince = 0;
   state.model = null; state.pending = []; state.unseen = 0; state.msgLimit = 120;
   state.queue = [];
   state.permCurrent = '';
@@ -5440,8 +5472,9 @@ function subscribeSession() {
       ui.dot.className = st === 'open' ? 'dot run' : 'dot';
       ui.dot.title = st === 'open' ? '实时已连接' : `重连中…${err ? ' ' + (err.message || err) : ''}`;
       if (ui.strip) ui.strip.textContent = st === 'open'
-        ? (state.busy ? '深度求索中…' : '')
+        ? busyText()
         : '实时连接断开，重连中…';
+      syncBusyTicker();
     },
     onFrame: f => { if (state.sessionId === sid) onFrame(f); },
   });
@@ -5475,8 +5508,8 @@ function onFrame(frame) {
   else if (t === 'session/event') {
     const ev = frame.event || {};
     const inner = (ev.data && ev.data.type) || (frame.data && frame.data.type) || ev.type || '';
-    if (inner === 'turn/start') state.busy = true;
-    if (inner === 'turn/end' || inner === 'turn/ended') { state.busy = false; }
+    if (inner === 'turn/start') markBusy(true);
+    if (inner === 'turn/end' || inner === 'turn/ended') { markBusy(false); }
     clearTimeout(onFrame._t);
     onFrame._t = setTimeout(loadMessages, 350);
     return;
