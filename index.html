@@ -626,6 +626,21 @@
     background:var(--bubble);color:var(--dim);font-size:11.5px;letter-spacing:-.1px;white-space:nowrap;
     flex:none;max-width:60%}
   .chip2:active{opacity:.7}
+  /* 新会话页：大输入框 + 工作区/模式 chips；和 composer 用同一套 chip 观感 */
+  .newpage{display:flex;flex-direction:column;flex:1;min-height:0}
+  .newbox{flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px;
+    padding:12px 14px calc(14px + var(--safe-b))}
+  .newta{width:100%;min-height:132px;max-height:46vh;resize:none;box-sizing:border-box;
+    border:1px solid var(--line);border-radius:18px;background:var(--card);color:var(--fg);
+    padding:14px 15px;font-family:inherit;font-size:15.5px;line-height:1.55;outline:none;
+    caret-color:var(--accent)}
+  .newta::placeholder{color:var(--dim)}
+  .newta:focus{border-color:color-mix(in srgb,var(--accent) 38%,var(--line))}
+  .newchips{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .chip2.on{background:color-mix(in srgb,var(--accent) 14%,transparent)}
+  .chip2.on b{color:var(--accent)}
+  .newchips .send{width:38px;height:38px;min-width:38px;border-radius:50%;flex:none}
+  .newhint{font-size:11.5px;color:var(--dim);line-height:1.6;padding:0 2px}
   .chip2 b{font-weight:600;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
   .chip2.danger{background:color-mix(in srgb,var(--bad) 12%,transparent);color:var(--bad);
     border:1px solid color-mix(in srgb,var(--bad) 35%,var(--line))}
@@ -745,7 +760,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v192';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v193';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1842,6 +1857,7 @@ function render() {
     if (state.view === 'list') { ui.sessionId = null; renderList(wrap); }
     else if (state.view === 'files') renderFiles(wrap);
     else if (state.view === 'settings') renderSettings(wrap);
+    else if (state.view === 'new') renderNewSession(wrap);
     else if (state.view === 'sub') renderSubPage(wrap);
     else if (state.view === 'git') renderGit(wrap);
     else renderSession(wrap);
@@ -2042,17 +2058,96 @@ function workspaceOf(sessionId) {
 }
 
 // 新建会话：先选工作区（AI-HUB 的新会话页也是这个模型），再让宿主建
+// ---------------- 新会话页：大输入框 + 工作区/模式 chips，写完直接发第一条 ----------------
+function openNewSession() {
+  state.view = 'new';
+  state.newDraft = '';
+  state.newIsolate = !!state.newIsolate;
+  if (state.newWs === undefined) state.newWs = null;
+  render();
+}
+
+function renderNewSession(wrap) {
+  const back = el('button', { class:'ico', html:sheetIconSVG('chevronLeft'), title:'返回', 'aria-label':'返回',
+    onclick: () => { state.view = 'list'; render(); } });
+  wrap.append(heroBackHeader('新会话', '写完直接发第一条', back));
+
+  const ta = el('textarea', { class:'newta', placeholder:'发消息或创建任务，/ 调用指令' });
+  ta.value = state.newDraft || '';
+  ta.addEventListener('input', () => { state.newDraft = ta.value; sendBtn.disabled = !ta.value.trim(); });
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); }
+  });
+
+  const ws = (state.workspaces || []).find(w => w.workspaceId === state.newWs);
+  const wsChip = el('button', { class:'chip2', title:'选择工作区', onclick: () => {
+    const items = (state.workspaces || []).map(w => ({
+      label: w.title || w.path,
+      sub: w.path && w.title ? w.path : '',
+      icon: '📁',
+      checked: w.workspaceId === state.newWs,
+      run: () => { state.newWs = w.workspaceId; render(); },
+    }));
+    items.push({ label:'默认工作区', icon:'＋', checked: !state.newWs,
+      run: () => { state.newWs = null; render(); } });
+    items.push({ label:'新建工作区…', icon:'＋', run: async () => {
+      await openWorkspacePicker(state.sessionCwd || '', async (path) => {
+        const created = await createWorkspaceAt(path);
+        if (!created || !created.workspaceId) return false;
+        state.newWs = created.workspaceId; render();
+        return true;
+      });
+    } });
+    openSheet(items, '工作区');
+  }}, el('span', { class:'ci', html:sheetIconSVG('folder') }),
+    el('b', { text: (ws && (ws.title || ws.path)) || '默认工作区' }));
+
+  // 模式：共享目录 / 隔离工作树（宿主 session/new 支持 isolate，和桌面「工作树隔离」同一个开关）
+  const isoChip = el('button', { class:'chip2' + (state.newIsolate ? ' on' : ''), title:'新会话是否用独立工作树',
+    onclick: () => { state.newIsolate = !state.newIsolate; render(); }},
+    el('span', { class:'ci', html:sheetIconSVG('git') }),
+    el('b', { text: state.newIsolate ? '隔离工作树' : '共享工作区' }));
+
+  const sendBtn = el('button', { class:'send', text:'↑', title:'创建会话并发送', disabled: true,
+    onclick: () => submit() });
+
+  async function submit() {
+    const text = (ta.value || '').trim();
+    if (!text) { toast('先写点什么'); return; }
+    if (sendBtn.disabled) return;
+    sendBtn.disabled = true;
+    try {
+      const body = {};
+      if (state.newWs) body.workspaceId = state.newWs;
+      if (state.newIsolate) body.isolate = true;
+      const r = await api('/api/mobile/v1/session/new', { method:'POST', body });
+      await refreshAll(true);
+      const found = state.sessions.find(s => s.sessionId === r.sessionId);
+      state.newDraft = '';
+      openSession(found || { sessionId: r.sessionId, title: '新会话', running: false });
+      // 等会话页渲染出输入框，再把第一条塞进去发（send 是 renderSession 里的闭包，走 ui.send）
+      await new Promise(res => setTimeout(res, 80));
+      if (ui.ta && ui.send) { ui.ta.textContent = text; await ui.send(); }
+      else toast('已建会话，但没能自动发出第一条，请手动粘贴');
+    } catch (e) {
+      toast('新建失败：' + (e.message || e));
+      sendBtn.disabled = false;
+    }
+  }
+
+  wrap.append(el('div', { class:'newpage' },
+    el('div', { class:'newbox' },
+      ta,
+      el('div', { class:'newchips' }, wsChip, isoChip, el('span', { style:'flex:1' }), sendBtn),
+      el('div', { class:'newhint', text: state.newIsolate
+        ? '会在独立工作树里开会话，改完再合并；适合实验性改动'
+        : '直接在当前工作区里开会话；⌘/Ctrl + Enter 也能发' }))));
+  setTimeout(() => { try { ta.focus(); } catch {} }, 60);
+}
+
+// 兼容旧调用点（列表页＋、抽屉＋）：一律进新会话页，不再弹「选工作区」sheet
 function openNewSessionSheet() {
-  // 已有工作区排在前面（日常多数是接着已有目录干活）；「新建工作区…」放最底下，
-  // 选完目录先采纳成工作区，再直接在这个工作区里建会话。
-  const items = state.workspaces.map(w => ({
-    label: w.title || w.path,
-    icon: '📁',
-    run: () => createSession(w.workspaceId),
-  }));
-  items.push({ label: '默认工作区', icon: '＋', run: () => createSession(null) });
-  items.push({ label: '新建工作区…', icon: '＋', run: newSessionInNewWorkspace });
-  openSheet(items, '新建会话 · 选择工作区');
+  openNewSession();
 }
 
 async function newSessionInNewWorkspace() {
@@ -4856,6 +4951,7 @@ function renderSession(wrap) {
   }
 
   ui = { sessionId: state.sessionId, body, listWrap, cardsWrap, ta, sendBtn, stopBtn, strip, dot, modelEl: modelRow, effortEl: effortRow,
+    send, // 新会话页要借它把第一条发出去（闭合在 renderSession 里，外面拿不到）
     qDock, editBar, jump, updateJump, loadStats: loadSessionStats, keys: [], nodes: [], cardsKey: '', prevCount: undefined, atBottom: true };
   paintSession({ scroll:'bottom' });
   // 进会话只定位到底部，不自动聚焦输入框：多数时候是进来看内容的，弹键盘会挡住正文
