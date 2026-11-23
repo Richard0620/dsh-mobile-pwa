@@ -484,6 +484,9 @@
   .sres .ss{font-size:12.5px;color:var(--dim);margin-top:3px;display:-webkit-box;-webkit-line-clamp:2;
     -webkit-box-orient:vertical;overflow:hidden}
   .sres .smeta{font-size:10.5px;color:var(--dim);margin-top:3px;opacity:.8}
+  /* 搜索命中：只标命中的那几个字，别把整行染色（主色在纸面皮肤里接近黑，压字反而看不清） */
+  .sres mark.hl{background:color-mix(in srgb, var(--accent) 16%, transparent);color:inherit;
+    border-radius:3px;padding:0 1px}
   .md blockquote{margin:10px 0;padding:2px 12px;border-left:3px solid var(--line);color:var(--dim)}
   .md hr{border:none;border-top:1px solid var(--line);margin:14px 0}
   .md a{color:var(--accent);text-decoration:none}
@@ -729,7 +732,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v183';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v184';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -3478,6 +3481,28 @@ function buildSearchResults(q) {
   return out.slice(0, 40);
 }
 
+// 搜索命中高亮：用 textContent 拼节点，不拼 HTML，天然免疫转义问题
+function hlText(text, q) {
+  const s = String(text == null ? '' : text);
+  const needle = String(q || '').trim();
+  const frag = document.createDocumentFragment();
+  if (!needle) { frag.append(s); return frag; }
+  const lower = s.toLowerCase();
+  const n = needle.toLowerCase();
+  let i = 0;
+  while (true) {
+    const at = lower.indexOf(n, i);
+    if (at < 0) { frag.append(s.slice(i)); break; }
+    if (at > i) frag.append(s.slice(i, at));
+    const m = document.createElement('mark');
+    m.className = 'hl';
+    m.textContent = s.slice(at, at + needle.length);
+    frag.append(m);
+    i = at + needle.length;
+  }
+  return frag;
+}
+
 function renderList(wrap, opts = {}) {
   if (Date.now() - termAgents.at > 15000) loadTermAgents();
   const menu = el('button', { class:'ico', text:'☰', 'data-bell':'', onclick: () => openSheet([
@@ -3559,11 +3584,18 @@ function renderList(wrap, opts = {}) {
   }
 
   if (state.searchItems) {
-    if (!state.searchItems.length) main.append(el('div', { class:'empty', text:'没有匹配的会话' }));
+    const q = (state.searchQ || '').trim();
+    if (!state.searchItems.length) {
+      main.append(el('div', { class:'empty' },
+        el('div', { text: q ? `没有匹配「${q}」的会话` : '没有匹配的会话' }),
+        el('button', { class:'btn', style:'margin-top:12px', text:'清除搜索', onclick: () => {
+          state.searchQ = ''; state.searchItems = null; render();
+        } })));
+    }
     for (const r of state.searchItems) {
       main.append(el('div', { class:'sres', onclick: () => openSession(r.s) },
-        el('div', { class:'st', text: r.s.title || '(无标题)' }),
-        r.snippet ? el('div', { class:'ss', text: r.snippet }) : null,
+        el('div', { class:'st' }, hlText(r.s.title || '(无标题)', q)),
+        r.snippet ? el('div', { class:'ss' }, hlText(r.snippet, q)) : null,
         el('div', { class:'smeta', text: r.meta })));
     }
     wrap.append(main);
