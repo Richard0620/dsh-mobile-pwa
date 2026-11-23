@@ -449,8 +449,8 @@ DSH 插件 sendFrame() ──► ~/.dsh/webpush.json ──► https://dsh.easym
 
 ### 待处理（按优先级）
 
-- **P0** `/push/subscribe` 无鉴权，且 `broadcast()` 向所有订阅广播：任何公网客户端都能订阅自己的 endpoint，收走之后所有通知的标题/正文/sessionId。需把订阅绑定到设备凭据，或做推送内容 E2EE。
-- **P1** 部署的 Caddy 缺 HSTS / CSP / X-Frame-Options / Permissions-Policy；先加 HSTS、Frame、Permissions，CSP 需要试。
+- ~~**P0** `/push/subscribe` 无鉴权…~~ ✅ **已修（2026-11-22 复核）**：VPS 上 `/opt/dsh-push/server.mjs` 的 `/push/subscribe` 与 `/push/unsubscribe` 都先过 `validDevice(req)`（拿 `Authorization: Bearer` + `x-dsh-instance` 回查宿主 `/api/mobile/v1/sessions`），实测无凭据 POST 返回 **401 device-credential-required**。`broadcast()` 只发给这些已授权设备的端点，属于同一主机的多设备分发，不是公网任意订阅。
+- ~~**P1** 部署的 Caddy 缺 HSTS / Frame / Permissions~~ ✅ **已加（2026-11-22）**：站点级 `header{}` 上了 `Strict-Transport-Security max-age=31536000`、`X-Frame-Options SAMEORIGIN`（**不能 DENY**：`/agents/` 会被 PWA 用 iframe 内嵌）、`X-Content-Type-Options nosniff`、`Referrer-Policy no-referrer`、`Permissions-Policy`，并隐藏 `Server`。`caddy validate` 通过后 reload，线上实测头都在、首页 200、`/api/mobile/v1/health` 正常。**CSP 仍未加**（要逐条试 `default-src`/`script-src`，与内联单文件架构冲突）。
 - **P1** 配对码 TTL / 连续失败自动轮换（插件补丁），以及新设备配对提醒；这样即使临时打开配对，也不用靠人记得关。
 - **P2** E2EE 评估；设备凭据一年有效且全权限；恢复链接 `#token=` 的转发/截图风险。
 - **P2** `/agents/` 接受 `?token=`，容易进浏览器历史和反代日志；建议去掉 query token 或改一次性码。
