@@ -736,7 +736,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v188';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v189';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -2117,16 +2117,40 @@ async function createWorkspaceAt(path) {
 // 连接信息：延迟 + 中转健康
 async function openConnInfo() {
   const t0 = performance.now();
-  let label = '中转不可达';
+  let relayLabel = '中转不可达';
+  let info = null;
   try {
     const r = await api('/api/mobile/v1/health');
-    label = r.service === 'dsh-mobile-relay' ? '中转正常' : (r.service || '正常');
-  } catch (e) { label = String(e.message || e); }
-  const ms = Math.round(performance.now() - t0);
-  openSheet([
-    { label:'重新加载', icon:'↻', run: reloadApp },
-    { label:'恢复链接', icon:'🔗', run: openRecovery },
-  ], `${label} · 延迟 ${ms}ms`);
+    // 走中转时 service 是 dsh-mobile-relay；直连宿主时是插件自己，翻成人话
+    relayLabel = r.service === 'dsh-mobile-relay' ? '正常（中转）'
+      : r.service === 'dsh-mobile-plugin' ? '正常（直连宿主）'
+      : (r.service || '正常');
+  } catch (e) { relayLabel = String(e.message || e); }
+  const relayMs = Math.round(performance.now() - t0);
+  try { info = await api('/api/mobile/v1/connection-info'); } catch {}
+  // 四类线路分开写清楚：中转 / 局域网直连 / 公网直连 / IPv6。
+  // 以前这里只有一句「延迟 xx ms」，出问题时没法判断手机到底走的哪条路。
+  const rows = [];
+  const relay = (info && (info.relayUrl || (info.relayUrls || [])[0])) || '未配置';
+  rows.push(['中转', relay]);
+  rows.push(['中转状态', `${relayLabel} · ${relayMs}ms`]);
+  const lan = (info && (info.lanUrls && info.lanUrls.length ? info.lanUrls : info.lanCandidates)) || [];
+  rows.push(['局域网直连', lan.length ? (lan[0].url + (lan[0].interface ? `（${lan[0].interface}）` : '')) : '同网才有，当前没有可用地址']);
+  if (lan.length > 1) rows.push(['其它内网地址', lan.slice(1).map(u => u.url).join('\n')]);
+  const direct = [(info && info.directUrl), (info && info.tcpUrl)].filter(Boolean).join(' / ');
+  rows.push(['公网直连', direct || '未设置（可在「连接」里手填）']);
+  const v6 = (info && info.ipv6Candidates) || [];
+  rows.push(['IPv6', v6.length ? v6[0].url : '无']);
+  rows.push(['实例', `${(info && info.name) || '?'} · ${(state.instanceId || '?').slice(0, 8)}`]);
+  if (info && info.lastSeen) rows.push(['最近上报', fmtTime(info.lastSeen)]);
+  openInfoBox('连接信息', rows, [
+    { label:'重新测速', run: openConnInfo },
+    { label:'恢复链接', run: openRecovery },
+    { label:'复制诊断', run: async () => {
+      try { await navigator.clipboard.writeText(JSON.stringify({ relayLabel, relayMs, info }, null, 2)); toast('已复制连接信息'); }
+      catch { toast('复制失败'); }
+    } },
+  ]);
 }
 
 // 文件读取：这个接口直接回原文，不是 JSON 信封，所以单独走 raw
