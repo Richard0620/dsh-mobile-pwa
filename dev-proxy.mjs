@@ -2,21 +2,55 @@
  * 开发用同源反代 —— 把 Caddy 上线后的那条规则在本地复现：
  *
  *   / 与静态文件      → 本地 pwa/ 目录
- *   /api/**, /__lan_pair → http://127.0.0.1:18787（dsh-mobile 插件）
+ *   /api/**, /__lan_pair → DSH 宿主的 web 端口（手机 API 挂在它上面）
  *
  * 为什么必须同源：实测该 API 不返回 Access-Control-Allow-Origin，OPTIONS 预检直接 401，
  * 浏览器跨域一律失败。所以前端只能与 API 同源。
  *
- * 用法： node dev-proxy.mjs  [端口，默认 8080]
+ * 用法： node dev-proxy.mjs  [端口，默认 8080]  [宿主 web 端口，可选]
+ *        宿主端口没给就自动探测（dsh web 每次重启端口都会变）
  */
 import http from 'node:http';
+import { execSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const PORT = Number(process.argv[2] || 8080);
-const UPSTREAM = { host: '127.0.0.1', port: 18787 };
+// 宿主自己的 web 端口（手机 API 挂在它上面）。18787 是 LAN/中转 sidecar 的端口，
+// 那边对 /api/mobile/v1/* 强制要求设备 token —— 本地开发转发过去永远配不上对。
+// 宿主端口每次重启都可能变（dsh web 会打印新端口），所以这里按顺序取：
+//   第 3 个参数 > DSH_WEB_PORT > 自动探测本机监听端口里的 /api/mobile/v1/health
+const UPSTREAM = { host: '127.0.0.1', port: Number(process.argv[3] || process.env.DSH_WEB_PORT || 0) };
+
+function listeningPorts() {
+  try {
+    const out = process.platform === 'win32'
+      ? execSync('netstat -ano', { encoding: 'utf8' })
+      : execSync('ss -ltn', { encoding: 'utf8' });
+    const re = process.platform === 'win32' ? /127\.0\.0\.1:(\d+)\s+\S+\s+LISTENING/gi : /127\.0\.0\.1:(\d+)/g;
+    return [...new Set([...out.matchAll(re)].map((m) => Number(m[1])))];
+  } catch {
+    return [];
+  }
+}
+
+/** 宿主 web 端口没给定就自己找：只有 dsh-mobile 插件会回这个 service 字段。 */
+async function resolveUpstream() {
+  if (UPSTREAM.port) return UPSTREAM.port;
+  for (const p of listeningPorts().filter((p) => p > 1023 && p !== PORT)) {
+    try {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 400);
+      const r = await fetch(`http://127.0.0.1:${p}/api/mobile/v1/health`, { signal: ctl.signal });
+      clearTimeout(timer);
+      const j = await r.json().catch(() => null);
+      if (r.ok && j && j.service === 'dsh-mobile-plugin') { UPSTREAM.port = p; return p; }
+    } catch { /* 下一个 */ }
+  }
+  throw new Error('找不到 DSH 宿主 web 端口：node dev-proxy.mjs 8080 <port>，或设 DSH_WEB_PORT');
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -30,7 +64,12 @@ const MIME = {
   '.ico': 'image/x-icon',
 };
 
-function proxy(req, res) {
+async function proxy(req, res) {
+  try { await resolveUpstream(); } catch (e) {
+    res.writeHead(502, { 'content-type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ ok: false, error: { code: 'upstream', message: String(e.message || e) } }));
+    return;
+  }
   const up = http.request(
     { ...UPSTREAM, method: req.method, path: req.url, headers: { ...req.headers, host: `${UPSTREAM.host}:${UPSTREAM.port}` } },
     (upRes) => {
@@ -79,6 +118,8 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`DSH Mobile dev proxy → http://127.0.0.1:${PORT}/   (api → ${UPSTREAM.host}:${UPSTREAM.port})`);
+server.listen(PORT, '127.0.0.1', async () => {
+  let target = `${UPSTREAM.host}:${UPSTREAM.port || '自动探测'}`;
+  try { target = `${UPSTREAM.host}:${await resolveUpstream()}`; } catch (e) { target = String(e.message || e); }
+  console.log(`DSH Mobile dev proxy → http://127.0.0.1:${PORT}/   (api → ${target})`);
 });

@@ -2,7 +2,8 @@
 
 > **所有会话、子代理都只改这一份。** 开工前先读；完成一项或发版后立刻更新状态，不要另建清单，也不要只把进度写在聊天里。
 >
-> 最后更新：2026-11-22 08:29 · 线上 **v177 / sw v178**（ref=origin/main）
+> 最后更新：2026-11-22 20:05 · 线上 **v177 / sw v178**（ref=origin/main）
+> 本轮新增：用无头浏览器（agent-browser，不碰鼠标）在 430×932 / 320×672、明暗两套主题下走查全站，新增 1.4、2.28–2.34 与 P3 一条；截图在 `_screenshots/qa-20261122/`
 > 代码主目录：`D:\Vibe\PWA\pwa`（master，主会话负责合并与部署）
 
 ---
@@ -46,15 +47,16 @@
 | v173 / sw v174 | 2.25 会话菜单图标补全、取消置顶即时反馈 | ✅ 已上线 |
 | v175 / sw v176 | 2.26 二级页返回按钮左置、文件多选空框可见、抽屉设置入口修正 | ✅ 已上线 |
 | v177 / sw v178 | 2.27 composer 底部按钮垂直对齐（去掉 `.chips` 不对称 padding） | ✅ 已上线 |
+| v182 / sw v183 | 1.4 弹层矮屏可滚动；2.28 模型来源可辨；2.29 图标语义；2.30 sheet 可键盘/Esc；2.31 错误文案；2.32 占位与提示；2.33 皮肤语义；2.34 细节批次；dev-proxy 端口自动探测 | ✅ 本地已验，**待部署** |
 | v128 / sw v129 | 2.22 第三步：composer 三颗 chip（工作区/模型/推理）+ 圆形发送 | 🔄 分支 feature/ui-paper-carbon |
 
-> 1.1 的**宿主补丁**已装进插件，但需要重启 DSH 才加载，见第 6 节。
+> 1.1 的**宿主补丁**已于 2026-11-22 随 DSH 重启加载并验收（见第 6 节）。
 
 ---
 
 ## 2. P0（影响日常使用）
 
-### 1.1 推送角标与客户端角标"打架" ✅（v81；宿主补丁待 DSH 重启）
+### 1.1 推送角标与客户端角标"打架" ✅（v81；宿主补丁已随 2026-11-22 重启生效）
 
 - **已完成**：镜像到 Web Push 的帧带 `badge`，由宿主按「未读会话数 + 待处理会话数」计算；客户端的 `unreadCount()` 改成同一口径（`pendingInteraction` + 本地卡按会话去重），App 打开时不再跳变。读不到台账就**不带 badge**，不发假数字。
 - 宿主补丁在 `patches/push-notify.js`，已装到 `~/.dsh/profiles/desktop/node_modules/dsh-mobile-plugin/lib/mobile/push-notify.js`（原文件有 `.bak` 备份）。
@@ -74,6 +76,24 @@
 - **验收**：桌面浏览器宽屏打开 → 列表/会话都是单栏，不再出现左侧常驻列表 + 右侧聊天；拖窗口跨 900px 不会整页重排。
 
 ---
+
+### 1.4 底部弹层在矮屏上溢出且不可滚动 ✅（v182）
+
+- **现象**：抽屉（☰）、新建会话选工作区、模型选择、皮肤选择都是底部 sheet，高度按内容撑开、不跟视口走。320×672（iPhone SE / 横屏 / 键盘弹起）时抽屉实测 `sheetTop = -225`、sheet 高 897，`scrollHeight == clientHeight = 896` —— 顶部「刷新 / 新建工作区 / 文件」三项被顶出屏幕，**且无法滚动找回**。
+- **影响**：小屏机、横屏、浏览器地址栏展开/键盘弹起时，入口直接消失，用户会以为功能被删了。
+- **修法**：sheet 容器 `max-height: calc(100dvh - 56px)`；内容区 `overflow-y:auto; -webkit-overflow-scrolling:touch`；`@media (max-height:700px)` 下压缩行高（现在每行约 75px）。
+- **证据**：`_screenshots/qa-20261122/14-drawer-320.png`。
+- **已完成（v182）**：`.sheet` 加 `max-height:calc(100dvh - 20px)` + `overflow-y:auto`（带 `100vh` 兜底、`overscroll-behavior:contain`），grab/shead 改 sticky；`@media (max-height:700px)` 压行高。实测同一抽屉 320×672：`top=20`、`h=652`、`scrollH=782 > clientH=651`（可滚），截图 `41-drawer-320-fixed.png`。
+
+> **v182 一并完成（2026-11-22）**：
+> - `2.28` 模型选择器：sheet item 新增副标题（`.sl2` + `.ssub`），行内显示来源（`DeepSeek` / `DeepSeek Account · high`）并对当前项打勾 —— 四个选项不再「两两同名」。
+> - `2.29` 图标：`archive` 图标从「垃圾桶感」改成带向下箭头的归档箱；归档页「取消归档」换成 `back` SVG + `.act` 提高不透明度（原 `↩` 太淡）。
+> - `2.30` 可访问性：`openSheet` 的行和「取消」从 `div` 改成 `<button type="button">`，sheet 加 `role="dialog" aria-modal="true"` + `aria-label`，打开时焦点进第一项，**Esc 关闭**（实测 Esc 后 `.mask` 数量 0）；`:focus-visible` 才显示焦点环，避免每开一次都出现黑框。
+> - `2.31` 错误文案：`api()` 现在同时解析 `{"error":"字符串"}` 和 `{"error":{message}}`，新增 `friendlyAuthError()` 把 401/网络错误翻成「配对码不对，或这台电脑暂时不允许新设备配对」这类可照做的话；凭据失效时改写成「登录已失效（原因），请重新配对或用恢复链接登录」。
+> - `2.32` 登录页：输入框占位改「粘贴恢复链接」，上方加一行说明「整条含 #token=…」。
+> - `2.33` 皮肤：`跟随系统` 改名 `自动`，三个选项各带副标题（浅色纸面 / 深色碳黑），不再和「主题」里的同名项打架。
+> - `2.34` 细节：全局 `.slabel` 的大写样式不再漏进 sheet（sheet 改用 `.ilabel`，工作区名不再被转成全大写）；☰ 菜单与新建会话 sheet 统一「新建工作区…」；视图器去掉重复的「复制全文」（保留工具栏那颗）；登录页副标题缩短，320 宽不再出现孤字「码」。
+> - `P3` dev-proxy：`/api` 不再写死 18787；改为「第 3 个参数 > `DSH_WEB_PORT` > 自动探测本机监听端口里的 `/api/mobile/v1/health`（`service === 'dsh-mobile-plugin'`）」，重启后端口变了也能自己找到。
 
 ## 3. P1（体验打磨）
 
@@ -220,7 +240,7 @@
   - 切换走 `/session/send` 的 `/permission <preset>` 文本命令，宿主按 `commands.execute` 执行，不发给模型；切换后重读 stats 刷新 chip。
 - **验收**：chip 显示当前档位；切到 `danger-full-access` 后不再逐次审批、chip 变红/全权；切回 `workspace-write` 恢复；命令失败有 toast。
 - **备注**：当前只用 DSH 默认预设名；若宿主配置了额外 preset，后续可把 catalog 透出来再做动态列表。
-### 2.23 界面重做：纸面 / 碳黑双皮肤 🔄（v124 第一步）
+### 2.23 界面重做：纸面 / 碳黑双皮肤 ✅（v124 起，已合入 master ffc8d6d）
 
 - **来源**：`PWA/design/ui-v1/`（430×932 的 12 屏交互稿，三套风格对比）。
 - **已定**：底部 Tab（会话/文件/设置）替代抽屉；composer 保留「工作区/模型/推理」三颗 chip；文件页用平铺列表 + 路径，不做目录树；默认纸面皮肤，碳黑作为可选皮肤。
@@ -263,6 +283,57 @@
 - **原因**：`.chips` 早期规则残留 `padding:2px 2px 8px`，后面的规则只改了 flex，没有清 padding；不对称 padding 把模型/推理/权限 chip 整体顶高，plus 和发送键看起来没对齐。
 - **修复**：`.chips` 补 `padding:0`，行高统一由 34px 的 plus/sendgroup 决定，30px chips 居中。
 - **验证**：本地用 `getBoundingClientRect` 实测 plus top=791.953 height=34、chips top=793.953 height=30、sendgroup top=791.953 height=34，三者垂直中心一致（chips 上下各留 2px）。
+
+### 2.28 模型选择器四个选项两两同名，无法区分 ✅（v182）
+
+- **现象**：`模型 · 当前 DeepSeek-V4.1-Flash · high` 弹层里是 4 行：`DEEPSEEK-V4.1-FLASH ×2`、`DEEPSEEK-V4-PRO ×2`；行内只有模型名，没有推理档/来源/供应商，用户分不清点哪个，也看不出哪一行是"当前"。
+- **建议**：行内加副标题（`high` / 来源 或 `账户/API`），按供应商分组；当前项加「当前」字样，别只靠背景色。
+- **证据**：`_screenshots/qa-20261122/37-model-sheet.png`。
+
+### 2.29 会话菜单与归档页图标语义不清晰 ✅（v182）
+
+- **现象**：行菜单里 重命名=铅笔、取消置顶=图钉、**归档会话=垃圾桶**、打开=chevron。垃圾桶的语义是"删除"，而归档是可恢复的。
+- **建议**：换成归档箱/下箭头；将来真有"删除"再用垃圾桶。
+- **证据**：`_screenshots/qa-20261122/32-rowmenu.png`。
+
+### 2.30 弹层行与「取消」是 div，键盘和读屏都点不到 ✅（v182）
+
+- **现象**：抽屉每一行、每个底部 sheet 的「取消」都是 `<div>`，没有 `role` / `tabindex` / 焦点环；用文本定位点击会报 "not visible"（实测）。而会话里的操作行（复制/分段/分支）是正常的 `<button>`，两套风格不统一。Esc 也关不掉 sheet（实测无反应）。
+- **建议**：统一 `<button type="button">`；sheet 加 `role="dialog" aria-modal="true"`，打开时把焦点送进第一项，Esc 关闭。
+- **证据**：`_screenshots/qa-20261122/13-drawer.png`、`36-perm-sheet.png`。
+
+### 2.31 登录页把 HTTP 状态码直接上屏 ✅（v182）
+
+- **现象**：配对失败显示 `401: Unauthorized`；恢复链接失效显示 `unauthorized: 缺少或无效的移动 token`（英文前缀 + 中文直译）。宿主明明返回了可读的原因（`{"ok":false,"error":"配对码错误"}`），前端却丢了 message。
+- **建议**：优先显示 `error.message`；映射 401 →「配对码不对或这台电脑暂不允许新设备」，408/网络断 →「连不上电脑，检查同一网络/中转」。
+- **证据**：`_screenshots/qa-20261122/login-320.png`、`03-bogus-token.png`。
+
+### 2.32 「恢复链接」占位文案被截断 ✅（v182）
+
+- **现象**：`或粘贴「恢复链接」（含 #token=…）` 在 430/390 只显示到「（含 #」，320 只剩「或粘贴「恢复链接」」。括号里正是格式提示。
+- **建议**：缩短为「粘贴恢复链接」，格式说明移到下方 hint 或 `title`。
+- **证据**：`_screenshots/qa-20261122/login-390.png`、`login-320.png`。
+
+### 2.33 皮肤与主题两个「跟随系统」语义重叠 ✅（v182）
+
+- **现象**：`皮肤` 弹层是 跟随系统 / 纸面 / 碳黑，紧接着下一行 `主题` 是 跟随系统 / 浅色 / 深色，两个"跟随系统"含义不同却同名；皮肤弹层里「跟随系统」和「纸面」的图标预览几乎一样。
+- **建议**：皮肤只留 纸面 / 碳黑，把"跟随系统"交给主题；或皮肤选项名改成「自动（随系统明暗）」并给两个有区分度的预览色块。
+- **证据**：`_screenshots/qa-20261122/38-skin.png`。
+
+### 2.34 文案与细节一致性（合并小项）✅（v182，剩余见 2.35）
+
+- 新建会话 sheet 写「新建工作区…」（带省略号），抽屉里写「新建工作区」（不带）；
+- 工作区名 `VIBE / PWA / CRM` 被 CSS 转成全大写，和中文「默认工作区」并排显得突兀；
+- 归档页的恢复图标 `↩` 太细太淡，几乎看不见（`23-archived.png`）；
+- 搜索结果只标「标题命中 / 最近一条命中」，关键词没有高亮，也没有「清除搜索」入口（`30-search.png`、`31-search-empty.png`）；
+- md 预览顶部工具栏有「复制全文」，底部条还有一颗「复制全文」，重复（`39-md-preview.png`）；
+- 登录页 320 宽副标题折行后「码」孤零零一行（`login-320.png`）。
+
+### 2.35 搜索命中没有高亮，也没有「清除搜索」⬜
+
+- **现象**：搜索只标「标题命中 / 最近一条命中」，命中的关键词在标题里没有标出来；清空要点输入框里的 `×`，没有独立入口；空态只写「没有匹配的会话」，不给下一步。
+- **建议**：结果行用 `<mark>` 包命中片段（转义后再拼 HTML）；空态加「清除搜索」按钮；输入框聚焦时显示「取消」。
+- 本轮只做了文案/图标/可访问性，这条属于新功能，留到下一批。
 
 ---
 
@@ -319,8 +390,9 @@
 | 优先级 | 项 | 为什么 | 建议 |
 |---|---|---|---|
 | P0 | 部署/工作区护栏 ✅ v111 | 最近多次出现并行会话直接改 `pwa/`（master 工作区），脏文件阻塞合并；主会话部署时还把未提交改动带上了线 | 已加：`deploy.ps1` 脏树拒绝、部署前 preflight、上传后 md5 校验；规则仍要求只有主会话碰 `pwa/`，合并/部署先征得用户同意 |
-| P0 | 推送端到端验收 🟡 待重启 | 宿主补丁已装但未重启，badge/通知点击链路没有一次完整闭环 | 重启 DSH 后跑一次「杀 App → 收通知 → 点通知 → 进对应会话 → 看角标」，结果记台账 |
-| P1 | 自动化冒烟/回归 🟡 部分 | 目前有静态 preflight，但没有浏览器级 UI 回归 | 后续加：启动 dev-proxy + headless 打开列表/会话，断言关键节点与无 console error；再覆盖配对、发送、审批 |
+| P0 | 推送端到端验收 ✅ 已完成（2026-11-22 用户确认重启验收通过） | 宿主补丁已装但未重启，badge/通知点击链路没有一次完整闭环 | 重启 DSH 后跑一次「杀 App → 收通知 → 点通知 → 进对应会话 → 看角标」，结果记台账 |
+| P1 | 自动化冒烟/回归 🟡 部分 | 目前有静态 preflight，但没有浏览器级 UI 回归 | 后续加：启动 dev-proxy + headless 打开列表/会话，断言关键节点与 no console error；再覆盖配对、发送、审批。**2026-11-22 已用 agent-browser 手动跑通一轮**（登录→列表→搜索→行菜单→会话→弹层→文件→md 预览→设置），脚本化仍待做 |
+| P1 | dev-proxy 的 `/api` 指到了错的 sidecar ✅ v182 | `dev-proxy.mjs` 里 `UPSTREAM.port = 18787`，那是 LAN/中转 sidecar（`relay.json` 的 `lanPort`），对 `/api/mobile/v1/*` 强制要设备 token；宿主手机 API 实际在 **61877**。结果本地开发永远配不上对，还报 `unauthorized: 缺少或无效的移动 token` 误导排查 | 改成 61877（或从 `DSH_WEB_PORT` 读）；2026-11-22 已用同一配对码在 18787/61877 上对比复现 |
 | P1 | 插件补丁兼容校验 ✅ v111 | `patches/push-notify.js` 依赖插件内部文件/模块（`read-receipts.json`、`storages/workspace.json`、`approvals.js`、`questions.js`） | `node patches/check.mjs`：检查依赖、hash、补丁关键函数；插件升级后先跑 |
 | P1 | 版本/缓存健康检查 ✅ v111 | 忘 bump `sw.js` CACHE 或部署了旧文件时，手机可能长时间看旧版；现在只能人工核对 VERSION | 设置 →「版本自检」对比本地/线上；`deploy.ps1` 上传后 md5 校验 |
 | P2 | 缓存 schema 版本 ✅ v111 | `dsh.cache.list` / `dsh.cache.msgs` 结构变了没有迁移机制，旧结构可能导致首屏错乱 | `CACHE_SCHEMA` 不匹配时只清列表/消息缓存 |
@@ -351,7 +423,7 @@ DSH 插件 sendFrame() ──► ~/.dsh/webpush.json ──► https://dsh.easym
 ```
 
 - **已通**：VPS 服务、VAPID、订阅（`subs=1`）、SW 的 `push`/`notificationclick`、角标。
-- **补丁已装、未生效**：`patches/push-notify.js` 已覆盖 `~/.dsh/profiles/desktop/node_modules/dsh-mobile-plugin/lib/mobile/push-notify.js`（插件 0.5.90 原文件备份 `.bak.<ts>`），`patches/check.mjs` 通过，**需要重启 DSH** 才加载新模块。
+- **补丁已装、已随 2026-11-22 重启生效**：`patches/push-notify.js` 已覆盖 `~/.dsh/profiles/desktop/node_modules/dsh-mobile-plugin/lib/mobile/push-notify.js`（插件 0.5.90 原文件备份 `.bak.<ts>`），`patches/check.mjs` 通过；2026-11-22 用户确认已完成重启验收，badge / 点击通知链路已跑通。
 - **2026-11-21 01:10**：`push/server.mjs` 已更新到 VPS `/opt/dsh-push/server.mjs`（原文件备份 `.bak.<ts>`），`dsh-push` 已重启并 active；「完成通知总是推送」的 per-device 偏好已生效。
 - **验证**：重启后 `journalctl -u dsh-push -f` 应出现带 `badge` 的 `[notify]` 帧；没重启时推送只是不带 badge（不会发错数字），不要据此判断代码失败。
 - **完成类推送**默认只在"你不在看"时发（60 秒心跳窗口）；在「设置 → 通知提醒」里开启「完成时总是推送」后跳过这个窗口（按设备偏好，服务端已支持）。

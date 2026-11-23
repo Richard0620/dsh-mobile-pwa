@@ -461,7 +461,11 @@
   .has-attn.attn-running::after{background:var(--ok)}
   /* 会话行右侧的三点菜单 */
   .row .rowmore{flex:none;width:30px;height:30px;border-radius:50%;color:var(--dim);font-size:16px;opacity:.55;
-    display:grid;place-items:center;margin-right:-4px}
+    display:grid;place-items:center;margin-right:-4px;background:none;border:0;cursor:pointer}
+  .row .rowmore svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2.2;
+    stroke-linecap:round;stroke-linejoin:round}
+  /* 归档页的「取消归档」是唯一动作，别再淡到看不见 */
+  .row .rowmore.act{opacity:.9;color:var(--fg)}
   .row .rowmore:active{background:var(--bubble)}
   .pinmark{font-size:10px;margin-right:2px;opacity:.85}
   /* 「显示更多」：每个工作区默认只露 5 条会话 */
@@ -653,23 +657,43 @@
   .sheet{width:100%;max-width:560px;background:var(--card);border-radius:26px 26px 0 0;
     padding:8px 16px calc(12px + var(--safe-b));border-top:1px solid var(--line);
     box-shadow:0 -20px 50px -20px rgba(30,24,10,.45);
+    max-height:calc(100vh - 20px);max-height:calc(100dvh - 20px);
+    overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
     animation:up .22s cubic-bezier(.22,1,.36,1)}
+  /* 矮屏（SE / 横屏 / 键盘弹起）压缩行高，尽量少滚 */
+  @media (max-height:700px){
+    .sheet .item{padding:9px 4px;font-size:14.5px}
+    .sheet .sic{width:26px;height:26px;border-radius:8px}
+    .sheet .grab{margin:0 auto 8px}
+    .sheet .shead{font-size:16.5px;padding:0 4px 6px}
+    .sheet .cancel{margin-top:6px;padding:10px}
+  }
   @keyframes up{from{transform:translateY(26px)}to{transform:translateY(0)}}
   .sheet .grab{width:36px;height:4px;border-radius:2px;background:var(--line-2,var(--line));
-    margin:2px auto 14px}
-  .sheet .shead{font-size:18px;font-weight:650;letter-spacing:-.02em;padding:0 4px 10px}
+    margin:2px auto 14px;position:sticky;top:0;z-index:2;flex:none}
+  .sheet .shead{font-size:18px;font-weight:650;letter-spacing:-.02em;padding:0 4px 10px;
+    position:sticky;top:0;z-index:1;background:var(--card)}
   .sheet .item .chk{margin-left:auto;color:var(--accent);display:grid;place-items:center;flex:none}
   .sheet .item .chk svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2.2;
     stroke-linecap:round;stroke-linejoin:round}
-  .sheet .sic svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;
-    stroke-linecap:round;stroke-linejoin:round}  .sheet .item{display:flex;align-items:center;gap:12px;padding:13px 4px;font-size:15px;
-    border-top:1px solid var(--line)}
+  .sheet .item{display:flex;align-items:center;gap:12px;padding:13px 4px;font-size:15px;
+    border:0;border-top:1px solid var(--line);width:100%;background:none;font-family:inherit;
+    color:inherit;text-align:left;cursor:pointer;-webkit-appearance:none;appearance:none}
+  .sheet .sl2{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+  .sheet .sl2 .ilabel{flex:none}
+  .sheet .ssub{font-size:11.5px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap;letter-spacing:.01em}
+  .sheet .item:focus{outline:none}
+  .sheet .item:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:10px}
   .sheet .item:active{background:var(--bubble)}
+  .sheet .sic svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;
+    stroke-linecap:round;stroke-linejoin:round}
   .sheet .sic{width:30px;height:30px;border-radius:9px;background:var(--bubble);flex:none;
     display:grid;place-items:center;font-size:14px;color:var(--dim);line-height:1}
-  .sheet .slabel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sheet .ilabel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .sheet .cancel{margin-top:10px;text-align:center;padding:12px;border-radius:12px;
-    border:1px solid var(--line);color:var(--dim);font-size:14px}
+    border:1px solid var(--line);color:var(--dim);font-size:14px;width:100%;background:none;
+    font-family:inherit;cursor:pointer;-webkit-appearance:none;appearance:none}
   .sheet .ver{text-align:center;font-size:11px;color:var(--dim);opacity:.7;padding:6px 0 0;
     font-family:ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.04em}
   .pair{min-height:100dvh;display:flex;flex-direction:column;justify-content:center;gap:12px;
@@ -704,7 +728,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v181';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v182';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1401,16 +1425,24 @@ async function api(path, { method='GET', body, auth=true } = {}) {
     e.code = 'not-json'; throw e;
   }
   if (!res.ok || data.ok === false) {
-    const code = (data && data.error && data.error.code) || res.status;
+    const errObj = (data && data.error) || null;
+    // 宿主的老配对接口回的是字符串（{"ok":false,"error":"配对码错误"}），
+    // 新接口回的是对象；两种都要取出可读的 message，否则界面只剩「401: Unauthorized」
+    const errMsg = (typeof errObj === 'string' ? errObj : (errObj && errObj.message))
+      || (data && typeof data.message === 'string' ? data.message : '')
+      || res.statusText || '请求失败';
+    const code = (errObj && errObj.code) || res.status;
     // 设备被吊销/凭据失效：直接回配对页，别让界面停在"还没有会话"这种误导性的空状态
     if (auth && (res.status === 401 || code === 'device-revoked')) {
-      state.authError = (data && data.error && data.error.message) || '凭据已失效，请重新配对';
+      state.authError = `登录已失效（${errMsg}），请重新配对或用恢复链接登录`;
       state.token = ''; state.instanceId = '';
       try { localStorage.removeItem(LS.token); localStorage.removeItem(LS.inst); } catch {}
       state.view = 'list'; render();
     }
-    const e = new Error(`${code}: ${(data && data.error && data.error.message) || res.statusText}`);
-    e.code = code; throw e;
+    const e = new Error(errMsg);
+    e.code = code;
+    e.status = res.status;
+    throw e;
   }
   return data;
 }
@@ -1831,13 +1863,15 @@ function renderPair() {
       render();
       refreshAll();
     } catch (e) {
-      err.textContent = String(e.message || e);
+      err.textContent = friendlyAuthError(e, 'pair');
       btn.textContent = '连接'; btn.disabled = false;
     }
   }}, '连接');
 
   // 从浏览器登录过、但添加到主屏后是新容器（iOS 两套 localStorage）——直接粘恢复链接即可
-  const rec = el('input', { placeholder:'或粘贴「恢复链接」（含 #token=…）', style:'margin-top:14px' });
+  const recHint = el('div', { style:'text-align:center;color:var(--dim);font-size:11.5px;line-height:1.5;margin-top:14px',
+    text:'或者粘贴一条恢复链接（整条含 #token=…）' });
+  const rec = el('input', { placeholder:'粘贴恢复链接', style:'margin-top:8px' });
   const recBtn = el('button', { class:'btn', style:'margin-top:8px', onclick: () => {
     const s = rec.value.trim();
     const t = /[#&]token=([^&\s]+)/.exec(s);
@@ -1857,12 +1891,30 @@ function renderPair() {
     el('div', { class:'logo', style:'justify-content:center' },
       el('span', { class:'mark', text:'A' }), el('span', { text:'AI-HUB' })),
     el('div', { style:'text-align:center;color:var(--dim);font-size:13px;line-height:1.7',
-      html:'输入电脑端「设置 → 移动端」里的 6 位配对码<br>直接连你自己的 DSH，不经任何第三方' }),
-    input, btn, err, rec, recBtn,
+      html:'输入电脑端「设置 → 移动端」的 6 位配对码<br>直连你自己的 DSH，不经第三方' }),
+    input, btn, err, recHint, rec, recBtn,
     el('div', { style:'text-align:center;color:var(--dim);font-size:11.5px;opacity:.7;margin-top:10px',
       text:`版本 ${APP_VERSION}` }),
   ));
   setTimeout(() => input.focus(), 60);
+}
+
+// 把登录/配对的接口错误翻成下一步能照做的话（服务端只给状态码时尤其需要）
+function friendlyAuthError(e, mode = 'pair') {
+  const code = String((e && e.code) || '');
+  const raw = String((e && e.message) || e || '').trim();
+  if (code === 'device-revoked') return '这台设备已被解除绑定，请重新配对';
+  if (code === 'device-expired') return '这台设备的授权已过期，请重新配对';
+  const authish = /401|unauthor|缺少或无效|失效/i.test(code + ' ' + raw);
+  if (authish) {
+    return mode === 'link'
+      ? '这条恢复链接已失效，请在电脑端「设置 → 移动端」重新复制一条'
+      : '配对码不对，或这台电脑暂时不允许新设备配对';
+  }
+  if (/failed to fetch|network|load failed|closed/i.test(raw)) {
+    return '连不上电脑：确认手机和电脑在同一网络，或中转/隧道是否在线';
+  }
+  return raw || '连接失败，请再试一次';
 }
 
 // ---------------------------------------------------------------- 列表（按工作区分组）
@@ -2518,10 +2570,7 @@ async function openViewer(path, name) {
   const head = el('div', { class:'vhead' },
     el('button', { class:'ico', text:'‹', onclick: close }),
     title,
-    el('span', { style:'flex:1' }),
-    el('button', { class:'ico', text:'⧉', title:'复制全文', onclick: async () => {
-      if (await copyText(raw)) toast('已复制全文'); else toast('复制失败');
-    } }));
+    el('span', { style:'flex:1' }) );
 
   const tools = el('div', { class:'vtools' },
     mdToggle,
@@ -2541,9 +2590,6 @@ async function openViewer(path, name) {
     } }));
 
   const foot = el('div', { class:'vfoot' },
-    el('button', { class:'vbtn', text:'复制全文', onclick: async () => {
-      if (await copyText(raw)) toast('已复制全文'); else toast('复制失败');
-    }}),
     el('button', { class:'vgo', text:'引用到会话', onclick: () => {
       const ta = ui && ui.ta;
       if (!ta) { toast('要先进一个会话，才能引用文件'); return; }
@@ -2823,10 +2869,12 @@ function pushHeartbeat() {
 function openSkinSheet() {
   const cur = (() => { try { return localStorage.getItem(SKIN_KEY) || 'paper'; } catch { return 'paper'; } })();
   const mark = k => cur === k ? '✓ ' : '';
+  // 「皮肤」= 配色家族（纸面 / 碳黑）；「主题」才是跟随系统/浅色/深色。
+  // 两处都叫「跟随系统」会让人分不清，这里改成「自动」并用副标题说明规律。
   openSheet([
-    { label: mark('auto') + '跟随系统', icon:'🌓', run: () => { applySkin('auto'); toast('皮肤：跟随系统'); } },
-    { label: mark('paper') + '纸面', icon:'◐', run: () => { applySkin('paper'); toast('皮肤：纸面'); } },
-    { label: mark('carbon') + '碳黑', icon:'◑', run: () => { applySkin('carbon'); toast('皮肤：碳黑'); } },
+    { label: mark('auto') + '自动', sub:'跟随系统明暗：浅色用纸面，深色用碳黑', icon:'🌓', run: () => { applySkin('auto'); toast('皮肤：跟随系统'); } },
+    { label: mark('paper') + '纸面', sub:'浅色纸张', icon:'☀️', run: () => { applySkin('paper'); toast('皮肤：纸面'); } },
+    { label: mark('carbon') + '碳黑', sub:'深色碳灰', icon:'🌙', run: () => { applySkin('carbon'); toast('皮肤：碳黑'); } },
   ], '皮肤');
 }
 
@@ -3433,7 +3481,7 @@ function renderList(wrap, opts = {}) {
   if (Date.now() - termAgents.at > 15000) loadTermAgents();
   const menu = el('button', { class:'ico', text:'☰', 'data-bell':'', onclick: () => openSheet([
     { label:'刷新', icon:'⟳', run: () => refreshAll(true) },
-    { label:'新建工作区', icon:'📁', run: newWorkspace },
+    { label:'新建工作区…', icon:'📁', run: newWorkspace },
     { label:'文件', icon:'📂', run: () => openFileDrawer(state.sessionCwd || '') },
     { label:'连接信息', icon:'⏱', run: openConnInfo },
     { label:'统计', icon:'📊', run: openStats },
@@ -3499,7 +3547,7 @@ function renderList(wrap, opts = {}) {
             el('div', { class:'t' },
               el('span', { class:'title', text: s.title || '(无标题)' }),
               el('span', { class:'time', text: fmtTime(s.updatedAt) }))),
-          el('button', { class:'rowmore', text:'↩', title:'取消归档', onclick: (e) => {
+          el('button', { class:'rowmore act', html: sheetIconSVG('back'), title:'取消归档', 'aria-label':'取消归档', onclick: (e) => {
             e.stopPropagation(); unarchiveSession(s);
           }}));
         main.append(row);
@@ -5078,7 +5126,7 @@ function sheetIconSVG(name) {
     back: '<path d="M9 6l-5 6 5 6"/><path d="M4 12h14"/>',
     close: '<path d="M6 6l12 12M18 6L6 18"/>',
     edit: '<path d="M4.5 19.5l4.2-.9L19 8.3a2.1 2.1 0 00-3-3L5.4 15.3l-.9 4.2z"/><path d="M14.8 6.5l2.7 2.7"/>',
-    archive: '<rect x="4" y="5" width="16" height="4" rx="1"/><path d="M5.5 9v9.5h13V9M9.5 13h5"/>',
+    archive: '<rect x="4" y="4.5" width="16" height="4.5" rx="1.2"/><path d="M6 9v10.5h12V9"/><path d="M12 11.5v5.5M9.8 14.2L12 16.4l2.2-2.2"/>',
     trash: '<path d="M5 7h14M9 7V4.5h6V7M7.5 7l.8 12.5h7.4L16.5 7"/><path d="M10 10.5v5M14 10.5v5"/>',
     folderOpen: '<path d="M3.5 7.5A1.5 1.5 0 015 6h4l2 2.5h7.5A1.5 1.5 0 0120 10v7.5H4L3.5 17V7.5z"/><path d="M3.5 17.5l2.2-6h15.1l-2.3 6"/>',
     bellOff: '<path d="M6.5 10a5.5 5.5 0 018.2-4.8M18 12.5c0 2 .5 3.2 1 4H9M10 19a2 2 0 004 0"/><path d="M4 4l16 16"/>',
@@ -5104,11 +5152,14 @@ function sheetIconSVG(name) {
 
 function openSheet(items, footerText) {
   const mask = el('div', { class:'mask', onclick: (e) => { if (e.target === mask) close(); } });
-  const sheet = el('div', { class:'sheet' });
+  const sheet = el('div', { class:'sheet', role:'dialog', 'aria-modal':'true' });
   sheet.append(el('div', { class:'grab' }));
   const txt = String(footerText || '').trim();
   const isVer = /^版本\s/.test(txt);
-  if (txt && !isVer) sheet.append(el('div', { class:'shead', text: txt }));
+  if (txt && !isVer) {
+    sheet.append(el('div', { class:'shead', text: txt }));
+    sheet.setAttribute('aria-label', txt);
+  }
   for (const it of items) {
     let label = String(it.label == null ? '' : it.label);
     let checked = !!it.checked;
@@ -5124,16 +5175,36 @@ function openSheet(items, footerText) {
       // 没登记的图标也至少显示原字符，绝不留空
       if (!icon) icon = el('span', { class:'sic', text: raw });
     }
-    sheet.append(el('div', { class:'item', onclick: () => { close(); it.run(); } },
+    // 可选副标题（模型来源、最近一条摘要之类），单行主标题仍然省略号截断
+    const sub = String(it.sub == null ? '' : it.sub).trim();
+    const labelEl = sub
+      ? el('span', { class:'sl2' },
+          el('span', { class:'ilabel', text: label }),
+          el('span', { class:'ssub', text: sub }))
+      : el('span', { class:'ilabel', text: label });
+    sheet.append(el('button', { class:'item', type:'button', onclick: () => { close(); it.run(); } },
       icon,
-      el('span', { class:'slabel', text: label }),
+      labelEl,
       checked ? el('span', { class:'chk', html: SHEET_CHECK }) : null));
   }
   if (isVer) sheet.append(el('div', { class:'ver', text: txt || `版本 ${APP_VERSION}` }));
-  sheet.append(el('div', { class:'cancel', text:'取消', onclick: close }));
-  function close() { mask.remove(); }
+  const cancelBtn = el('button', { class:'cancel', type:'button', text:'取消', onclick: close });
+  sheet.append(cancelBtn);
+  function onKey(e) {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+  }
+  function close() {
+    document.removeEventListener('keydown', onKey, true);
+    mask.remove();
+  }
+  document.addEventListener('keydown', onKey, true);
   mask.append(sheet);
   document.body.append(mask);
+  // 键盘 / 读屏：焦点进第一项，Esc 关闭（不再只能靠点「取消」）
+  requestAnimationFrame(() => {
+    const first = sheet.querySelector('.item') || cancelBtn;
+    try { first.focus({ preventScroll: true }); } catch {}
+  });
 }
 
 // ---------------------------------------------------------------- 流程
@@ -5274,10 +5345,21 @@ async function loadModel() {
 function openModelPicker() {
   const groups = state.modelGroups || [];
   if (!groups.length) { toast('这个会话拿不到模型列表'); return; }
+  const cur = state.modelMeta || null;
   const items = [];
   for (const g of groups) {
     for (const m of (g.models || [])) {
-      items.push({ label: m.name || m.id, icon: '◈', run: () => pickEffort(g.id, m) });
+      const isCur = !!(cur && cur.provider === g.id && cur.model === m.id);
+      // 同一模型在两个来源下会重复出现：副标题写清来源，当前项打勾，避免「四个一样的选项」
+      const sub = [g.name || g.id, isCur && cur.reasoningEffort ? cur.reasoningEffort : '']
+        .filter(Boolean).join(' · ');
+      items.push({
+        label: m.name || m.id,
+        sub,
+        icon: '◈',
+        checked: isCur,
+        run: () => pickEffort(g.id, m),
+      });
     }
   }
   openSheet(items, `模型 · 当前 ${state.model || '?'}`);
