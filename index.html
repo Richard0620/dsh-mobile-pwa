@@ -732,7 +732,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v185';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v186';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -3928,7 +3928,11 @@ function blobToBase64(blob) {
 async function uploadFile(file, onProgress) {
   const begin = await api('/api/mobile/v1/upload/begin', { method:'POST', body: { name: file.name, size: file.size } });
   const uploadId = begin.uploadId;
-  const chunkSize = begin.chunkSize || 262144;
+  // 分片大小：宿主会同时给「起步值」和「上限」。视频动辄几十上百 MB，按起步值 256KB 一片
+  // 等于上千次请求，走中转时用户要等几分钟；直接爬到 2MB 一片能把请求数压到 1/8。
+  const start = Math.max(64 * 1024, Number(begin.chunkSize) || 262144);
+  const cap = Math.max(start, Number(begin.maxChunkSize) || start);
+  const chunkSize = Math.min(cap, Math.max(start, 2 * 1024 * 1024));
   const total = Math.max(1, Math.ceil(file.size / chunkSize));
   for (let i = 0; i < total; i++) {
     const blob = file.slice(i * chunkSize, Math.min(file.size, (i + 1) * chunkSize));
@@ -4504,7 +4508,10 @@ function renderSession(wrap) {
         previewUrl: isImg ? URL.createObjectURL(f) : null, progress: 0, uploading: false,
       });
       if (isVideoFile({ mediaType, name: f.name })) {
-        toast('视频会作为文件路径发送，App 内不能播放');
+        const mb = Math.round((f.size || 0) / 1048576);
+        toast(mb >= 50
+          ? `视频会作为文件路径发送，App 内不能播放（${mb}MB，上传要等一会儿）`
+          : '视频会作为文件路径发送，App 内不能播放');
       }
     }
     renderAttach();
