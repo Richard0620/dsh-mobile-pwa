@@ -237,6 +237,10 @@
   .mholder{display:flex;flex-direction:column}
   /* 排队中的消息：挂在输入框上方（dock 内），默认折叠成一行 */
   .qdock{display:none;flex-direction:column;gap:6px;padding:2px 0 4px;max-height:220px;overflow-y:auto}
+  /* 编辑排队消息：提示条 + 保存/取消（点保存走宿主 edit 动作，附件不动） */
+  .qeditbar{display:none;align-items:center;gap:8px;padding:6px 10px;margin:0 0 6px;border-radius:12px;
+    border:1px solid var(--accent);background:var(--card);font-size:12px;color:var(--fg)}
+  .qeditbar .qmini{flex:none}
   .qlist{display:flex;flex-direction:column;gap:6px}
   .qitem{border:1px dashed var(--line);border-radius:14px;padding:7px 10px;background:var(--card);opacity:.92}
   .qitem.open{padding:9px 12px}
@@ -732,7 +736,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v187';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v188';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -4249,6 +4253,20 @@ function paintSession({ scroll = 'auto' } = {}) {
       ui.qDock.replaceChildren();
     }
   }
+  // 编辑排队消息时的提示条
+  if (ui.editBar) {
+    const editing = queueEditing && (state.queue || []).some(x => x.id === queueEditing.id);
+    if (!editing) { if (queueEditing) queueEditing = null; ui.editBar.style.display = 'none'; ui.editBar.replaceChildren(); }
+    else if (!ui.editBar.childElementCount) {
+      ui.editBar.style.display = 'flex';
+      ui.editBar.replaceChildren(
+        el('span', { style:'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap',
+          text:'正在编辑排队消息 · 附件会保留' }),
+        el('button', { class:'qmini', text:'取消', onclick: cancelQueueEdit }),
+        el('button', { class:'qmini', text:'保存', onclick: saveQueueEdit }));
+    }
+  }
+  if (ui.sendBtn) ui.sendBtn.disabled = !!state.sending || (state.pending || []).some(a => a.uploading) || !!queueEditing;
   // 运行状态只保留 dock 里这一份；对话流末尾不再重复一次
   if (ui.strip) {
     ui.strip.textContent = state.stream === 'open'
@@ -4646,6 +4664,8 @@ function renderSession(wrap) {
     } catch (e) { toast('取消失败：' + (e.message || e)); }
   }});
   const qDock = el('div', { class:'qdock' });
+  // 编辑排队消息时的提示条：文本进输入框，附件留在队列里（走宿主的 edit 动作）
+  const editBar = el('div', { class:'qeditbar' });
 
   // 会话权限：读 projections.permissions，切换走宿主 /permission 命令（不发给模型）
   const permMeta = (name) => {
@@ -4723,6 +4743,7 @@ function renderSession(wrap) {
     slashBox,
     attach,
     qDock,
+    editBar,
     strip,
     el('div', { class:'composer' }, ta,
       el('div', { class:'crow' },
@@ -4763,7 +4784,7 @@ function renderSession(wrap) {
   }
 
   ui = { sessionId: state.sessionId, body, listWrap, cardsWrap, ta, sendBtn, stopBtn, strip, dot, modelEl: modelRow, effortEl: effortRow,
-    qDock, jump, updateJump, loadStats: loadSessionStats, keys: [], nodes: [], cardsKey: '', prevCount: undefined, atBottom: true };
+    qDock, editBar, jump, updateJump, loadStats: loadSessionStats, keys: [], nodes: [], cardsKey: '', prevCount: undefined, atBottom: true };
   paintSession({ scroll:'bottom' });
   // 进会话只定位到底部，不自动聚焦输入框：多数时候是进来看内容的，弹键盘会挡住正文
   requestAnimationFrame(() => { body.scrollTop = body.scrollHeight; });
@@ -4875,35 +4896,56 @@ async function queueAct(it, action, okMsg) {
 }
 
 /**
- * 编辑排队消息：不再用 prompt 原地改。
- * 原因：prompt 只挡住界面，宿主那边照跑 —— 上一轮跑完的瞬间队列就被取走发出了，
- * 于是"还没改完就被发了"；而保存时条目已不在队列，编辑又静默落空。
- * 现在：先把这条从队列里删掉（原子），再把原文放回输入框让用户改，改完照常发送。
+ * 编辑排队消息（原地改，不撤出队列）。
+ *
+ * 之前是「先从队列删掉 → 把原文放回输入框 → 让用户重发」：那条路会把这条消息里的
+ * 图片/附件一起留在队列之外，等于丢附件（编辑完只回来文字）。宿主其实支持
+ * `{kind:'edit', content:[{text}]}` —— 只换正文，附件块保持不动。
+ * 所以现在把正文放回输入框，点「保存」走 edit；条目一直在队列里，
+ * 万一这中间被取走发出了，保存会报错，不会静默丢。
  */
-async function queueEdit(it, old) {
-  try {
-    await api('/api/mobile/v1/session/queue/update', { method:'POST', body: {
-      sessionId: state.sessionId, itemId: it.id, action: { kind:'remove' },
-    }});
-  } catch (e) {
-    toast('这条可能已经被发出去了：' + (e.message || e));
-    state.queue = (state.queue || []).filter(x => x.id !== it.id);
-    paintSession();
-    return;
-  }
-  state.queue = (state.queue || []).filter(x => x.id !== it.id);
-  paintSession();
+let queueEditing = null;
+
+function startQueueEdit(it) {
   const ta = ui && ui.ta;
-  if (!ta) { toast('已撤回排队消息'); return; }
-  const cur = (ta.innerText || '').replace(/\u00a0/g, ' ');
-  ta.textContent = (cur.trim() ? cur.replace(/\s*$/, '') + '\n' : '') + old;
+  if (!ta) return;
+  queueEditing = { id: it.id };
+  ta.textContent = queueText(it);
   ta.focus();
-  try { saveDraft(state.sessionId, ta.textContent); } catch {}
   try {
     const r = document.createRange(); r.selectNodeContents(ta); r.collapse(false);
     const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
   } catch {}
-  toast('已撤回，改完直接发送');
+  paintSession();
+}
+
+function cancelQueueEdit() {
+  queueEditing = null;
+  const ta = ui && ui.ta;
+  if (ta) { ta.textContent = ''; try { saveDraft(state.sessionId, ''); } catch {} }
+  paintSession();
+}
+
+async function saveQueueEdit() {
+  const ta = ui && ui.ta;
+  if (!ta || !queueEditing) return;
+  const text = (ta.innerText || '').replace(/\u00a0/g, ' ').trim();
+  if (!text) { toast('内容不能为空'); return; }
+  const id = queueEditing.id;
+  try {
+    await api('/api/mobile/v1/session/queue/update', { method:'POST', body: {
+      sessionId: state.sessionId, itemId: id, action: { kind:'edit', content: [{ type:'text', text }] },
+    }});
+    const it = (state.queue || []).find(x => x.id === id);
+    if (it) it.content = [{ type:'text', text }];
+    toast('已保存排队消息');
+  } catch (e) {
+    toast('这条可能已经发出去了：' + (e.message || e));
+  }
+  queueEditing = null;
+  ta.textContent = '';
+  try { saveDraft(state.sessionId, ''); } catch {}
+  paintSession();
 }
 
 const queueOpen = new Set();
@@ -4929,7 +4971,7 @@ function renderQueueItem(it) {
   if (open) {
     item.append(el('div', { class:'qacts' },
       el('button', { class:'qmini', text:'删除', onclick: () => queueAct(it, { kind:'remove' }, '已删除') }),
-      el('button', { class:'qmini', text:'编辑', onclick: () => queueEdit(it, text) }),
+      el('button', { class:'qmini', text:'编辑', onclick: () => startQueueEdit(it) }),
       el('button', { class:'qmini primary', text:'立刻发送', onclick: () => queueAct(it, { kind:'steer' }, '已插话，马上处理') }),
     ));
     item.append(el('div', { class:'qtext', text }));
