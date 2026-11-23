@@ -6,7 +6,7 @@
    4. 记住"通知对应的会话"，让点击后能真正跳过去
       —— iOS 上点击通知只会用 start_url 拉起 App，URL 参数传不进来，
          notification.data 也不保证保留，所以必须自己持久化。 */
-const CACHE = 'dsh-mobile-v192';
+const CACHE = 'dsh-mobile-v193';
 const SHELL = ['./', './index.html', './manifest.webmanifest'];
 
 const OPEN_CACHE = 'dsh-open';

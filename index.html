@@ -745,7 +745,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v191';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v192';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1770,22 +1770,56 @@ async function renderSubPage(wrap) {
     row('重新加载', '清页面状态再进', '', reloadApp),
   ));
 }
+// 设置首页要显示真实状态（推送开没开、配了几台设备），但 render() 是同步的：
+// 先把事实缓存起来异步取一次，拿到后只重绘一次设置页（避免每次进都闪）。
+let settingsFacts = null;
+function loadSettingsFacts() {
+  if (settingsFacts) return;
+  settingsFacts = { push: '', devices: null };
+  Promise.all([
+    pushStatus().catch(() => 'off'),
+    api('/api/mobile/v1/paired-devices')
+      .then(r => (r.devices || r.items || []).length)
+      .catch(() => null),
+  ]).then(([push, devices]) => {
+    settingsFacts = { push, devices };
+    if (state.view === 'settings') render();
+  });
+}
+
 function renderSettings(wrap) {
   wrap.append(heroHeader('设置', 'DSH MOBILE · ' + APP_VERSION));
+  loadSettingsFacts();
+  const facts = settingsFacts || { push:'', devices:null };
   const skin = (() => { try { const v = localStorage.getItem('dsh.skin'); return v === 'carbon' ? '碳黑' : v === 'auto' ? '跟随系统' : '纸面'; } catch { return '纸面'; } })();
   const theme = (() => { try { const t = localStorage.getItem('dsh.theme'); return t === 'light' ? '浅色' : t === 'dark' ? '深色' : '跟随系统'; } catch { return '跟随系统'; } })();
   const row = (title, desc, value, run) => el(run ? 'button' : 'div', run ? { class:'srow', onclick: run } : { class:'srow' },
     el('div', { class:'st' }, el('b', { text: title }), desc ? el('span', { text: desc }) : null),
     value ? el('span', { class:'sv', text: value }) : null);
+  const sw = (title, desc, on, run) => el('div', { class:'srow', onclick: run },
+    el('div', { class:'st' }, el('b', { text: title }), desc ? el('span', { text: desc }) : null),
+    el('span', { class:'tgl' + (on ? ' on' : '') }));
   const card = rows => el('div', { class:'groupcard' }, ...rows);
   const main = el('div', { class:'settings' });
+  const pushLabel = {
+    on:'已开启，这台设备会收到推送', off:'未开启，点了开启',
+    denied:'系统里被拒绝，请去 设置 → 通知 打开',
+    unsupported:'浏览器不支持 Web Push（iOS 16.4+ 且需添加到主屏）',
+    nosw:'Service Worker 没注册上', installing:'SW 正在激活，稍后再看',
+  }[facts.push] || (facts.push === '' ? '读取中…' : String(facts.push));
   main.append(el('div', { class:'slabel', text:'外观' }), card([
     row('皮肤', '纸面 / 碳黑', skin, openSkinSheet),
     row('主题', '跟随系统 / 浅色 / 深色', theme, openThemeSheet),
   ]));
   main.append(el('div', { class:'slabel', text:'通知' }), card([
-    row('通知提醒', '推送开关、完成提醒', '', () => { state.view = 'sub'; state.subPage = 'push'; render(); }),
-    row('推送诊断', '检查订阅与最近投递', '', () => { state.view = 'sub'; state.subPage = 'pushdiag'; render(); }),
+    sw('通知提醒', pushLabel, facts.push === 'on', async () => {
+      if (facts.push === 'on') await disablePush(); else await enablePush();
+      settingsFacts = null; render();
+    }),
+    sw('完成时总是推送', '后台跑完也推一条，不只在等你审批时', alwaysDone(), () => {
+      setAlwaysDone(!alwaysDone()); pushHeartbeat(); render();
+    }),
+    row('推送诊断', '订阅端点、最近投递', '', () => { state.view = 'sub'; state.subPage = 'pushdiag'; render(); }),
   ]));
   main.append(el('div', { class:'slabel', text:'连接' }), card([
     row('连接', '自动 / 仅中转 / 仅局域网', '', () => { state.view = 'sub'; state.subPage = 'conn'; render(); }),
@@ -1794,6 +1828,7 @@ function renderSettings(wrap) {
   ]));
   main.append(el('div', { class:'slabel', text:'应用' }), card([
     row('关于', '版本、设备、缓存', APP_VERSION, () => { state.view = 'sub'; state.subPage = 'about'; render(); }),
+    row('已配对设备', '在电脑端可移除', facts.devices == null ? '' : facts.devices + ' 台', null),
     row('重新加载', '清掉页面状态重新进入', '', reloadApp),
     row('退出登录', '清除本机凭据', '', () => { localStorage.clear(); state.token = ''; state.view = 'list'; render(); }),
   ]));
