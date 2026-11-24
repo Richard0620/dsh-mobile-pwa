@@ -184,6 +184,12 @@
   .fname2 span{display:block;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
     font-size:9.5px;color:var(--dim);margin-top:3px}
   .flrow .chev{color:var(--dim);font-size:16px;flex:none}
+  /* 文件行右侧的「存到手机」：只读下载，和三点菜单同一个观感 */
+  .flrow .fdl{flex:none;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;
+    border:0;background:none;color:var(--dim);opacity:.75;cursor:pointer;-webkit-appearance:none;appearance:none}
+  .flrow .fdl svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.9;
+    stroke-linecap:round;stroke-linejoin:round}
+  .flrow .fdl:active{background:var(--bubble);opacity:1}
   .fselbox{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--dim);flex:none;
     display:grid;place-items:center;color:transparent;font-size:11px;background:var(--card);opacity:.7}
   .flrow.sel .fselbox{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);opacity:1}
@@ -760,7 +766,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v197';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v198';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -2441,20 +2447,33 @@ function renderFiles(wrap) {
   };
   const row = (e, isDir) => {
     const sel = state.filesSel.has(e.path);
+    // 能按文本预览的才走查看器；图片/压缩包/二进制这些点开只会是乱码，
+    // 所以点行直接「存到手机」，右侧那颗 ⤓ 也是同一个动作
+    const TEXTY = /\.(md|markdown|txt|json|jsonc|js|mjs|cjs|ts|tsx|jsx|html|htm|css|scss|yml|yaml|sh|ps1|bat|py|rs|go|java|c|h|cpp|log|csv|xml|svg|ini|toml|conf)$/i;
+    const canPreview = !isDir && TEXTY.test(e.name || '');
+    const tap = () => {
+      if (isDir) return loadFiles(e.path);
+      if (canPreview) return openViewer(e.path, e.name);
+      return downloadHostFile(e.path, e.name);
+    };
     return el('div', { class:'flrow' + (sel ? ' sel' : ''), onclick: () => {
       if (state.filesSelecting) {
         if (state.filesSel.has(e.path)) state.filesSel.delete(e.path); else state.filesSel.add(e.path);
         render();
         return;
       }
-      if (isDir) loadFiles(e.path); else openViewer(e.path, e.name);
+      tap();
     }},
       state.filesSelecting ? el('span', { class:'fselbox', text:'✓' }) : null,
       el('div', { class:'ftile' + (isDir ? ' dir' : '') }, el('span', { text: isDir ? 'DIR' : extOf(e.name) })),
       el('div', { class:'fname2' },
         el('b', { text: e.name }),
         el('span', { text: stamp(e.modified) || (isDir ? '文件夹' : '文件') })),
-      state.filesSelecting ? null : el('span', { class:'chev', text:'›' }));
+      state.filesSelecting ? null
+        : isDir ? el('span', { class:'chev', text:'›' })
+        : el('button', { class:'fdl', title:'存到手机', 'aria-label':'存到手机',
+            html: sheetIconSVG('download'),
+            onclick: (ev) => { ev.stopPropagation(); downloadHostFile(e.path, e.name); } }));
   };
 
   if (dirsAll.length) {
@@ -4183,7 +4202,7 @@ function splitAttachmentNotes(text) {
 }
 // 宿主文件走 POST + 分片接口（/session/file），<video> / <a download> 没法直接吃 URL，
 // 所以按 4MB 分片取回来拼成 Blob，再交给播放器或下载。
-async function fetchHostFile(path, onProgress) {
+async function fetchHostFile(path, onProgress, apiPath = '/api/mobile/v1/session/file') {
   // 宿主对分段有硬约束：必须是正整数、不超过 2MiB（且非尾段要 64KiB 对齐）
   const CHUNK = 2 * 1024 * 1024;
   let total = 0;
@@ -4191,13 +4210,15 @@ async function fetchHostFile(path, onProgress) {
   const parts = [];
   let offset = 0;
   for (;;) {
-    const res = await fetch(apiUrl('/api/mobile/v1/session/file'), {
+    const res = await fetch(apiUrl(apiPath), {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         ...(state.token ? { authorization: `Bearer ${state.token}` } : {}),
         ...(state.instanceId ? { 'x-dsh-instance': state.instanceId } : {}),
       },
+      // /session/file 只认会话工作区；/file/read 认整片允许区（工作区 ∪ 项目），
+      // 文件浏览器用它——两个接口的分段规则是同一套
       body: JSON.stringify({ sessionId: state.sessionId, path, offset, length: CHUNK }),
     });
     if (!res.ok) {
@@ -4214,6 +4235,30 @@ async function fetchHostFile(path, onProgress) {
     if (total && offset >= total) break;
   }
   return new Blob(parts);
+}
+
+// 文件浏览器 → 存到手机：走 /file/read（同一个允许区，工作区外的项目文件也能拿），
+// 分片取回拼 Blob 再交给 <a download>。iOS Safari 会弹出「存储到文件/Safari 下载」。
+async function downloadHostFile(path, name) {
+  const label = name || String(path).split(/[\\/]/).pop() || '文件';
+  toast(`正在取回 ${label}…`);
+  try {
+    const blob = await fetchHostFile(path, (done, total) => {
+      if (!total) return;
+      const pct = Math.min(99, Math.round((done / total) * 100));
+      toast(`正在取回 ${label} · ${pct}%`);
+    }, '/api/mobile/v1/file/read');
+    const url = URL.createObjectURL(blob);
+    const a = el('a', { href:url, download:label, style:'display:none' });
+    document.body.append(a);
+    a.click();
+    setTimeout(() => { try { URL.revokeObjectURL(url); a.remove(); } catch {} }, 60_000);
+    const n = blob.size;
+    const size = n < 1024 ? n + 'B' : n < 1048576 ? (n / 1024).toFixed(1) + 'KB' : (n / 1048576).toFixed(1) + 'MB';
+    toast(`已取回 ${label}（${size}），在手机的下载/文件里`);
+  } catch (e) {
+    toast('下载失败：' + String(e.message || e));
+  }
 }
 
 // 文件卡 → 在 App 内播放/保存：视频直接 <video controls>，其它文件给「保存到手机」
@@ -5543,6 +5588,7 @@ function sheetIconSVG(name) {
     gear: '<circle cx="12" cy="12" r="3.2"/><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M6 6l1.4 1.4M16.6 16.6L18 18M18 6l-1.4 1.4M7.4 16.6L6 18"/>',
     sliders: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/>',
     upload: '<path d="M12 16V5M7.5 9.5L12 5l4.5 4.5M5 19h14"/>',
+    download: '<path d="M12 4.5v10.5M7.5 10.5L12 15l4.5-4.5M5 19.5h14"/>',
     eye: '<path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.6"/>',
     plus: '<path d="M12 5.5v13M5.5 12h13"/>',
     file: '<path d="M7 4.5h6.5L18 9v10.5H7z"/><path d="M13.5 4.5V9H18"/>',
