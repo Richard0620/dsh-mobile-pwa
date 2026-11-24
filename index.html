@@ -342,6 +342,12 @@
   .rplist .frow{padding:12px 4px;border-radius:10px;font-size:14.5px}
   .rplist .frow.sel{background:var(--bubble)}
   .rplist .frow .fico{width:22px;text-align:center;flex:none}
+  /* 右侧文件面板：文件行右侧的「存到手机」，和主文件页同一个图标 */
+  .frow .fdl{flex:none;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;
+    border:0;background:none;color:var(--dim);opacity:.7;cursor:pointer;-webkit-appearance:none;appearance:none}
+  .frow .fdl svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.9;
+    stroke-linecap:round;stroke-linejoin:round}
+  .frow .fdl:active{background:var(--bubble);opacity:1}
   .rplist .chev{color:var(--dim);font-size:14px;flex:none}
   .rpsect{font-size:11.5px;color:var(--dim);padding:8px 2px 2px}
   /* 新建工作区：目录选择器 */
@@ -766,7 +772,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v199';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v200';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -2447,22 +2453,13 @@ function renderFiles(wrap) {
   };
   const row = (e, isDir) => {
     const sel = state.filesSel.has(e.path);
-    // 能按文本预览的才走查看器；图片/压缩包/二进制这些点开只会是乱码，
-    // 所以点行直接「存到手机」，右侧那颗 ⤓ 也是同一个动作
-    const TEXTY = /\.(md|markdown|txt|json|jsonc|js|mjs|cjs|ts|tsx|jsx|html|htm|css|scss|yml|yaml|sh|ps1|bat|py|rs|go|java|c|h|cpp|log|csv|xml|svg|ini|toml|conf)$/i;
-    const canPreview = !isDir && TEXTY.test(e.name || '');
-    const tap = () => {
-      if (isDir) return loadFiles(e.path);
-      if (canPreview) return openViewer(e.path, e.name);
-      return downloadHostFile(e.path, e.name);
-    };
     return el('div', { class:'flrow' + (sel ? ' sel' : ''), onclick: () => {
       if (state.filesSelecting) {
         if (state.filesSel.has(e.path)) state.filesSel.delete(e.path); else state.filesSel.add(e.path);
         render();
         return;
       }
-      tap();
+      if (isDir) loadFiles(e.path); else openHostPath(e.path, e.name);
     }},
       state.filesSelecting ? el('span', { class:'fselbox', text:'✓' }) : null,
       el('div', { class:'ftile' + (isDir ? ' dir' : '') }, el('span', { text: isDir ? 'DIR' : extOf(e.name) })),
@@ -2639,11 +2636,14 @@ async function openFileDrawer(path, opts = {}) {
             paintList(); paintFoot();
             return;
           }
-          if (isDir) nav(e.path); else openViewer(e.path, e.name);
+          if (isDir) nav(e.path); else openHostPath(e.path, e.name);
         }},
           el('span', { class:'fico' + (isDir ? ' dir' : ''), html: st.selecting ? sheetIconSVG(sel ? 'check' : 'box') : sheetIconSVG(isDir ? 'folder' : 'file') }),
           el('span', { class:'fname', text: e.name }),
-          st.selecting ? null : el('span', { class:'chev', text:'›' }));
+          st.selecting ? null
+            : isDir ? el('span', { class:'chev', text:'›' })
+            : el('button', { class:'fdl', title:'存到手机', 'aria-label':'存到手机', html: sheetIconSVG('download'),
+                onclick: (ev) => { ev.stopPropagation(); downloadHostFile(e.path, e.name); } }));
       };
       for (const e of dirs) listBox.append(rowOf(e, true));
       if (files.length) listBox.append(el('div', { class:'rpsect', text:'文件' }));
@@ -4234,11 +4234,61 @@ async function fetchHostFile(path, onProgress, apiPath = '/api/mobile/v1/session
     if (buf.byteLength < CHUNK) break;
     if (total && offset >= total) break;
   }
-  return new Blob(parts);
+  return new Blob(parts, { type: mimeOfName(path) });
 }
 
-// 文件浏览器 → 存到手机：走 /file/read（同一个允许区，工作区外的项目文件也能拿），
-// 分片取回拼 Blob 再交给 <a download>。iOS Safari 会弹出「存储到文件/Safari 下载」。
+// 按扩展名分派：能当文本看的 / 图片 / PDF / 其它二进制
+const TEXTY_EXT = /\.(md|markdown|txt|json|jsonc|js|mjs|cjs|ts|tsx|jsx|html|htm|css|scss|yml|yaml|sh|ps1|bat|py|rs|go|java|c|h|cpp|log|csv|xml|svg|ini|toml|conf)$/i;
+const IMG_EXT = /\.(png|jpe?g|gif|webp|bmp|avif|heic|ico)$/i;
+const PDF_EXT = /\.pdf$/i;
+const isIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent)
+  || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const fmtBytes = n => n < 1024 ? n + 'B' : n < 1048576 ? (n / 1024).toFixed(1) + 'KB' : (n / 1048576).toFixed(1) + 'MB';
+// Blob 一定要带类型：不带的话 blob: URL 是没有 MIME 的，<embed type=application/pdf>
+// 或 <video> 会把它当纯文本渲染 —— 之前 PDF 显示成一屏源码就是这个原因
+const MIME_BY_EXT = {
+  pdf:'application/pdf', png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', gif:'image/gif',
+  webp:'image/webp', svg:'image/svg+xml', avif:'image/avif', bmp:'image/bmp', ico:'image/x-icon', heic:'image/heic',
+  mp4:'video/mp4', mov:'video/quicktime', m4v:'video/x-m4v', webm:'video/webm', mkv:'video/x-matroska',
+  txt:'text/plain;charset=utf-8', md:'text/markdown;charset=utf-8', json:'application/json',
+  zip:'application/zip', csv:'text/csv;charset=utf-8',
+};
+function mimeOfName(name) {
+  const m = /\.([a-z0-9]+)$/i.exec(String(name || ''));
+  return (m && MIME_BY_EXT[m[1].toLowerCase()]) || 'application/octet-stream';
+}
+
+// 把取回的字节交给手机。
+// 关键：iOS Safari **不支持** `blob:` + `<a download>`（点了什么都不发生），
+// 必须走系统分享（存储到「文件」）或在新标签里打开。桌面/安卓的 <a download> 照旧。
+async function saveBlobToPhone(blob, label) {
+  const url = URL.createObjectURL(blob);
+  const size = fmtBytes(blob.size);
+  if (isIOS()) {
+    let file = null;
+    try { file = new File([blob], label, { type: blob.type || 'application/octet-stream' }); } catch {}
+    const canShare = !!(file && navigator.canShare && navigator.canShare({ files: [file] }));
+    const items = [];
+    if (canShare) items.push({ label:'存储到「文件」/ 分享', icon:'⤓', run: async () => {
+      try { await navigator.share({ files: [file], title: label }); }
+      catch (e) { if (String(e && e.name) !== 'AbortError') toast('分享失败：' + String(e.message || e)); }
+    } });
+    items.push({ label:'在浏览器打开（可再分享保存）', icon:'🌐', run: () => {
+      const a = el('a', { href:url, target:'_blank', rel:'noopener' });
+      document.body.append(a); a.click(); a.remove();
+    } });
+    openSheet(items, `已取回 ${label} · ${size}`);
+    setTimeout(() => URL.revokeObjectURL(url), 5 * 60_000);
+    return;
+  }
+  const a = el('a', { href:url, download:label, style:'display:none' });
+  document.body.append(a);
+  a.click();
+  setTimeout(() => { try { URL.revokeObjectURL(url); a.remove(); } catch {} }, 60_000);
+  toast(`已保存 ${label}（${size}）`);
+}
+
+// 文件浏览器 → 存到手机
 async function downloadHostFile(path, name) {
   const label = name || String(path).split(/[\\/]/).pop() || '文件';
   toast(`正在取回 ${label}…`);
@@ -4248,17 +4298,55 @@ async function downloadHostFile(path, name) {
       const pct = Math.min(99, Math.round((done / total) * 100));
       toast(`正在取回 ${label} · ${pct}%`);
     }, '/api/mobile/v1/file/read');
-    const url = URL.createObjectURL(blob);
-    const a = el('a', { href:url, download:label, style:'display:none' });
-    document.body.append(a);
-    a.click();
-    setTimeout(() => { try { URL.revokeObjectURL(url); a.remove(); } catch {} }, 60_000);
-    const n = blob.size;
-    const size = n < 1024 ? n + 'B' : n < 1048576 ? (n / 1024).toFixed(1) + 'KB' : (n / 1048576).toFixed(1) + 'MB';
-    toast(`已取回 ${label}（${size}），在手机的下载/文件里`);
+    await saveBlobToPhone(blob, label);
   } catch (e) {
     toast('下载失败：' + String(e.message || e));
   }
+}
+
+// PDF / 图片：取回后直接看，不用先下载再找。
+// iOS 的 Safari 内嵌 PDF 只显示第一页，所以额外给「在浏览器打开」。
+async function openHostMedia(path, name) {
+  const label = name || String(path).split(/[\\/]/).pop() || '文件';
+  const isPdf = PDF_EXT.test(label);
+  const mask = el('div', { class:'viewer' });
+  let url = null;
+  const status = el('div', { class:'vmeta', text: `正在取回 ${label}…` });
+  const body = el('div', { class:'vbody', style:'display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px 8px' });
+  const close = () => { try { if (url) URL.revokeObjectURL(url); } catch {} mask.remove(); };
+  const saveBtn = el('button', { class:'vtool', text:'存到手机', onclick: async () => {
+    try { const blob = await fetchHostFile(path, null, '/api/mobile/v1/file/read'); await saveBlobToPhone(blob, label); }
+    catch (e) { toast('失败：' + String(e.message || e)); }
+  }});
+  mask.append(
+    el('div', { class:'vhead' }, el('button', { class:'ico', text:'‹', onclick: close }),
+      el('b', { class:'vtitle', text:label }), el('span', { style:'flex:1' }), saveBtn),
+    status, body);
+  document.body.append(mask);
+  try {
+    const blob = await fetchHostFile(path, (done, total) => {
+      if (total) status.textContent = `正在取回 ${label} · ${Math.min(99, Math.round((done / total) * 100))}%`;
+    }, '/api/mobile/v1/file/read');
+    url = URL.createObjectURL(blob);
+    status.textContent = `${fmtBytes(blob.size)}${isPdf ? ' · PDF' : ''}`;
+    if (isPdf) {
+      body.append(el('embed', { src:url, type:'application/pdf',
+        style:'width:100%;height:70vh;border:0;border-radius:12px;background:#fff' }));
+      body.append(el('a', { class:'vtool', href:url, target:'_blank', rel:'noopener', text:'在浏览器打开' }));
+    } else {
+      body.append(el('img', { src:url, style:'max-width:100%;max-height:72vh;border-radius:12px' }));
+    }
+  } catch (e) {
+    status.textContent = '打不开：' + String(e.message || e);
+  }
+}
+
+// 统一入口：文本进查看器，PDF/图片进媒体预览，其它二进制走下载
+function openHostPath(path, name) {
+  const label = name || String(path).split(/[\\/]/).pop() || '文件';
+  if (TEXTY_EXT.test(label)) return openViewer(path, label);
+  if (PDF_EXT.test(label) || IMG_EXT.test(label)) return openHostMedia(path, label);
+  return downloadHostFile(path, label);
 }
 
 // 文件卡 → 在 App 内播放/保存：视频直接 <video controls>，其它文件给「保存到手机」
