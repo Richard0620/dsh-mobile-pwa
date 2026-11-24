@@ -760,7 +760,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v193';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v195';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1008,6 +1008,9 @@ async function consumePendingOpen() {
     const s = state.sessions.find(x => x.sessionId === j.sessionId)
       || { sessionId: j.sessionId, title: '(来自通知)' };
     openSession(s);
+    // push 跳转发生在布局/视口还没稳定时，补量两次高度，避免输入框停在屏幕中间
+    setTimeout(() => { try { window.__syncViewport && window.__syncViewport(); } catch {} }, 80);
+    setTimeout(() => { try { window.__syncViewport && window.__syncViewport(); } catch {} }, 500);
     // 跳成功才删；失败留着，下次启动还能再试一次
     await c.delete(new Request('./__pending-open'));
     window.__lastPending = { ...j, consumed: true };
@@ -1896,13 +1899,14 @@ function installViewportSync() {
     // 改高度前先判断「是不是在看最新消息」——高度一变这个差值就不准了
     const wasNear = ui && ui.body && ui.body.isConnected
       ? ui.body.scrollHeight - ui.body.scrollTop - ui.body.clientHeight < 90 : false;
-    const vvh = Math.round(vv ? vv.height : ih);
-    de.style.setProperty('--vvh', vvh + 'px');
-
     const shrunk = maxH - ih;
     // 关键：iOS 有时不缩 innerHeight，只缩 visualViewport。两个信号取大的那个。
     const vvShrunk = vv ? maxH - Math.round(vv.height) : 0;
     const kb = Math.max(shrunk, vvShrunk) > 120;
+    // 没有键盘时一律用 innerHeight：从通知冷启动或切回前台时，visualViewport 可能是
+    // 键盘弹出期间留下的旧值（表现为输入框停在屏幕中间、下面一大片空白）。
+    const vvh = Math.round(kb && vv ? vv.height : ih);
+    de.style.setProperty('--vvh', vvh + 'px');
     de.classList.toggle('kb-open', kb);
 
     // iOS 会把页面往上顶（offsetTop/scrollY 变成几百），把滚动位置强行拉回 0
@@ -1929,6 +1933,14 @@ function installViewportSync() {
   document.addEventListener('focusin', () => { setTimeout(apply, 120); setTimeout(apply, 320); setTimeout(apply, 700); });
   document.addEventListener('focusout', () => { setTimeout(apply, 120); setTimeout(apply, 400); });
   apply();
+  // 从后台/通知回来时 iOS 不一定补发 resize，这里主动补量几次
+  window.__syncViewport = apply;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') { setTimeout(apply, 60); setTimeout(apply, 350); }
+  });
+  window.addEventListener('pageshow', () => { setTimeout(apply, 60); setTimeout(apply, 350); });
+  window.addEventListener('focus', () => setTimeout(apply, 60));
+  setTimeout(apply, 400); setTimeout(apply, 1200);
 }
 
 // 从会话回到列表（返回按钮和左滑手势共用）
