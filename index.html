@@ -146,24 +146,25 @@
   .hero h1{margin:0;font-size:30px;line-height:1.12;font-weight:650;letter-spacing:-.5px}
   .hero .sub{margin-top:6px;font-size:10px;letter-spacing:.06em;text-transform:none;
     color:var(--dim);font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
-  .hero .acts{display:flex;gap:4px;padding-top:2px}
+  .hero .acts{display:flex;gap:4px;padding-top:0;align-items:flex-end}
+  .hero .acts .ico{place-items:end center;padding-bottom:0;transform:translateY(3px)}
+  .hero .hrow h1{position:relative;top:2px}
   .hero > div:first-child{flex:1;min-width:0}
   .hero .hero-stack{flex:1;min-width:0}
-  .hero .hrow{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+  .hero .hrow{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
   .hero .hrow h1{margin:0}
   .hero .subrow{display:flex;align-items:center;gap:8px;margin-top:5px;min-height:24px}
   .hero .subrow .sub{margin-top:0}
-  .hero .subrow .connpill{margin-left:auto}
   .connpill{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border:1px solid var(--line);
     border-radius:999px;background:var(--card);font:10px/1 ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--dim);white-space:nowrap;flex:none}
   .connpill:active{opacity:.7}
-  .connpill b{font-weight:650;color:var(--fg)}
-  .connpill .dot{width:6px;height:6px;border-radius:50%;background:var(--dim);flex:none}
+  .connpill b{font-weight:650;color:var(--fg);display:inline-block;line-height:1;align-self:center}
+  .connpill .dot{width:6px;height:6px;border-radius:50%;background:var(--dim);flex:none;display:block;align-self:center;margin-top:0;opacity:1}
   .connpill.direct .dot{background:var(--ok)}
   .connpill.direct b{color:var(--ok)}
   .connpill.relay .dot{background:var(--warn)}
   .connpill.relay b{color:var(--warn)}
-  .connpill .ms{color:var(--dim)}
+  .connpill .ms{color:var(--dim);display:inline-block;line-height:1;align-self:center}
   .connpill.static{cursor:default}
   .hero.hero-back{align-items:center;justify-content:flex-start;gap:8px}
   .hero.hero-back .hero-main{flex:1;min-width:0}
@@ -799,7 +800,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v237';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v241';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1881,10 +1882,12 @@ function loadSettingsFacts() {
 
 function renderSettings(wrap) {
   const sub = el('div', { class:'subrow' },
-    el('div', { class:'sub', text:'DSH MOBILE · ' + APP_VERSION }),
-    connPill());
+    el('div', { class:'sub', text:'DSH MOBILE · ' + APP_VERSION }));
   wrap.append(el('div', { class:'hero' },
-    el('div', {}, el('h1', { text:'设置' }), sub)));
+    el('div', { class:'hero-stack' },
+      el('div', { class:'hrow' }, el('h1', { text:'设置' }),
+        el('div', { class:'acts' }, connPill())),
+      sub)));
   loadSettingsFacts();
   const facts = settingsFacts || { push:'', devices:null };
   const skin = (() => { try { const v = localStorage.getItem('dsh.skin'); return v === 'carbon' ? '碳黑' : v === 'auto' ? '跟随系统' : '纸面'; } catch { return '纸面'; } })();
@@ -3814,10 +3817,10 @@ function renderList(wrap, opts = {}) {
   const plus = el('button', { class:'ico', text:'＋', onclick: openNewSessionSheet });
   if (!opts.noHeader) {
     const sub = el('div', { class:'subrow' },
-      el('div', { class:'sub', text: state.sessions.length + ' 个会话 · ' + state.workspaces.length + ' 个工作区' }),
-      connPill());
+      el('div', { class:'sub', text: state.sessions.length + ' 个会话 · ' + state.workspaces.length + ' 个工作区' }));
     const stack = el('div', { class:'hero-stack' },
-      el('div', { class:'hrow' }, el('h1', { text:'会话' }), el('div', { class:'acts' }, plus, menu)),
+      el('div', { class:'hrow' }, el('h1', { text:'会话' }),
+        el('div', { class:'acts' }, connPill(), plus, menu)),
       sub);
     wrap.append(el('div', { class:'hero' }, stack));
   }
