@@ -54,3 +54,4 @@
 | v197 | 2026-11-23 | master | 终端建会话兜底：herdr 重启后没有 workspace 时自动创建并重试，修复 502/工作区丢失后建终端失败 | 手机 PWA 终端 | 公网 /agents/tab/create 返回 200；VPS 隧道健康 |
 | v199 | 2026-11-24 | master | 发送中切换会话串台：send() 捕获 sid，消息/草稿/loadMessages 绑定原会话 | 手机 PWA 会话发送 | 代码走查不再用全局 sessionId 发送；切走后只 toast 原会话 |
 | v221 | 2026-11-24 | master | 配对页粘贴按钮：配对码/恢复链接都支持从剪贴板一键粘贴 | 配对登录 | 无头浏览器可见粘贴按钮；布局不溢出 |
+| v223 | 2026-11-24 | master | 配对页可滚动：`.pair` 使用 --vvh + overflow-y:auto + 安全区 padding，键盘不再遮挡 | 配对登录 | clientHeight=564 scrollHeight=622 overflow=auto |
