@@ -359,19 +359,21 @@
     background:var(--card);color:var(--dim)}
   .rproot.on{color:var(--accent-fg);background:var(--accent);border-color:var(--accent)}
 
-  /* 全屏文件查看器 */
-  .viewer{position:fixed;inset:0;z-index:1100;background:var(--bg);display:flex;flex-direction:column}
-  /* 查看器：恒深色，纸面/碳黑都一样 */
-  .viewer{--bg:#0B0C0E;--card:#121417;--fg:#EAE8DF;--dim:#6E726C;--line:#24272C;
-    --bubble:#171A1E;--accent:#C6F04E;--accent-fg:#0B0C0E;background:#0B0C0E;color:var(--fg)}
-  .viewer .vtitle{color:#F0EEE6}
-  .viewer .vmeta{color:#8E8C82}
-  .viewer .vbody{color:#E7E5DA}  .vfoot{flex:none;display:flex;gap:8px;padding:8px 12px calc(10px + var(--safe-b));
-    border-top:1px solid var(--line);background:#0B0C0E}
+  /* 全屏文件查看器：跟随当前皮肤（纸面 / 碳黑），不再恒深色 */
+  .viewer{position:fixed;inset:0;z-index:1100;background:var(--bg);color:var(--fg);
+    display:flex;flex-direction:column}
+  .viewer .vtitle{color:var(--fg)}
+  .viewer .vmeta{color:var(--dim)}
+  .viewer .vbody{color:var(--fg)}
+  .vfoot{flex:none;display:flex;gap:8px;padding:8px 12px calc(10px + var(--safe-b));
+    border-top:1px solid var(--line);background:var(--bg)}
   .vbtn{height:42px;padding:0 14px;border-radius:11px;border:1px solid var(--line);
     color:var(--fg);font-size:12.5px}
-  .vgo{flex:1;height:42px;border-radius:11px;background:var(--fg);color:#0B0C0E;
+  .vgo{flex:1;height:42px;border-radius:11px;background:var(--accent);color:var(--accent-fg);
     font-size:13px;font-weight:600}  .vhead{display:flex;align-items:center;gap:6px;padding:calc(8px + var(--safe-t)) 10px 6px}
+  /* 查看器右上角的图标按钮：SVG 必须 fill:none，否则路径会被填成实心黑块 */
+  .vhead .ico svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;
+    stroke-linecap:round;stroke-linejoin:round}
   .vtitle{flex:1;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center}
   .vmeta{font-size:11px;color:var(--dim);padding:0 14px 6px;overflow:hidden;
     text-overflow:ellipsis;white-space:nowrap}
@@ -386,10 +388,16 @@
   .vcount{font-size:11px;color:var(--dim);min-width:48px;text-align:center}
   .vbody{flex:1;overflow:auto;margin:0;padding:6px 8px calc(16px + var(--safe-b));
     font:12px/1.55 ui-monospace,Consolas,monospace;counter-reset:vline}
+  /* 媒体（PDF/图片/视频）铺满整块剩余区域：底部不再留一条空白 */
+  .viewer .vbody.media{display:flex;align-items:center;justify-content:center;
+    padding:0;overflow:hidden;background:var(--card)}
+  .viewer .vbody.media > embed{flex:1;width:100%;height:100%;border:0;background:var(--card)}
+  .viewer .vbody.media > img,.viewer .vbody.media > video{width:100%;height:100%;
+    object-fit:contain;background:var(--card)}
   .viewer .vmd{display:none;flex:1;overflow:auto;padding:12px 14px calc(18px + var(--safe-b));
-    font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;color:#E7E5DA}
-  .viewer .vmd .md{font-size:15px;line-height:1.65;color:#E7E5DA}
-  .viewer .vmd .md code{background:#1b1f27;color:#e6e9ef}
+    font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;color:var(--fg)}
+  .viewer .vmd .md{font-size:15px;line-height:1.65;color:var(--fg)}
+  .viewer .vmd .md code{background:var(--bubble);color:var(--fg)}
   .viewer .vmd .md pre.code{margin:10px 0}
   .vbody .vline{counter-increment:vline;white-space:pre-wrap;word-break:break-word;
     padding-left:3.4em;text-indent:-3.4em}
@@ -773,7 +781,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v223';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v224';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -4335,15 +4343,26 @@ async function openHostMedia(path, name) {
   const mask = el('div', { class:'viewer' });
   let url = null;
   const status = el('div', { class:'vmeta', text: `正在取回 ${label}…` });
-  const body = el('div', { class:'vbody', style:'display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px 8px' });
+  // 媒体区吃满剩余高度：不再给底部按钮留一条空白
+  const body = el('div', { class:'vbody media' });
   const close = () => { try { if (url) URL.revokeObjectURL(url); } catch {} mask.remove(); };
-  const saveBtn = el('button', { class:'vtool', text:'存到手机', onclick: async () => {
+  const iconBtn = (icon, title, run) => el('button', { class:'ico', title, 'aria-label':title,
+    html: sheetIconSVG(icon), onclick: run });
+  const saveBtn = iconBtn('download', '存到手机', async () => {
     try { const blob = await fetchHostFile(path, null, '/api/mobile/v1/file/read'); await saveBlobToPhone(blob, label); }
     catch (e) { toast('失败：' + String(e.message || e)); }
-  }});
+  });
+  // 打开按钮一开始就放右上角（PDF 在 iOS 上内嵌可能只显示第一页，用户随时能出去看）
+  const openBtn = iconBtn('openExternal', '在浏览器打开', () => {
+    if (!url) { toast('还没取回完'); return; }
+    const a = el('a', { href:url, target:'_blank', rel:'noopener' });
+    document.body.append(a); a.click(); a.remove();
+  });
   mask.append(
-    el('div', { class:'vhead' }, el('button', { class:'ico', text:'‹', onclick: close }),
-      el('b', { class:'vtitle', text:label }), el('span', { style:'flex:1' }), saveBtn),
+    el('div', { class:'vhead' },
+      el('button', { class:'ico', html:sheetIconSVG('chevronLeft'), title:'返回', 'aria-label':'返回', onclick: close }),
+      el('b', { class:'vtitle', text:label }),
+      openBtn, saveBtn),
     status, body);
   document.body.append(mask);
   try {
@@ -4352,13 +4371,8 @@ async function openHostMedia(path, name) {
     }, '/api/mobile/v1/file/read');
     url = URL.createObjectURL(blob);
     status.textContent = `${fmtBytes(blob.size)}${isPdf ? ' · PDF' : ''}`;
-    if (isPdf) {
-      body.append(el('embed', { src:url, type:'application/pdf',
-        style:'width:100%;height:70vh;border:0;border-radius:12px;background:#fff' }));
-      body.append(el('a', { class:'vtool', href:url, target:'_blank', rel:'noopener', text:'在浏览器打开' }));
-    } else {
-      body.append(el('img', { src:url, style:'max-width:100%;max-height:72vh;border-radius:12px' }));
-    }
+    if (isPdf) body.append(el('embed', { src:url, type:'application/pdf' }));
+    else body.append(el('img', { src:url, alt:label }));
   } catch (e) {
     status.textContent = '打不开：' + String(e.message || e);
   }
@@ -4375,14 +4389,21 @@ function openHostPath(path, name) {
 // 文件卡 → 在 App 内播放/保存：视频直接 <video controls>，其它文件给「保存到手机」
 async function openHostFile(path, name) {
   const isVid = isVideoName(name);
+  const label = name || String(path).split(/[\\/]/).pop() || '文件';
   const mask = el('div', { class:'viewer' });
   let url = null;
   const status = el('div', { class:'vmeta', text: isVid ? '正在取回视频…' : '正在取回文件…' });
-  const body = el('div', { class:'vbody', style:'display:grid;place-items:center;padding:16px' });
+  const body = el('div', { class:'vbody media' });
   const close = () => { try { if (url) URL.revokeObjectURL(url); } catch {} mask.remove(); };
+  const saveBtn = el('button', { class:'ico', title:'存到手机', 'aria-label':'存到手机',
+    html: sheetIconSVG('download'), onclick: async () => {
+      try { const blob = await fetchHostFile(path, null); await saveBlobToPhone(blob, label); }
+      catch (e) { toast('失败：' + String(e.message || e)); }
+    }});
   mask.append(
-    el('div', { class:'vhead' }, el('button', { class:'ico', text:'‹', onclick: close }),
-      el('b', { class:'vtitle', text:name }), el('span', { style:'flex:1' })),
+    el('div', { class:'vhead' },
+      el('button', { class:'ico', html:sheetIconSVG('chevronLeft'), title:'返回', 'aria-label':'返回', onclick: close }),
+      el('b', { class:'vtitle', text:label }), saveBtn),
     status, body);
   document.body.append(mask);
   try {
@@ -4393,14 +4414,14 @@ async function openHostFile(path, name) {
         : `已取回 ${mb} MB`;
     });
     url = URL.createObjectURL(blob);
-    status.textContent = `${(blob.size / 1048576).toFixed(1)} MB`;
+    status.textContent = fmtBytes(blob.size);
     if (isVid) {
-      const v = el('video', { controls:'', playsinline:'', autoplay:'',
-        style:'width:100%;max-height:72vh;border-radius:12px;background:#000' });
+      const v = el('video', { controls:'', playsinline:'', autoplay:'' });
       v.src = url;
       body.append(v);
     } else {
-      body.append(el('a', { class:'btn primary', href:url, download:name, text:'保存到手机' }));
+      const a = el('a', { class:'btn primary', href:url, download:label, text:'保存到手机' });
+      body.append(a);
     }
   } catch (e) {
     status.textContent = '打不开：' + String(e.message || e);
@@ -5731,6 +5752,7 @@ function sheetIconSVG(name) {
     sliders: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/>',
     upload: '<path d="M12 16V5M7.5 9.5L12 5l4.5 4.5M5 19h14"/>',
     download: '<path d="M12 4.5v10.5M7.5 10.5L12 15l4.5-4.5M5 19.5h14"/>',
+    openExternal: '<path d="M14 4.5h5.5V10M19.5 4.5l-8.5 8.5M11 4.5H6.5A1.5 1.5 0 005 6v11.5A1.5 1.5 0 006.5 19H18a1.5 1.5 0 001.5-1.5V13"/>',
     eye: '<path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.6"/>',
     plus: '<path d="M12 5.5v13M5.5 12h13"/>',
     file: '<path d="M7 4.5h6.5L18 9v10.5H7z"/><path d="M13.5 4.5V9H18"/>',
