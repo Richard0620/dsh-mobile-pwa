@@ -766,7 +766,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v198';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v199';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -4767,6 +4767,10 @@ function renderSession(wrap) {
 
 
   async function send() {
+    const sid = state.sessionId;
+    const sendTitle = state.sessionTitle;
+    if (!sid) return;
+    const sameSession = () => state.view === 'session' && state.sessionId === sid && ui.sessionId === sid;
     const text = getText().trim();
     const atts = state.pending.slice();
     if ((!text && !atts.length) || sendBtn.disabled) return;
@@ -4776,19 +4780,28 @@ function renderSession(wrap) {
     // 先把还没上传的附件传掉（此时才产生 uploadId，不会过期）
     for (const a of atts) {
       if (a.uploadId || a.path || !a.file) continue;
-      a.uploading = true; renderAttach();
+      a.uploading = true;
+      if (sameSession()) renderAttach();
       try {
-        const up = await uploadFile(a.file, (i, n) => { a.progress = i / n; updateAttachProgress(a); });
+        const up = await uploadFile(a.file, (i, n) => {
+          if (state.sessionId !== sid) return;
+          a.progress = i / n;
+          try { updateAttachProgress(a); } catch {}
+        });
         const isImg = (a.mediaType || '').startsWith('image/');
         a.uploadId = isImg ? up.uploadId : null;
         a.path = isImg ? null : up.path;
         a.file = null;
       } catch (e) {
-        a.uploading = false; state.sending = false; renderAttach();
-        toast('附件上传失败：' + (e.message || e));
+        a.uploading = false; state.sending = false;
+        const curSend = document.querySelector('.send');
+        if (curSend) curSend.disabled = false;
+        if (sameSession()) { renderAttach(); toast('附件上传失败：' + (e.message || e)); }
+        else { saveDraft(sid, text); toast('附件上传失败（原会话）：' + (e.message || e)); }
         return;   // 中止发送，内容与附件都还留在原地
       }
-      a.uploading = false; renderAttach();
+      a.uploading = false;
+      if (sameSession()) renderAttach();
     }
 
     const blocks = [];
@@ -4801,30 +4814,48 @@ function renderSession(wrap) {
     if (fullText) blocks.unshift({ type:'text', text: fullText });
 
     const tmp = { id:`tmp-${Date.now()}`, role:'user', text: fullText, blocks:[], pending:true };
-    state.messages.push(tmp);
-    paintSession({ scroll:'bottom' });
-    clearText();
-    saveDraft(state.sessionId, '');
-    state.pending = []; renderAttach();
+    if (sameSession()) {
+      state.messages.push(tmp);
+      paintSession({ scroll:'bottom' });
+      clearText();
+      state.pending = [];
+      renderAttach();
+    }
+    saveDraft(sid, '');
 
     try {
       await api('/api/mobile/v1/session/send', { method:'POST', body: {
-        sessionId: state.sessionId, content: blocks, clientMessageId: uuid(),
+        sessionId: sid, content: blocks, clientMessageId: uuid(),
       }});
-      markBusy(true);
-      await loadMessages();
-      // 发完就收键盘：多数人是发完去读回复，不是连发
-      try { ta.blur(); } catch {}
+      if (sameSession()) {
+        markBusy(true);
+        await loadMessages(false, sid);
+        // 发完就收键盘：多数人是发完去读回复，不是连发
+        try { ta.blur(); } catch {}
+      } else {
+        toast('已发送到「' + (sendTitle || '原会话') + '」');
+      }
     } catch (e) {
-      state.messages = state.messages.filter(m => m.id !== tmp.id);
-      // 发送失败要把内容和附件还回去：网络抖一下不该把用户打的东西吞掉
-      if (text) { ta.textContent = text; saveDraft(state.sessionId, text); try { caretToEnd(); } catch {} }
-      state.pending = atts;
-      renderAttach();
-      paintSession();
-      toast('发送失败：' + String(e.message || e) + '（内容已保留）');
-      try { ta.focus(); } catch {}
-    } finally { state.sending = false; sendBtn.disabled = false; }
+      // 失败时只恢复原会话的界面；用户已切走就不要污染当前会话
+      if (sameSession()) {
+        state.messages = state.messages.filter(m => m.id !== tmp.id);
+        // 发送失败要把内容和附件还回去：网络抖一下不该把用户打的东西吞掉
+        if (text) { ta.textContent = text; saveDraft(sid, text); try { caretToEnd(); } catch {} }
+        state.pending = atts;
+        renderAttach();
+        paintSession();
+        toast('发送失败：' + String(e.message || e) + '（内容已保留）');
+        try { ta.focus(); } catch {}
+      } else {
+        if (text) saveDraft(sid, text);
+        toast('发送失败（原会话）：' + String(e.message || e));
+      }
+    } finally {
+      state.sending = false;
+      sendBtn.disabled = false;
+      const curSend = document.querySelector('.send');
+      if (curSend) curSend.disabled = false;
+    }
   }
 
   // contenteditable 没有 input 事件里的 value，粘贴要自己净化成纯文本
@@ -5834,13 +5865,18 @@ async function applyModel(provider, model, reasoningEffort) {
   } catch (e) { toast('切换模型失败：' + (e.message || e)); }
 }
 
-async function loadMessages(force=false) {
+async function loadMessages(force=false, sidOverride=null) {
+  const sid = sidOverride || state.sessionId;
+  if (!sid) return;
   state.lastMsgLoad = Date.now();
   try {
-    const r = await api(`/api/mobile/v1/session/messages?sessionId=${encodeURIComponent(state.sessionId)}`);
-    state.messages = r.items || [];
-    state.lastSeq = r.lastSeq || 0;
-    saveMsgCache(state.sessionId, state.messages, state.lastSeq);
+    const r = await api(`/api/mobile/v1/session/messages?sessionId=${encodeURIComponent(sid)}`);
+    const items = r.items || [], lastSeq = r.lastSeq || 0;
+    saveMsgCache(sid, items, lastSeq);
+    // 请求期间用户可能已切走：只写缓存，不能把 A 的消息灌进 B
+    if (state.sessionId !== sid) return;
+    state.messages = items;
+    state.lastSeq = lastSeq;
     if (state.view === 'session') paintSession(force ? { scroll:'bottom' } : {});
   } catch (e) { console.warn('messages', e); }
 }
