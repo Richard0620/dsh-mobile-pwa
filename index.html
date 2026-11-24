@@ -781,7 +781,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v224';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v229';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -4738,7 +4738,6 @@ function renderSession(wrap) {
   const listWrap = el('div');
   const cardsWrap = el('div');
   body.append(listWrap, cardsWrap);
-  installPullToRefresh(body);
 
   const strip = el('div', { class:'streamline' });
   const ta = el('div', { class:'ta', contenteditable:'true', role:'textbox', 'aria-multiline':'true',
