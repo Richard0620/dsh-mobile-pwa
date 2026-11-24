@@ -147,6 +147,21 @@
   .hero .sub{margin-top:6px;font-size:10px;letter-spacing:.06em;text-transform:none;
     color:var(--dim);font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
   .hero .acts{display:flex;gap:4px;padding-top:2px}
+  .hero > div:first-child{flex:1;min-width:0}
+  .hero .subrow{display:flex;align-items:center;gap:8px;margin-top:5px;min-height:24px}
+  .hero .subrow .sub{margin-top:0}
+  .hero .subrow .connpill{margin-left:auto}
+  .connpill{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border:1px solid var(--line);
+    border-radius:999px;background:var(--card);font:10px/1 var(--mono);color:var(--dim);white-space:nowrap;flex:none}
+  .connpill:active{opacity:.7}
+  .connpill b{font-weight:650;color:var(--fg)}
+  .connpill .dot{width:6px;height:6px;border-radius:50%;background:var(--dim);flex:none}
+  .connpill.direct .dot{background:var(--ok)}
+  .connpill.direct b{color:var(--ok)}
+  .connpill.relay .dot{background:var(--warn)}
+  .connpill.relay b{color:var(--warn)}
+  .connpill .ms{color:var(--dim)}
+  .connpill.static{cursor:default}
   .hero.hero-back{align-items:center;justify-content:flex-start;gap:8px}
   .hero.hero-back .hero-main{flex:1;min-width:0}
   .hero.hero-back .acts{margin-left:auto;padding-top:0}
@@ -781,7 +796,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v231';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v233';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1441,8 +1456,14 @@ async function applyNetMode({ silent = false } = {}) {
   if (!state.token) return;
   const before = state.apiBase;
   const r = await resolveNetMode();
-  state.netInfo = { ...r, at: Date.now() };
   state.apiBase = r.base;
+  // 中转没有探测延迟；用当前线路对 /health 做一次轻量测速，列表/设置才能显示真实 ms
+  if (!r.ms && r.channel === 'relay') {
+    const t0 = performance.now();
+    try { await api('/api/mobile/v1/health'); r.ms = Math.round(performance.now() - t0); } catch {}
+  }
+  state.netInfo = { ...r, at: Date.now() };
+  paintConnPills();
   if (r.base === before) return r;
   if (!state.booted) return r;
   if (!silent) toast(r.base ? `已切到局域网直连${r.ms ? ' · ' + r.ms + 'ms' : ''}` : '已切回中转');
@@ -1605,6 +1626,35 @@ function heroHeader(title, sub, action) {
   return el('div', { class:'hero' },
     el('div', {}, el('h1', { text: title }), sub ? el('div', { class:'sub', text: sub }) : null),
     action ? el('div', { class:'acts' }, action) : null);
+}
+
+function openConnectionSettings() {
+  state.view = 'sub'; state.subPage = 'conn'; render();
+}
+
+// 列表 / 设置共用的当前连接状态；点按进入「设置 → 连接」
+function connPill({ interactive = true } = {}) {
+  const info = state.netInfo || {};
+  const ch = info.channel;
+  const label = ch === 'lan' ? '直连' : ch ? '中转' : '连接中';
+  const cls = ch === 'lan' ? 'direct' : ch ? 'relay' : 'unknown';
+  const ms = Number(info.ms) || 0;
+  const props = {
+    class: `connpill ${cls}${interactive ? '' : ' static'}`,
+    title: ch ? `当前${label}${ms ? ' · ' + ms + 'ms' : ''}，点击查看连接设置` : '正在探测连接',
+    'aria-label': ch ? `当前${label}${ms ? '，' + ms + ' 毫秒' : ''}` : '正在探测连接',
+  };
+  if (interactive) { props.type = 'button'; props.onclick = openConnectionSettings; }
+  return el(interactive ? 'button' : 'span', props,
+    el('i', { class:'dot' }),
+    el('b', { text: label }),
+    ms ? el('span', { class:'ms', text: ms + 'ms' }) : (ch ? el('span', { class:'ms', text:'—' }) : null));
+}
+
+function paintConnPills() {
+  document.querySelectorAll('.connpill').forEach(old => {
+    try { old.replaceWith(connPill()); } catch {}
+  });
 }
 
 // 二级页沿用「返回在左、标题紧随」的规范，不再把返回箭头丢到右上角
@@ -1827,7 +1877,11 @@ function loadSettingsFacts() {
 }
 
 function renderSettings(wrap) {
-  wrap.append(heroHeader('设置', 'DSH MOBILE · ' + APP_VERSION));
+  const sub = el('div', { class:'subrow' },
+    el('div', { class:'sub', text:'DSH MOBILE · ' + APP_VERSION }),
+    connPill());
+  wrap.append(el('div', { class:'hero' },
+    el('div', {}, el('h1', { text:'设置' }), sub)));
   loadSettingsFacts();
   const facts = settingsFacts || { push:'', devices:null };
   const skin = (() => { try { const v = localStorage.getItem('dsh.skin'); return v === 'carbon' ? '碳黑' : v === 'auto' ? '跟随系统' : '纸面'; } catch { return '纸面'; } })();
@@ -3755,7 +3809,14 @@ function renderList(wrap, opts = {}) {
     { label:'退出登录', icon:'⏏', run: () => { localStorage.clear(); state.token=''; state.view='list'; render(); } },
   ]) });
   const plus = el('button', { class:'ico', text:'＋', onclick: openNewSessionSheet });
-  if (!opts.noHeader) wrap.append(heroHeader('会话', state.sessions.length + ' 个会话 · ' + state.workspaces.length + ' 个工作区', el('div', { style:'display:flex;gap:2px' }, plus, menu)));
+  if (!opts.noHeader) {
+    const sub = el('div', { class:'subrow' },
+      el('div', { class:'sub', text: state.sessions.length + ' 个会话 · ' + state.workspaces.length + ' 个工作区' }),
+      connPill());
+    wrap.append(el('div', { class:'hero' },
+      el('div', {}, el('h1', { text:'会话' }), sub),
+      el('div', { class:'acts' }, plus, menu)));
+  }
 
   const main = el('main');
   // 「已归档」页的数据来自 archived=1；当前宿主只返回归档子集，
