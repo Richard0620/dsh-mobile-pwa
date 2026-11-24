@@ -137,6 +137,7 @@ try {
     var a=document.querySelector('.app'), t=document.querySelector('.tabbar'), vv=window.visualViewport;
     d.textContent='ih='+innerHeight+' vv='+(vv?Math.round(vv.height):'-')+
       ' sb='+cs.getPropertyValue('--safe-b').trim()+
+      ' st='+cs.getPropertyValue('--safe-t').trim()+' sh='+screen.height+
       ' app='+(a?Math.round(a.getBoundingClientRect().height):'-')+
       ' tab='+(t?Math.round(t.getBoundingClientRect().bottom):'-')+
       ' dm='+(matchMedia('(display-mode: standalone)').matches?1:0)+
