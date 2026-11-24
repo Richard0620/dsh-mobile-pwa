@@ -155,7 +155,7 @@
   .hero .subrow .sub{margin-top:0}
   .hero .subrow .connpill{margin-left:auto}
   .connpill{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border:1px solid var(--line);
-    border-radius:999px;background:var(--card);font:10px/1 var(--mono);color:var(--dim);white-space:nowrap;flex:none}
+    border-radius:999px;background:var(--card);font:10px/1 ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--dim);white-space:nowrap;flex:none}
   .connpill:active{opacity:.7}
   .connpill b{font-weight:650;color:var(--fg)}
   .connpill .dot{width:6px;height:6px;border-radius:50%;background:var(--dim);flex:none}
@@ -799,7 +799,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v235';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v237';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
