@@ -344,9 +344,18 @@ const server = http.createServer(async (req, res) => {
       if (!cwd) return send(res, 400, JSON.stringify({ error: "cwd required" }));
       const label = body.label || basename(cwd) || "term";
       const startAgent = body.startAgent === true;
-      const before = JSON.parse(await run(["api", "snapshot"])).result.snapshot;
-      const beforeTabs = new Set((before.tabs || []).map((t) => t.tab_id));
-      await run(["tab", "create", "--cwd", cwd, "--label", label, "--no-focus"]);
+      let before = JSON.parse(await run(["api", "snapshot"])).result.snapshot;
+      let beforeTabs = new Set((before.tabs || []).map((t) => t.tab_id));
+      try {
+        await run(["tab", "create", "--cwd", cwd, "--label", label, "--no-focus"]);
+      } catch (e) {
+        // Fresh herdr server (e.g. right after reboot) has no workspace; create one and retry.
+        if (!/workspace_not_found|no active workspace/i.test(String((e && e.message) || e))) throw e;
+        await run(["workspace", "create", "--cwd", cwd, "--label", label, "--no-focus"]);
+        before = JSON.parse(await run(["api", "snapshot"])).result.snapshot;
+        beforeTabs = new Set((before.tabs || []).map((t) => t.tab_id));
+        await run(["tab", "create", "--cwd", cwd, "--label", label, "--no-focus"]);
+      }
       const after = JSON.parse(await run(["api", "snapshot"])).result.snapshot;
       const tab = (after.tabs || []).find((t) => !beforeTabs.has(t.tab_id));
       if (!tab) return send(res, 500, JSON.stringify({ error: "tab created but not found in snapshot" }));
