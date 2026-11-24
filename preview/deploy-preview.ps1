@@ -127,7 +127,26 @@ try {
   $marker = "<script>window.__DSH_PREVIEW__={branch:'$branchEsc',slug:'$Slug'};</script>"
   $idx = $idx -replace '(<head[^>]*>)', "`$1`n$marker"
   $switch = '<a href="../" style="position:fixed;left:8px;bottom:calc(env(safe-area-inset-bottom) + 92px);z-index:9999;font:11px -apple-system,sans-serif;padding:4px 8px;border-radius:999px;background:rgba(0,0,0,.55);color:#fff;text-decoration:none;opacity:.8">← 测试环境</a>'
-  $idx = $idx.Replace('</body>', "$switch`n</body>")
+  $diag = @'
+<div id="__diag" style="position:fixed;left:8px;bottom:calc(env(safe-area-inset-bottom,0px) + 4px);z-index:10000;background:rgba(0,0,0,.72);color:#fff;font:9px/1.35 ui-monospace,Consolas,monospace;padding:3px 6px;border-radius:6px;pointer-events:none;max-width:94vw;white-space:nowrap"></div>
+<script>
+(function(){
+  var d=document.getElementById('__diag');
+  function tick(){
+    var cs=getComputedStyle(document.documentElement);
+    var a=document.querySelector('.app'), t=document.querySelector('.tabbar'), vv=window.visualViewport;
+    d.textContent='ih='+innerHeight+' vv='+(vv?Math.round(vv.height):'-')+
+      ' sb='+cs.getPropertyValue('--safe-b').trim()+
+      ' app='+(a?Math.round(a.getBoundingClientRect().height):'-')+
+      ' tab='+(t?Math.round(t.getBoundingClientRect().bottom):'-')+
+      ' dm='+(matchMedia('(display-mode: standalone)').matches?1:0)+
+      ' na='+(navigator.standalone?1:0);
+  }
+  setInterval(tick,800); tick();
+})();
+</script>
+'@
+  $idx = $idx.Replace('</body>', "$switch`n$diag`n</body>")
   [IO.File]::WriteAllText($idxPath, $idx, (New-Object Text.UTF8Encoding($false)))
 
   $newCache = "dsh-preview-$Slug-$app"
