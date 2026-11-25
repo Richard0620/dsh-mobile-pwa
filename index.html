@@ -799,7 +799,7 @@
 </div>
 <script type="module">
 // ---------------------------------------------------------------- 基础
-const APP_VERSION = 'v247';   // 每次发版改这里，菜单底部会显示
+const APP_VERSION = 'v249';   // 每次发版改这里，菜单底部会显示
 const LS = { token:'dsh.token', inst:'dsh.inst', collapsed:'dsh.collapsed', draft:'dsh.draft', mode:'dsh.mode', lanBase:'dsh.lanBase', lanPort:'dsh.lanPort', lanName:'dsh.lanName' };
 
 // 本地缓存：先出内容再拉新（弱网/离线时至少能看到上次的样子）
@@ -1110,6 +1110,27 @@ async function markRead(sessionId) {
   // 本地水位是第二层保险：宿主 readAt 写入失败/延迟时，重开 App 也不会把点又点亮
   markOpened(sessionId);
   syncBadge();
+}
+
+// 停留在会话页、且人已经在底部看最新消息时，自动把这一轮推进已读。
+// 只靠打开会话时那一次 markRead 不够：后续新回复会让 lastTurn.endedAt 继续变大。
+function markSessionSeen(sessionId) {
+  if (!sessionId) return;
+  if (document.visibilityState && document.visibilityState !== 'visible') return;
+  const s = state.sessions.find(x => x.sessionId === sessionId);
+  // 还在跑的这一轮先不消点，等 turn/end 后的摘要/消息落地
+  if (state.busy) return;
+  const summaryAt = Number(s && s.lastTurn && s.lastTurn.endedAt) || 0;
+  const lastMsg = state.sessionId === sessionId && state.messages.length
+    ? state.messages[state.messages.length - 1] : null;
+  const lastMsgAt = Number(lastMsg && lastMsg.time) || 0;
+  const endedAt = Math.max(summaryAt, lastMsgAt);
+  if (!endedAt) return;
+  if (endedAt <= (Number(readMarks[sessionId]) || 0)) return;
+  markOpened(sessionId, endedAt);
+  if (s) { s.lastTurn = s.lastTurn || {}; s.lastTurn.readAt = Date.now(); }
+  syncBadge();
+  api('/api/mobile/v1/session/read', { method:'POST', body: { sessionId } }).catch(() => {});
 }
 
 function toast(msg) {
@@ -5239,6 +5260,7 @@ function renderSession(wrap) {
     if (!far) state.unseen = 0;
     // 记录「用户是不是在看最新消息」：键盘弹起、窗口缩放、贴底校正都靠它判断
     if (ui && ui.body === body) ui.atBottom = distance < 90;
+    if (distance < 90) markSessionSeen(state.sessionId);
     updateJump();
   }, { passive: true });
 
@@ -5924,6 +5946,9 @@ async function refreshAll(force=false) {
     syncBadge();
     if (state.view === 'list') render();
     else if (force) paintOpenDrawer();
+    // 会话页正停在底部看最新回复：摘要刷新后立刻把这轮标已读
+    if (state.view === 'session' && document.visibilityState === 'visible'
+      && ui && ui.sessionId === state.sessionId && ui.atBottom) markSessionSeen(state.sessionId);
   } catch (e) {
     if (['device-revoked','device-expired','unauthorized'].includes(e.code)) {
       state.token = ''; localStorage.clear(); render();
@@ -6094,6 +6119,8 @@ async function loadMessages(force=false, sidOverride=null) {
     state.messages = items;
     state.lastSeq = lastSeq;
     if (state.view === 'session') paintSession(force ? { scroll:'bottom' } : {});
+    // 新回复已经渲染出来，且人就在底部：本地水位立即推进，回列表不再亮未读
+    if (state.view === 'session' && state.sessionId === sid && ui && ui.atBottom) markSessionSeen(sid);
   } catch (e) { console.warn('messages', e); }
 }
 
