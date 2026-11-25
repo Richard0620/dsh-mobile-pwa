@@ -814,6 +814,265 @@ try {
   }
 } catch {}
 
+// ---------------------------------------------------------------- 缓存存储层 v2
+// 一期只做「影子写 + 可开关读取」，不改界面、不改接口：
+//   - 默认（localStorage['dsh.cache.v2'] !== '1'）只有下面的 legacy 路径，行为与之前逐字节一致；
+//   - 开关打开后：读走 IndexedDB，写仍然照老规则写 localStorage（当影子 + 回滚保险），
+//     另外再写一份到 IndexedDB（限额更大：单会话 400 条 / 最多 30 个会话）。
+// 四个对外函数 saveListCache / readListCache / saveMsgCache / readMsgCache 签名和行为保持。
+const CACHE_V2_KEY = 'dsh.cache.v2';
+const CACHE_V2_MIGRATED_KEY = 'dsh.cache.migrated.v2';
+const IDB_NAME = 'dsh-mobile';
+const IDB_VERSION = 1;
+const IDB_STORE = 'kv';
+// 本期唯一的行为差异：IDB 单会话 400 条 / 最多 30 个会话；legacy 仍是 120 条 / 10 个会话
+const IDB_LIMITS = { msgsPerSession: 400, sessions: 30 };
+const CACHE_V2 = (() => { try { return localStorage.getItem(CACHE_V2_KEY) === '1'; } catch { return false; } })();
+
+// 读接口是同步的（调用点都在渲染路径上），所以 IndexedDB 的内容先灌进内存镜像，读只查内存。
+// 键：'list' / 'msg:<sid>'；另有一条 'idx' 只存 { sid: at }，用于在「不读消息正文」的前提下裁会话数。
+const idbState = {
+  ready: false, failed: false, db: null,
+  memList: null,            // 会话列表（读走它）
+  memMsgs: new Map(),       // sid -> { at, lastSeq, messages }
+  msgAt: new Map(),         // sid -> at（裁剪排序用）
+  prefetching: new Set(),
+  warnedWrite: false,
+  initP: null,
+  hydrateP: null,
+};
+
+function idbWarn(msg, e) {
+  console.warn('[cache-v2] ' + msg, (e && e.message) || e || '');
+}
+function idbUsable() { return !!(CACHE_V2 && idbState.ready && idbState.db); }
+
+function idbOpenDb() {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    // WebKit 偶发 open() 既不成功也不失败：兜个超时，别把启动卡死
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error('open timeout'));
+    }, 3000);
+    let req;
+    try { req = indexedDB.open(IDB_NAME, IDB_VERSION); }
+    catch (e) { clearTimeout(timer); settled = true; return reject(e); }
+    req.onupgradeneeded = () => {
+      try { if (!req.result.objectStoreNames.contains(IDB_STORE)) req.result.createObjectStore(IDB_STORE); } catch {}
+    };
+    req.onblocked = () => {};   // 别的标签页还占着旧版本：等它关，不算失败
+    req.onerror = () => {
+      clearTimeout(timer);
+      if (settled) return;
+      settled = true;
+      reject(req.error || new Error('open failed'));
+    };
+    req.onsuccess = () => {
+      clearTimeout(timer);
+      if (settled) { try { req.result.close(); } catch {} return; }
+      settled = true;
+      resolve(req.result);
+    };
+  });
+}
+
+function idbGet(key) {
+  return new Promise((resolve, reject) => {
+    if (!idbState.db) return reject(new Error('no db'));
+    let tx;
+    try { tx = idbState.db.transaction(IDB_STORE, 'readonly'); } catch (e) { return reject(e); }
+    const rq = tx.objectStore(IDB_STORE).get(key);
+    rq.onsuccess = () => resolve(rq.result == null ? null : rq.result);
+    rq.onerror = () => reject(rq.error || new Error('get failed'));
+  });
+}
+function idbGetAll() {
+  return new Promise((resolve, reject) => {
+    if (!idbState.db) return reject(new Error('no db'));
+    let tx;
+    try { tx = idbState.db.transaction(IDB_STORE, 'readonly'); } catch (e) { return reject(e); }
+    const rq = tx.objectStore(IDB_STORE).getAll();
+    rq.onsuccess = () => resolve(Array.isArray(rq.result) ? rq.result : []);
+    rq.onerror = () => reject(rq.error || new Error('getAll failed'));
+  });
+}
+// ops: [{type:'put', key, value} | {type:'del', key} | {type:'clear'}]，一笔事务
+function idbTx(ops) {
+  return new Promise((resolve, reject) => {
+    if (!idbState.db) return reject(new Error('no db'));
+    let tx;
+    try { tx = idbState.db.transaction(IDB_STORE, 'readwrite'); } catch (e) { return reject(e); }
+    tx.oncomplete = () => resolve(true);
+    tx.onabort = () => reject(tx.error || new Error('tx aborted'));
+    tx.onerror = () => reject(tx.error || new Error('tx failed'));
+    try {
+      const st = tx.objectStore(IDB_STORE);
+      for (const op of ops) {
+        if (op.type === 'del') st.delete(op.key);
+        else if (op.type === 'clear') st.clear();
+        else st.put(op.value, op.key);
+      }
+    } catch (e) { try { tx.abort(); } catch {} reject(e); }
+  });
+}
+// 写失败不许打断使用：只 warn 一次，legacy 那份还在
+function idbWrite(ops, label) {
+  idbTx(ops).catch(e => {
+    if (idbState.warnedWrite) return;
+    idbState.warnedWrite = true;
+    idbWarn('写 IndexedDB 失败（' + label + '），继续用 localStorage', e);
+  });
+}
+function idbIdxValue() {
+  const msgAt = {};
+  for (const [sid, at] of idbState.msgAt) msgAt[sid] = at;
+  return { key:'idx', schema: CACHE_SCHEMA, msgAt };
+}
+
+// 首次迁移：把 localStorage 里已有的 list/msgs 一次性搬进 IDB，搬完记 dsh.cache.migrated.v2。
+// 只补不覆盖：IDB 里已有更新的记录就保留 IDB 的。
+async function idbMigrateOnce() {
+  try { if (localStorage.getItem(CACHE_V2_MIGRATED_KEY) === '1') return; } catch {}
+  const recs = [];
+  try {
+    const raw = localStorage.getItem(CACHE_KEYS.list);
+    const j = raw ? JSON.parse(raw) : null;
+    if (j && Array.isArray(j.sessions)) {
+      recs.push({ key:'list', value:{ key:'list', at: j.at || Date.now(), sessions: j.sessions } });
+    }
+  } catch {}
+  try {
+    const raw = localStorage.getItem(CACHE_KEYS.msgs);
+    const all = raw ? JSON.parse(raw) : null;
+    if (all && typeof all === 'object') {
+      for (const sid of Object.keys(all)) {
+        const r = all[sid];
+        if (!sid || !r || !Array.isArray(r.messages)) continue;
+        const key = 'msg:' + sid;
+        recs.push({ key, value:{ key, at: r.at || Date.now(), lastSeq: r.lastSeq || 0, messages: r.messages } });
+      }
+    }
+  } catch {}
+  const ops = [];
+  for (const rec of recs) {
+    let cur = null;
+    try { cur = await idbGet(rec.key); } catch {}
+    if (cur && (cur.at || 0) >= (rec.value.at || 0)) continue;
+    ops.push({ type:'put', key: rec.key, value: rec.value });
+    if (rec.key.startsWith('msg:')) idbState.msgAt.set(rec.key.slice(4), rec.value.at);
+  }
+  ops.push({ type:'put', key:'idx', value: idbIdxValue() });   // 顺手把 schema 戳写上，后面的版本校验才有依据
+  await idbTx(ops);
+  try { localStorage.setItem(CACHE_V2_MIGRATED_KEY, '1'); } catch {}
+}
+
+// 正文灌进内存镜像（后台做，不挡启动）。长会话从后台回来能立刻有内容靠的就是这一步。
+async function idbHydrateMsgs() {
+  let all = [];
+  try { all = await idbGetAll(); } catch (e) { idbWarn('读消息缓存失败', e); return; }
+  for (const rec of all) {
+    if (!rec || typeof rec !== 'object') continue;
+    const key = String(rec.key || '');
+    if (!key.startsWith('msg:')) continue;
+    const sid = key.slice(4);
+    if (!sid) continue;
+    if (rec.at && !idbState.msgAt.has(sid)) idbState.msgAt.set(sid, Number(rec.at) || 0);
+    if (!idbState.memMsgs.has(sid) && Array.isArray(rec.messages)) {
+      idbState.memMsgs.set(sid, { at: Number(rec.at) || 0, lastSeq: Number(rec.lastSeq) || 0, messages: rec.messages });
+    }
+  }
+}
+
+async function idbInit() {
+  if (!CACHE_V2) return false;                 // 开关关着：连库都不开，零开销
+  if (idbState.initP) return idbState.initP;
+  idbState.initP = (async () => {
+    try {
+      if (typeof indexedDB === 'undefined' || !indexedDB) throw new Error('indexedDB 不存在');
+      idbState.db = await idbOpenDb();
+      idbState.db.onversionchange = () => {
+        try { idbState.db.close(); } catch {}
+        idbState.db = null; idbState.ready = false;
+        idbWarn('IndexedDB 被要求升级/关闭，本次会话回落 localStorage');
+      };
+      // schema 不兼容：整库清掉（跟 localStorage 那边同一规则），也不再把旧结构迁进来
+      let idx = null;
+      try { idx = await idbGet('idx'); } catch {}
+      if (idx && idx.schema !== CACHE_SCHEMA) {
+        await idbTx([{ type:'clear' }]);
+        idbState.msgAt.clear(); idbState.memMsgs.clear(); idbState.memList = null;
+        try { localStorage.setItem(CACHE_V2_MIGRATED_KEY, '1'); } catch {}
+      } else if (idx && idx.msgAt && typeof idx.msgAt === 'object') {
+        for (const sid of Object.keys(idx.msgAt)) idbState.msgAt.set(String(sid), Number(idx.msgAt[sid]) || 0);
+      }
+      try { await idbMigrateOnce(); } catch (e) { idbWarn('迁移旧缓存失败（下次启动再试）', e); }
+      const list = await idbGet('list');
+      if (list && Array.isArray(list.sessions)) idbState.memList = list.sessions;
+      idbState.ready = true;
+      idbState.hydrateP = idbHydrateMsgs().catch(e => idbWarn('预热消息缓存失败', e));
+      return true;
+    } catch (e) {
+      idbState.db = null; idbState.ready = false;
+      if (!idbState.failed) { idbState.failed = true; idbWarn('IndexedDB 不可用，自动回落 localStorage（不弹提示）', e); }
+      return false;
+    }
+  })();
+  return idbState.initP;
+}
+
+function idbSaveList(slim) {
+  idbState.memList = slim;
+  idbWrite([{ type:'put', key:'list', value:{ key:'list', at: Date.now(), sessions: slim } }], 'list');
+}
+// 一个会话一笔事务：put 正文 + idx +（超 30 个会话时）删最旧的
+function idbSaveMsg(sid, messages, lastSeq) {
+  const at = Date.now();
+  const key = 'msg:' + sid;
+  idbState.memMsgs.set(sid, { at, lastSeq, messages });
+  idbState.msgAt.set(sid, at);
+  const drops = [];
+  if (idbState.msgAt.size > IDB_LIMITS.sessions) {
+    const keep = [...idbState.msgAt.entries()].sort((a, b) => (b[1] || 0) - (a[1] || 0)).slice(0, IDB_LIMITS.sessions);
+    const keepSet = new Set(keep.map(x => x[0]));
+    // 同一毫秒写入多个会话时排序可能并列：当前会话必须保住，别把自己刚写的删了
+    if (!keepSet.has(sid)) {
+      const last = keep[keep.length - 1];
+      if (last && last[0] !== sid) keepSet.delete(last[0]);
+      keepSet.add(sid);
+    }
+    for (const k of [...idbState.msgAt.keys()]) if (!keepSet.has(k)) drops.push(k);
+    for (const k of drops) { idbState.msgAt.delete(k); idbState.memMsgs.delete(k); }
+  }
+  const ops = [{ type:'put', key, value:{ key, at, lastSeq, messages } }];
+  for (const k of drops) ops.push({ type:'del', key:'msg:' + k });
+  ops.push({ type:'put', key:'idx', value: idbIdxValue() });
+  idbWrite(ops, key);
+}
+function idbPrefetchMsg(sid) {
+  if (!idbUsable() || idbState.memMsgs.has(sid) || idbState.prefetching.has(sid)) return;
+  idbState.prefetching.add(sid);
+  idbGet('msg:' + sid).then(rec => {
+    if (!rec || !Array.isArray(rec.messages) || idbState.memMsgs.has(sid)) return;
+    idbState.memMsgs.set(sid, { at: Number(rec.at) || 0, lastSeq: Number(rec.lastSeq) || 0, messages: rec.messages });
+  }).catch(() => {}).then(() => idbState.prefetching.delete(sid));
+}
+
+// 退登：localStorage 一直是一把清，现在消息正文还多了一份在 IDB，必须一起清
+// （否则换账号后开关一开就能读到上一个账号的消息）
+function clearLocalCaches() {
+  try { localStorage.clear(); } catch {}
+  const db = idbState.db;
+  idbState.ready = false; idbState.failed = true;
+  idbState.memList = null; idbState.memMsgs.clear(); idbState.msgAt.clear();
+  if (!db) return;
+  try {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).clear();
+  } catch {}
+}
+
 const THEME_KEY = 'dsh.theme';
 function applyTheme(mode) {
   const v = mode === 'light' || mode === 'dark' ? mode : '';
@@ -830,20 +1089,34 @@ function applySkin(id) {
   try { localStorage.setItem(SKIN_KEY, v); } catch {}
 }
 
-function saveListCache(sessions) {
+// ---- legacy 路径：开关关闭时唯一路径，逻辑与原版逐字节一致 ----
+function legacySaveListCache(sessions) {
+  let slim = null;
   try {
-    const slim = sessions.slice(0, 80).map(s => ({
+    slim = sessions.slice(0, 80).map(s => ({
       sessionId: s.sessionId, title: s.title, running: s.running, updatedAt: s.updatedAt,
       workspaceId: s.workspaceId, cwd: s.cwd, lastMessage: s.lastMessage || null,
     }));
     localStorage.setItem(CACHE_KEYS.list, JSON.stringify({ at: Date.now(), sessions: slim }));
   } catch {}
+  return slim;   // 顺手把同一份裁剪结果给 v2 复用
 }
-function readListCache() {
+function legacyReadListCache() {
   try {
     const j = JSON.parse(localStorage.getItem(CACHE_KEYS.list) || 'null');
     return j && Array.isArray(j.sessions) ? j.sessions : null;
   } catch { return null; }
+}
+
+// ---- 对外：会话列表 ----
+function saveListCache(sessions) {
+  const slim = legacySaveListCache(sessions);
+  if (!CACHE_V2 || !idbUsable() || !slim) return;
+  try { idbSaveList(slim); } catch (e) { idbWarn('保存列表缓存失败', e); }
+}
+function readListCache() {
+  if (CACHE_V2 && idbState.ready) return idbState.memList ? idbState.memList.slice() : null;
+  return legacyReadListCache();
 }
 
 const fmtMsgTime = (ts) => {
@@ -876,13 +1149,8 @@ const fmtExactTime = (ts) => {
   return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
-let msgCacheSig = '';
-function saveMsgCache(sid, messages, lastSeq) {
-  if (!sid || !messages || !messages.length) return;
-  // 只在内容真变了才写，避免每 4 秒轮询都写一次 localStorage
-  const sig = `${sid}:${messages.length}:${lastSeq}:${messages[messages.length - 1] && messages[messages.length - 1].id}`;
-  if (sig === msgCacheSig) return;
-  msgCacheSig = sig;
+// ---- legacy 路径：限额（120 条 / 10 会话）与体积兜底都不动 ----
+function legacySaveMsgCache(sid, messages, lastSeq) {
   try {
     const all = JSON.parse(localStorage.getItem(CACHE_KEYS.msgs) || '{}');
     let keep = messages.slice(-120);
@@ -894,12 +1162,40 @@ function saveMsgCache(sid, messages, lastSeq) {
     localStorage.setItem(CACHE_KEYS.msgs, JSON.stringify(all));
   } catch {}
 }
-function readMsgCache(sid) {
+function legacyReadMsgCache(sid) {
   try {
     const all = JSON.parse(localStorage.getItem(CACHE_KEYS.msgs) || '{}');
     return all[sid] || null;
   } catch { return null; }
 }
+
+let msgCacheSig = '';
+// ---- 对外：消息 ----
+function saveMsgCache(sid, messages, lastSeq) {
+  if (!sid || !messages || !messages.length) return;
+  // 只在内容真变了才写，避免每 4 秒轮询都写一次（IDB 写也共用这个判重）
+  const sig = `${sid}:${messages.length}:${lastSeq}:${messages[messages.length - 1] && messages[messages.length - 1].id}`;
+  if (sig === msgCacheSig) return;
+  msgCacheSig = sig;
+  legacySaveMsgCache(sid, messages, lastSeq);          // 影子写：回滚开关后立刻可用
+  if (!CACHE_V2 || !idbUsable()) return;
+  try { idbSaveMsg(sid, messages.slice(-IDB_LIMITS.msgsPerSession), lastSeq); }
+  catch (e) { idbWarn('保存消息缓存失败', e); }
+}
+function readMsgCache(sid) {
+  if (CACHE_V2 && idbState.ready) {
+    const rec = idbState.memMsgs.get(sid);
+    if (rec && Array.isArray(rec.messages) && rec.messages.length) {
+      // 返回数组副本：调用方会往 state.messages 里 push 临时消息，别写脏内存镜像
+      return { at: rec.at, lastSeq: rec.lastSeq, messages: rec.messages.slice() };
+    }
+    idbPrefetchMsg(sid);   // 还没进内存镜像：后台补一次，下次打开就能秒开
+    return null;
+  }
+  return legacyReadMsgCache(sid);
+}
+// 开关打开时早点开始开库/迁移，跟启动流程并行（await 在启动段）
+if (CACHE_V2) idbInit();
 // ---------------- 待查看提醒（图标角标） ----------------
 // iOS 16.4+ 的主屏 Web App、以及 Chrome 安装的 PWA 都支持 Badging API：
 //   navigator.setAppBadge(n) / clearAppBadge()
@@ -1952,7 +2248,7 @@ function renderSettings(wrap) {
     row('关于', '版本、设备、缓存', APP_VERSION, () => { state.view = 'sub'; state.subPage = 'about'; render(); }),
     row('已配对设备', '在电脑端可移除', facts.devices == null ? '' : facts.devices + ' 台', null),
     row('重新加载', '清掉页面状态重新进入', '', reloadApp),
-    row('退出登录', '清除本机凭据', '', () => { localStorage.clear(); state.token = ''; state.view = 'list'; render(); }),
+    row('退出登录', '清除本机凭据', '', () => { clearLocalCaches(); state.token = ''; state.view = 'list'; render(); }),
   ]));
   wrap.append(main);
 }
@@ -3293,7 +3589,7 @@ async function openAbout() {
       } catch {}
       location.reload();
     } },
-    { label:'退出登录', icon:'⏏', run: () => { localStorage.clear(); state.token=''; state.view='list'; render(); } },
+    { label:'退出登录', icon:'⏏', run: () => { clearLocalCaches(); state.token=''; state.view='list'; render(); } },
   ], `${APP_VERSION} · ${chan} · 宿主 ${inst || '?'}${devices}\n${state.apiBase || host}`);
 }
 
@@ -3835,7 +4131,7 @@ function renderList(wrap, opts = {}) {
     { label:'推送诊断', icon:'🩺', run: openPushDiag },
     { label:'重新加载', icon:'↻', run: reloadApp },
     { label:'恢复链接', icon:'🔗', run: openRecovery },
-    { label:'退出登录', icon:'⏏', run: () => { localStorage.clear(); state.token=''; state.view='list'; render(); } },
+    { label:'退出登录', icon:'⏏', run: () => { clearLocalCaches(); state.token=''; state.view='list'; render(); } },
   ]) });
   const plus = el('button', { class:'ico', text:'＋', onclick: openNewSessionSheet });
   if (!opts.noHeader) {
@@ -5951,7 +6247,7 @@ async function refreshAll(force=false) {
       && ui && ui.sessionId === state.sessionId && ui.atBottom) markSessionSeen(state.sessionId);
   } catch (e) {
     if (['device-revoked','device-expired','unauthorized'].includes(e.code)) {
-      state.token = ''; localStorage.clear(); render();
+      state.token = ''; clearLocalCaches(); render();
     }
   }
 }
@@ -6236,6 +6532,12 @@ function subscribeDevice() {
         if (j && j.token) { state.token = j.token; state.instanceId = j.instanceId || state.instanceId; localStorage.setItem(LS.token, j.token); }
       }
     } catch {}
+  }
+  // 缓存层 v2（默认关）：开关打开时先把 IndexedDB 暖好（打开 / 迁移 / 索引 / 列表镜像）。
+  // 打不开会自动回落 legacy，这里不用额外处理；开关关着时这一段不执行，启动路径不变。
+  // 最多等 1.2 秒：JS 线程卡住时也不能让首屏一直白着，暖好后后续读写照常走 IDB。
+  if (CACHE_V2) {
+    try { await Promise.race([idbInit(), new Promise(r => setTimeout(r, 1200))]); } catch {}
   }
   // 有缓存就先画列表，网络回来再覆盖（秒开）
   if (state.token && !state.sessions.length) {
