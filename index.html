@@ -823,6 +823,8 @@ try {
 // 四个对外函数 saveListCache / readListCache / saveMsgCache / readMsgCache 签名和行为保持。
 const CACHE_V2_KEY = 'dsh.cache.v2';
 const CACHE_V2_MIGRATED_KEY = 'dsh.cache.migrated.v2';
+// 退登时若库连接还没开（open pending），当场清不掉库：留一个持久「待清」标记，下次拿连接时先清再读
+const CACHE_V2_WIPE_KEY = 'dsh.cache.wipe.v2';
 const IDB_NAME = 'dsh-mobile';
 const IDB_VERSION = 1;
 const IDB_STORE = 'kv';
@@ -837,6 +839,8 @@ const CACHE_V2 = (() => { try { return localStorage.getItem(CACHE_V2_KEY) !== '0
 const idbState = {
   ready: false, failed: false, db: null,
   gen: 0,                   // 每次退登 +1：在飞的初始化/迁移/预热看到代数变了就自废
+  initToken: null,          // 当前这次初始化；新的 init 会覆盖它，旧 init 据此知道自己已被接手
+  clearPending: false,      // 有「待清库」：拿到连接后必须先清空再读，绝不让旧账号数据被读出来
   memList: null,            // 会话列表（读走它）
   memMsgs: new Map(),       // sid -> { at, lastSeq, messages }
   msgAt: new Map(),         // sid -> at（裁剪排序用）
@@ -981,6 +985,7 @@ async function idbHydrateMsgs(gen) {
   try { all = await idbGetAll(); } catch (e) { idbWarn('读消息缓存失败', e); return; }
   if (gen !== idbState.gen) return;   // 退登过：别把旧账号的数据灌进内存镜像
   for (const rec of all) {
+    if (gen !== idbState.gen) return;  // 每条写 mem 前再确认一次：被退登打断就整批丢弃
     if (!rec || typeof rec !== 'object') continue;
     const key = String(rec.key || '');
     if (!key.startsWith('msg:')) continue;
@@ -993,37 +998,54 @@ async function idbHydrateMsgs(gen) {
   }
 }
 
-// 退登发生在初始化/迁移半路：把这半路开的库连接清干净再关掉，别把旧账号数据留给下一次登录
-async function idbAbortAndClear(db) {
-  const conn = db || idbState.db;
-  if (idbState.db === conn) idbState.db = null;
+// 在给定连接上清空 store（一笔事务）；退登打断初始化时也用它
+function idbClearConn(conn) {
+  return new Promise((resolve) => {
+    if (!conn) return resolve(false);
+    let tx;
+    try { tx = conn.transaction(IDB_STORE, 'readwrite'); } catch (e) { return resolve(false); }
+    try { tx.objectStore(IDB_STORE).clear(); } catch {}
+    tx.oncomplete = () => resolve(true);
+    tx.onabort = () => resolve(false);
+    tx.onerror = () => resolve(false);
+  });
+}
+
+// 退登打断了这次初始化：收拾自己那条连接；只有确认没有「更新的一次 init」接手时，
+// 才复位内存镜像和代数（否则会清掉新账号刚建立的状态，b-fast 场景）。
+async function idbAbortAndClear(conn, gen, token) {
+  if (conn && (!idbState.initToken || idbState.initToken === token)) {
+    await idbClearConn(conn);
+  }
+  if (conn) { try { conn.close(); } catch {} }
+  // await 期间可能已经有新的 init 接手：那就只关自己的连接，别动它
+  if (idbState.initToken && idbState.initToken !== token) return false;
+  idbState.gen++;
+  idbState.initToken = null;
+  idbState.initP = null;
   idbState.ready = false;
-  if (!conn) return false;
-  try {
-    await new Promise((resolve) => {
-      let tx;
-      try { tx = conn.transaction(IDB_STORE, 'readwrite'); } catch (e) { return resolve(); }
-      try { tx.objectStore(IDB_STORE).clear(); } catch {}
-      tx.oncomplete = () => resolve();
-      tx.onabort = () => resolve();
-      tx.onerror = () => resolve();
-    });
-  } catch {}
-  try { conn.close(); } catch {}
+  idbState.db = null;
+  idbState.memList = null;
+  idbState.memMsgs.clear();
+  idbState.msgAt.clear();
   return false;
 }
 
 async function idbInit() {
   if (!CACHE_V2) return false;                 // 回退开关 = '0'：连库都不开，零开销
   if (idbState.initP) return idbState.initP;
+  // 上次退登没清成库（连接还没开）或者中间重载过页面：持久标记要求这次「先清再读」
+  try { if (localStorage.getItem(CACHE_V2_WIPE_KEY) === '1') idbState.clearPending = true; } catch {}
   const gen = idbState.gen;                    // 记下代数：退登会让它 +1，在飞的任务据此自废
+  const token = {};                            // 本次 init 的身份：被更新的 init 覆盖后，旧 init 知道自己已被接手
+  idbState.initToken = token;
   const alive = () => gen === idbState.gen;
   idbState.initP = (async () => {
     let db = null;
     try {
       if (typeof indexedDB === 'undefined' || !indexedDB) throw new Error('indexedDB 不存在');
       db = await idbOpenDb();
-      if (!alive()) return await idbAbortAndClear(db);
+      if (!alive()) return await idbAbortAndClear(db, gen, token);
       idbState.db = db;
       db.onversionchange = () => {
         try { db.close(); } catch {}
@@ -1031,10 +1053,29 @@ async function idbInit() {
         idbState.ready = false;
         idbWarn('IndexedDB 被要求升级/关闭，本次会话回落 localStorage');
       };
+      // 退登留下的「待清」：先清空磁盘 + 内存镜像，成功之后才允许读 idx/list。
+      // 清失败就保持 clearPending 并 warn，本次直接不读旧数据（宁可没有缓存，也不能串账号）。
+      if (idbState.clearPending) {
+        const cleared = await idbClearConn(db);
+        if (!alive()) return await idbAbortAndClear(db, gen, token);
+        if (!cleared) {
+          idbState.ready = false;
+          idbState.db = null;
+          idbState.initP = null;
+          try { db.close(); } catch {}
+          idbWarn('清 IndexedDB 失败，保留待清标记，本次不读旧缓存');
+          return false;
+        }
+        idbState.memList = null;
+        idbState.memMsgs.clear();
+        idbState.msgAt.clear();
+        idbState.clearPending = false;
+        try { localStorage.removeItem(CACHE_V2_WIPE_KEY); } catch {}
+      }
       // schema 不兼容：整库清掉（跟 localStorage 那边同一规则），也不再把旧结构迁进来
       let idx = null;
       try { idx = await idbGet('idx'); } catch {}
-      if (!alive()) return await idbAbortAndClear(db);
+      if (!alive()) return await idbAbortAndClear(db, gen, token);
       if (idx && idx.schema !== CACHE_SCHEMA) {
         await idbTx([{ type:'clear' }]);
         idbState.msgAt.clear(); idbState.memMsgs.clear(); idbState.memList = null;
@@ -1043,9 +1084,9 @@ async function idbInit() {
         for (const sid of Object.keys(idx.msgAt)) idbState.msgAt.set(String(sid), Number(idx.msgAt[sid]) || 0);
       }
       try { await idbMigrateOnce(gen); } catch (e) { if (alive()) idbWarn('迁移旧缓存失败（下次启动再试）', e); }
-      if (!alive()) return await idbAbortAndClear(db);
+      if (!alive()) return await idbAbortAndClear(db, gen, token);
       const list = await idbGet('list');
-      if (!alive()) return await idbAbortAndClear(db);
+      if (!alive()) return await idbAbortAndClear(db, gen, token);
       if (list && Array.isArray(list.sessions)) idbState.memList = list.sessions;
       idbState.ready = true;
       idbState.hydrateP = idbHydrateMsgs(gen).catch(e => idbWarn('预热消息缓存失败', e));
@@ -1056,6 +1097,7 @@ async function idbInit() {
         if (!idbState.failed) { idbState.failed = true; idbWarn('IndexedDB 不可用，自动回落 localStorage（不弹提示）', e); }
         // 别把已 resolve 的 promise 留在 initP 里：退登后同页重登 / 下次调用还要能重新起库
         idbState.initP = null;
+        idbState.initToken = null;
       }
       if (db) { try { db.close(); } catch {} }
       return false;
@@ -1064,12 +1106,30 @@ async function idbInit() {
   return idbState.initP;
 }
 
+// b-fast：重登后同一 tick 就刷列表/开会话时库还没 ready，把这次写挂到 initP 上补一次（只补一次，不递归）
+// 补写时必须确认代数没变：退登/换账号后，旧账号的数据只能丢掉，绝不能等库起来再写进去
+function idbQueueUntilReady(fn) {
+  if (!CACHE_V2 || idbState.ready || !idbState.initP) return;
+  const gen = idbState.gen;
+  idbState.initP.then(() => {
+    if (gen !== idbState.gen) return;
+    if (idbUsable()) fn();
+  }).catch(() => {});
+}
 function idbSaveList(slim) {
+  if (idbUsable()) return idbSaveListNow(slim);
+  idbQueueUntilReady(() => idbSaveListNow(slim));
+}
+function idbSaveListNow(slim) {
   idbState.memList = slim;
   idbWrite([{ type:'put', key:'list', value:{ key:'list', at: Date.now(), sessions: slim } }], 'list');
 }
 // 一个会话一笔事务：put 正文 + idx +（超 30 个会话时）删最旧的
 function idbSaveMsg(sid, messages, lastSeq) {
+  if (idbUsable()) return idbSaveMsgNow(sid, messages, lastSeq);
+  idbQueueUntilReady(() => idbSaveMsgNow(sid, messages, lastSeq));
+}
+function idbSaveMsgNow(sid, messages, lastSeq) {
   const at = Date.now();
   const key = 'msg:' + sid;
   idbState.memMsgs.set(sid, { at, lastSeq, messages });
@@ -1094,23 +1154,46 @@ function idbSaveMsg(sid, messages, lastSeq) {
 }
 function idbPrefetchMsg(sid) {
   if (!idbUsable() || idbState.memMsgs.has(sid) || idbState.prefetching.has(sid)) return;
+  const gen = idbState.gen;
   idbState.prefetching.add(sid);
   idbGet('msg:' + sid).then(rec => {
+    if (gen !== idbState.gen) return;   // 退登/换账号过：这份结果作废，别灌进内存镜像
     if (!rec || !Array.isArray(rec.messages) || idbState.memMsgs.has(sid)) return;
     idbState.memMsgs.set(sid, { at: Number(rec.at) || 0, lastSeq: Number(rec.lastSeq) || 0, messages: rec.messages });
   }).catch(() => {}).then(() => idbState.prefetching.delete(sid));
 }
 
+// 退登时把 UI 层里跟旧账号/旧会话相关的状态一起清掉：不能等下一次 refreshAll，
+// 否则网络回来前列表/会话还在显示旧账号内容（跨账号残留）。
+function resetClientCachesForLogout() {
+  try { state.live?.close(); } catch {}
+  if (state.poll) { try { clearInterval(state.poll); } catch {} }
+  state.live = null; state.poll = null;
+  state.sessions = []; state.workspaces = [];
+  state.sessionId = null; state.sessionTitle = ''; state.sessionCwd = '';
+  state.messages = []; state.cards = []; state.queue = []; state.pending = [];
+  state.lastSeq = 0; state.unseen = 0; state.busy = false; state.busySince = 0;
+  state.msgLimit = 120;
+  state.foreign = new Map();
+  state.archived = null; state.archivedError = '';
+  state.searchQ = ''; state.searchItems = null;
+  state.gitWs = ''; state.gitData = null; state.gitTitle = '';
+}
+
 // 退登：localStorage 一直是一把清，现在消息正文还多了一份在 IDB，必须一起清
 // （否则换账号后重启就能读到上一个账号的消息）。
-// 同时把「启动状态 + 判重状态」全部复位：否则同一页里用恢复链接/配对码重登时，
-// 旧的 initP 会被 idbInit() 永远返回、msgCacheSig 会挡住重写，缓存到整页刷新前都是死的。
+// 同时把「启动状态 + 判重状态 + UI 状态」全部复位：否则同一页里用恢复链接/配对码重登时，
+// 旧的 initP 会被 idbInit() 永远返回、msgCacheSig 会挡住重写、列表还挂着旧账号标题。
+// 连接可能还没开（open pending）：这时清不了库，留一个持久「待清」标记，拿到连接后先清再读。
 function clearLocalCaches() {
   try { localStorage.clear(); } catch {}
+  try { localStorage.setItem(CACHE_V2_WIPE_KEY, '1'); } catch {}
   const db = idbState.db;
   idbState.gen++;                       // 在飞的初始化/迁移/预热看到代数变了就自废
+  idbState.initToken = null;            // 让旧 init 知道自己已被接手
   idbState.initP = null;                // 允许同页重登时重新起库
   idbState.hydrateP = null;
+  idbState.clearPending = true;         // 即使 db 为 null 也要记住「库还没清」
   idbState.failed = false;
   idbState.ready = false;
   idbState.db = null;
@@ -1119,6 +1202,7 @@ function clearLocalCaches() {
   idbState.msgAt.clear();
   idbState.prefetching.clear();
   msgCacheSig = '';                     // 判重状态也清：重登后同样内容要能重新写进两份缓存
+  resetClientCachesForLogout();
   if (!db) return;
   try {
     const tx = db.transaction(IDB_STORE, 'readwrite');
@@ -1165,7 +1249,8 @@ function legacyReadListCache() {
 // ---- 对外：会话列表 ----
 function saveListCache(sessions) {
   const slim = legacySaveListCache(sessions);
-  if (!CACHE_V2 || !idbUsable() || !slim) return;
+  if (!CACHE_V2 || !slim) return;
+  // 库没 ready 时由 idbSaveList 自己挂到 initP 上补写（b-fast），这里不再提前 return
   try { idbSaveList(slim); } catch (e) { idbWarn('保存列表缓存失败', e); }
 }
 function readListCache() {
@@ -1232,7 +1317,8 @@ function saveMsgCache(sid, messages, lastSeq) {
   if (sig === msgCacheSig) return;
   msgCacheSig = sig;
   legacySaveMsgCache(sid, messages, lastSeq);          // 影子写：回滚开关后立刻可用
-  if (!CACHE_V2 || !idbUsable()) return;
+  if (!CACHE_V2) return;
+  // 库没 ready 时由 idbSaveMsg 自己挂到 initP 上补写（b-fast），这里不再提前 return
   try { idbSaveMsg(sid, messages.slice(-IDB_LIMITS.msgsPerSession), lastSeq); }
   catch (e) { idbWarn('保存消息缓存失败', e); }
 }
@@ -3857,11 +3943,13 @@ async function unarchiveSession(s) {
 // 判据：返回里出现了默认列表中的会话 → 说明它给的是全量。
 // 两边都带 fresh=1，避免 30 秒缓存让差集把「刚取消归档的」又算回归档里。
 async function loadArchived() {
+  const tok = state.token;
   try {
     const [all, act] = await Promise.all([
       api('/api/mobile/v1/sessions?archived=1&fresh=1'),
       api('/api/mobile/v1/sessions?fresh=1'),
     ]);
+    if (state.token !== tok) return;   // 退登/换账号后回来的旧响应：别写进新账号的列表和缓存
     const allItems = Array.isArray(all.items) ? all.items : [];
     const gotActive = Array.isArray(act.items);
     const activeItems = gotActive ? act.items : [];
@@ -6281,11 +6369,13 @@ function openSheet(items, footerText) {
 
 // ---------------------------------------------------------------- 流程
 async function refreshAll(force=false) {
+  const tok = state.token;
   try {
     const [s, w] = await Promise.all([
       api('/api/mobile/v1/sessions' + (force ? '?fresh=1' : '')),
       api('/api/mobile/v1/workspaces').catch(() => ({ items: [] })),
     ]);
+    if (state.token !== tok) return;   // 退登/换账号后回来的旧响应：别写进新账号的列表和缓存
     state.sessions = s.items || [];
     state.workspaces = w.items || [];
     saveListCache(state.sessions);
@@ -6463,9 +6553,11 @@ async function applyModel(provider, model, reasoningEffort) {
 async function loadMessages(force=false, sidOverride=null) {
   const sid = sidOverride || state.sessionId;
   if (!sid) return;
+  const tok = state.token;
   state.lastMsgLoad = Date.now();
   try {
     const r = await api(`/api/mobile/v1/session/messages?sessionId=${encodeURIComponent(sid)}`);
+    if (state.token !== tok) return;   // 退登/换账号后回来的旧响应：连缓存都不能写
     const items = r.items || [], lastSeq = r.lastSeq || 0;
     saveMsgCache(sid, items, lastSeq);
     // 请求期间用户可能已切走：只写缓存，不能把 A 的消息灌进 B

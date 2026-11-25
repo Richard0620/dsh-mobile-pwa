@@ -93,6 +93,8 @@ IndexedDB: dsh-mobile (version 1)
 
 idb 模式但库还没暖好（启动前 1.2 秒内）或已降级时，四个函数自动读/写 legacy。
 初始化失败后 `initP` 会被放开，同页重新登录或下次调用还能再试一次。
+退登留下的「待清库」如果清不掉（比如拿不到读写事务），会保留 `clearPending` 并 warn 一次，
+本次直接不读旧缓存 —— 宁可没有缓存，也不能串账号。
 
 ## 6. 限额差异（本期唯一的行为差异）
 
@@ -115,12 +117,25 @@ idb 模式但库还没暖好（启动前 1.2 秒内）或已降级时，四个�
 | 回退并清干净 | 回退 + 删除 IndexedDB 库 `dsh-mobile`（DevTools Application/Storage 面板 Delete database） | 没有版本/开关缓存残留 |
 | 让 idb 追上 legacy | 删 `dsh.cache.migrated.v2` 后重开一次 | 迁移按 `at` 只补更新 |
 | 退登清凭据 | 「退出登录」走 `clearLocalCaches()`：`localStorage.clear()` **加** 清空 IDB store | 换账号不会读到上个账号的消息 |
+| 退登时连接还没开（open pending） | `clearLocalCaches()` 记 `clearPending`，并写持久标记 `localStorage['dsh.cache.wipe.v2']='1'`；下次拿到连接**先清库再读** | 慢盘、大库、中途 reload 都不会把旧账号数据读出来 |
 | 退登后同页重登 | 恢复链接 / 配对码登录会重新起 v2 库（`idbInit()`），不用整页刷新 | 重登后缓存继续可用 |
 
 `clearLocalCaches()` 除了清数据，还会复位缓存层的运行态：代数 `gen + 1`（让在飞的初始化/迁移/预热自废）、
-`initP` / `hydrateP` 置空、`failed` 复位、关闭并放开 `db`、清空内存镜像、清空 `msgCacheSig`。
+`initToken` / `initP` / `hydrateP` 置空、`clearPending = true`、`failed` 复位、关闭并放开 `db`、
+清空内存镜像（`memList` / `memMsgs` / `msgAt` / `prefetching`）、清空 `msgCacheSig`。
 不这么做的话，同一页里重登会拿到旧的已 resolve 的 `initP`（`ready` 永远回不到 true），
 且 `msgCacheSig` 会把「内容相同」的写入判重吞掉，表现为缓存到整页刷新前都失效。
+
+还会一并复位 UI 层里跟旧账号/旧会话相关的状态（`state.sessions` / `state.messages` / `state.cards` /
+`state.queue` / `state.sessionId` 等），否则网络回来之前列表和会话还在显示旧账号内容。
+
+**慢 open 竞态**：退登时如果库连接还没开，当场清不掉库，`clearPending` + `wipe` 标记就是用来兜这个的；
+旧的那次 `idbInit()` 在 open 之后会看到代数已变而走 `idbAbortAndClear()`。它只收拾自己那条连接；
+如果这期间已经有新的 init（新账号登录）接手，就不再清库/清内存，避免把新账号刚建立的状态打掉。
+`idbHydrateMsgs()` 每条写内存前也会再查一次代数，被退登打断就整批丢弃。
+
+**b-fast**：重登后同一 tick 就刷列表/开会话、库还没 ready 时，`idbSaveList` / `idbSaveMsg` 会把这次写
+挂到 `initP` 上补一次（只补一次，不递归），首次写入不会丢。
 
 回滚不需要回退代码：开关是纯运行时数据。代码回退只需要 revert 这个功能的 commit（`clearLocalCaches`
 只是多了清 IDB 的动作，没有外部依赖）。
@@ -221,7 +236,28 @@ msg 条数与 legacy 里同会话一致（legacy 那 120 条以内）；`localSt
 
 **失败判定**：重登后 `msg:*` 一直为空，只有整页刷新才恢复。
 
-### 8.9 降级（不弹 toast）
+**b-fast**：重登后不切页面、立刻点开会话（越早越好，可以给网络加延迟让它慢一点），
+第一次 `loadMessages` 返回后 `kv` 里就该有这条 `msg:<sid>`（不能等下一次内容变化才补写）。
+
+### 8.9 跨账号竞态（慢 open + 第一帧退登）
+
+验证方实测过的场景，必须专门过一遍：
+
+1. 旧账号先攒一个会话（最好 30 条消息，确认 `kv` 里有 `msg:<sid>`）。
+2. 让 `indexedDB.open` 变慢（DevTools 里用 Snippet/Overrides 把它包成 2 秒后回调，或用 CPU/网络节流
+   把启动拖到 2 秒以上），保证「退登发生时旧 open 还没 resolve」。
+3. 首屏刚可交互的第一时间点「退出登录」，然后**立刻**用另一个账号的恢复链接登录。
+4. 在旧 open resolve 前后各查一次（界面 + console）：
+   - 列表不能出现旧账号会话标题；点开旧会话不能出现旧消息；
+   - `kv` 里不能有旧账号的 `list` / `msg:*`；
+   - 新账号数据回来之前 `kv` 里最多只有一条 `idx`（schema 戳，不含消息内容）；
+   - 旧 open resolve 之后 `idbState.ready` 仍是 `true`（新 init 不能被旧 abort 打掉）。
+5. 等新账号网络返回：列表/会话应是新账号内容，`kv` 里只出现新账号的 `msg:*`。
+
+**失败判定**：旧 open resolve 前或后，界面 / 内存镜像 / 库里出现任何旧账号消息；或新账号缓存从此失效
+（只有整页刷新才恢复）。
+
+### 8.10 降级（不弹 toast）
 
 任选一种制造失败：
 
@@ -234,7 +270,7 @@ msg 条数与 legacy 里同会话一致（legacy 那 120 条以内）；`localSt
 **收尾**：版本冲突测试后，Application 面板 Delete database `dsh-mobile`（否则之后 `version 1` 会开不起来，
 一直处于降级状态 —— 这本身也算一次降级验证，但别留在正式验收机上）。
 
-### 8.10 回滚
+### 8.11 回滚
 
 按 8.3 执行即可；回滚不需要回退代码，也不需要清 IDB（残留数据不再被读写）。
 要「看起来和线上完全一样」，再在 Application 面板删掉 `dsh-mobile` 库。
@@ -250,7 +286,10 @@ msg 条数与 legacy 里同会话一致（legacy 那 120 条以内）；`localSt
 4. **读写都在主线程**：400 条 structured clone 在低端机可能有 10–30ms 抖动，但被 `msgCacheSig` 限流到「内容真变才写」。
 5. **回退后再开启的数据陈旧**：见第 4 节，需要清 `dsh.cache.migrated.v2` 才会再对齐。
 6. **IDB 无体积兜底**：见第 6 节尾部。
-7. **没有自动化测试**：语法检查 + 真机手工验收是唯一验证手段；默认开启，`'0'` 回退开关是安全网。
+7. **跨账号安全靠三个点**：`clearPending` + 持久 `dsh.cache.wipe.v2` 标记 + `idbHydrateMsgs` 逐条代数检查。
+   以后动退登 / `idbInit` / 迁移逻辑时要一起看，别只清 DB 不清内存镜像。
+8. **没有真机自动化**：语法检查 + 本机离线 mock（112 条断言）覆盖逻辑分支；真机仍需按第 8 节手工验收。
+   默认开启，`'0'` 回退开关是安全网。
 
 ## 10. 变更记录
 
@@ -258,3 +297,4 @@ msg 条数与 legacy 里同会话一致（legacy 那 120 条以内）；`localSt
 | --- | --- |
 | 2026-11-25 | 一期落地：影子写 + 可开关读取；初期默认关闭，同日按用户决策改为**默认开启**（`'0'` 回退） |
 | 2026-11-25 | 修复：退登后同页用恢复链接/配对码重登，缓存到整页刷新前失效（复位 `initP`/`hydrateP`/`failed`/`db`/`msgCacheSig`，并在登录路径重新起库） |
+| 2026-11-25 | 修复跨账号竞态：慢 open 时退登→立刻换账号登录，旧数据曾被新的 init 读进内存镜像。改为 `clearPending` + 持久 `dsh.cache.wipe.v2`「先清后读」，`idbHydrateMsgs` 逐条查代数，`idbAbortAndClear` 不再打掉已接手的新 init，退登同时清 UI 状态；`b-fast` 把未 ready 时的写入挂到 `initP` 补写 |
