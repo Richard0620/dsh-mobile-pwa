@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>F1/F2 两个待定项 · 对比说明</title>
+<style>
+  :root{
+    --bg:#F6F5F1; --card:#FFFFFF; --fg:#1A1A16; --dim:#8C8A7F; --line:#E5E2D8;
+    --bubble:#ECEAE2; --accent:#1A1A16; --accent-fg:#FFFFFF; --ok:#2E6B3F; --bad:#A33B31; --warn:#8A5A12;
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  body{margin:0;background:#fff;color:#12140F;
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro SC","PingFang SC","Segoe UI","Microsoft YaHei",sans-serif}
+  .board{width:900px;padding:34px 26px 40px}
+  .cap{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#8C8A7F;font-weight:700}
+  h1{font-size:25px;margin:6px 0 8px;letter-spacing:-.02em}
+  .sub{color:#5E5D54;font-size:13.5px;margin:0 0 26px;line-height:1.6}
+  h2{font-size:18px;margin:34px 0 4px}
+  h2 .n{color:#8C8A7F;margin-right:8px}
+  .hint{font-size:12.5px;color:#8C8A7F;margin:0 0 14px}
+  .row{display:flex;gap:26px}
+  .col{flex:1;min-width:0}
+  .lbl{font-size:12px;font-weight:700;margin:0 0 8px;display:flex;align-items:center;gap:8px}
+  .tag{font-size:10.5px;padding:1px 7px;border-radius:999px;font-weight:600;letter-spacing:.02em}
+  .tag.now{background:#EDEAE0;color:#5E5D54}
+  .tag.new{background:#E7F0E9;color:#2E6B3F}
+  .tag.bad{background:#F7E7E4;color:#A33B31}
+
+  /* composer 组件（照抄 index.html 结构） */
+  .composer{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:10px 12px 9px}
+  .ph{color:var(--dim);font-size:16px;min-height:24px;display:flex;align-items:center}
+  .crow{display:flex;align-items:center;gap:8px;margin-top:8px}
+  .plus{width:34px;height:34px;border-radius:50%;background:var(--bubble);display:grid;place-items:center;font-size:17px;color:var(--dim);flex:none}
+  .chips{display:flex;align-items:center;gap:6px;flex:1;min-width:0}
+  .chip{display:inline-flex;align-items:center;font-size:12.5px;color:var(--dim);border:1px solid var(--line);
+    border-radius:999px;padding:5px 9px;background:var(--card);white-space:nowrap}
+  .sg{display:flex;align-items:center;gap:8px;flex:none;margin-left:auto}
+  .send{width:34px;height:34px;border-radius:50%;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;font-size:15px}
+  .send.off{opacity:.4}
+  .mic{width:34px;height:34px;border-radius:50%;background:var(--bubble);color:var(--fg);border:1px solid var(--line);
+    display:grid;place-items:center}
+  .mic svg{width:17px;height:17px}
+  .cap2{font-size:11.5px;color:#8C8A7F;margin-top:8px;line-height:1.55}
+
+  /* 时间线 */
+  .tl{border:1px solid #E9E6DC;border-radius:12px;padding:14px 16px;background:#FBFAF6}
+  .tlrow{display:flex;align-items:stretch;gap:0;margin:10px 0 4px;height:52px}
+  .seg{display:flex;flex-direction:column;justify-content:center;padding:0 10px;font-size:12px;line-height:1.35;
+    border-right:1px dashed #DDD9CC}
+  .seg:last-child{border-right:0}
+  .seg b{display:block;font-size:12.5px}
+  .seg span{color:#8C8A7F;font-size:11px}
+  .seg.t7{background:#EEF3EE;flex:3.2}
+  .seg.gap{background:#FBF1EE;flex:1.3}
+  .seg.t8{background:#F2F1EA;flex:2.2}
+  .seg.ok{background:#EAF3EC}
+  .badge{font-size:10.5px;padding:1px 6px;border-radius:4px;background:#fff;border:1px solid #E3DECD;color:#5E5D54}
+  .barwrap{height:6px;border-radius:3px;background:#EDEAE0;overflow:hidden;margin-top:6px;position:relative}
+  .barwrap i{position:absolute;inset:0 auto 0 0;background:#2E6B3F;border-radius:3px;display:block}
+  .sweep{position:absolute;inset:0;background:linear-gradient(90deg,transparent,#B9D3BF,transparent);
+    width:40%;animation:sw 1.6s linear infinite}
+  @keyframes sw{from{transform:translateX(-100%)}to{transform:translateX(260%)}}
+
+  table{width:100%;border-collapse:collapse;font-size:12.8px;margin-top:8px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid #E9E6DC;vertical-align:top}
+  th{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#8C8A7F;background:#FBFAF6}
+  td.rec{color:#2E6B3F;font-weight:600}
+  .k{font-family:ui-monospace,Consolas,monospace;font-size:11.5px}
+</style>
+</head>
+<body>
+<div class="board">
+  <div class="cap">Decision review · F1 / F2</div>
+  <h1>两个待定项长什么样，以及 F3/F4/F5 的取舍</h1>
+  <p class="sub">左边是现在跑在 preview 上的行为，右边是改动后的样子。组件结构、token 都取自 <span class="k">index.html</span>。</p>
+
+  <!-- ============ 1. 麦克风 ============ -->
+  <h2><span class="n">01</span>麦克风默认可见 / 不可见</h2>
+  <p class="hint">差别只有一个：<b>空输入时右侧那颗按钮是 🎙 还是 ↑</b>。有文字时两边都是 ↑，不受影响。</p>
+
+  <div class="row">
+    <div class="col">
+      <p class="lbl"><span class="tag now">现状</span>设置里「按住说话」默认关</p>
+      <div class="composer">
+        <div class="ph">发消息…</div>
+        <div class="crow">
+          <button class="plus">+</button>
+          <div class="chips"><span class="chip">Vibe</span><span class="chip">deepseek-flash</span></div>
+          <div class="sg"><div class="send off">↑</div></div>
+        </div>
+      </div>
+      <p class="cap2">空输入 → 只有一个半透明的 ↑。<br>要用语音得先去 <b>设置 → 语音</b> 打开开关，再回会话——很多人根本不知道有这个入口。</p>
+    </div>
+    <div class="col">
+      <p class="lbl"><span class="tag new">提议</span>麦克风常驻，设置只当行为开关</p>
+      <div class="composer">
+        <div class="ph">发消息…</div>
+        <div class="crow">
+          <button class="plus">+</button>
+          <div class="chips"><span class="chip">Vibe</span><span class="chip">deepseek-flash</span></div>
+          <div class="sg"><div class="mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="10" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v3"></path></svg></div></div>
+        </div>
+      </div>
+      <p class="cap2">空输入 → 🎙 常驻，按住就能说；有文字自动变 ↑。<br>第一次按住才弹系统麦克风授权；设置里的开关退化成「允许按住说话」，默认开。</p>
+    </div>
+  </div>
+
+  <table style="margin-top:14px">
+    <tr><th style="width:150px">维度</th><th>现状（设置关 → 不渲染）</th><th>提议（常驻）</th></tr>
+    <tr><td>发现性</td><td>不翻设置永远看不到</td><td class="rec">打开就在，和微信一致</td></tr>
+    <tr><td>误触风险</td><td>无</td><td>按住才录，单击不触发；上滑可取消</td></tr>
+    <tr><td>不支持时</td><td>本来就不渲染</td><td>同样不渲染（判断顺序：能力 → 设置）</td></tr>
+    <tr><td>改动量</td><td>—</td><td class="k">micEnabled = !!speechCtor　（去掉 &amp;&amp; speechHoldOn()，1 行）</td></tr>
+  </table>
+
+  <!-- ============ 2. phase 跨轮 ============ -->
+  <h2><span class="n">02</span>跨轮 phase：沿用上一轮 vs 开新一轮清空</h2>
+  <p class="hint">模型写待办才有「第 i/n 步」。新一轮开头它还没写待办的几秒里，界面拿到的还是上一轮最后一个 phase。</p>
+
+  <div class="row">
+    <div class="col">
+      <p class="lbl"><span class="tag bad">现状</span>沿用（契约：取最近一次 todo_write）</p>
+      <div class="tl">
+        <div class="tlrow">
+          <div class="seg t7"><b>第 7 轮</b><span>跑到第 7/7 步</span></div>
+          <div class="seg gap"><b>新一轮开始</b><span>模型还没写待办</span></div>
+          <div class="seg t8"><b>第 8 轮</b><span>它已经在读文件了</span></div>
+        </div>
+        <div class="barwrap"><i style="width:100%"></i></div>
+        <div style="display:flex;justify-content:space-between;margin-top:6px">
+          <span class="badge">第 7/7 步 · 100%</span>
+          <span class="badge">← 空格里仍显示 7/7</span>
+          <span class="badge">已跑 1 步</span>
+        </div>
+        <p class="cap2">问题：进度条停在 100%、文字写着「第 7/7 步」，但这一轮其实才刚开始。<b>看起来像卡住了或重复运行</b>。</p>
+      </div>
+    </div>
+    <div class="col">
+      <p class="lbl"><span class="tag new">提议</span><code class="k">turn/start</code> 清空 phase</p>
+      <div class="tl">
+        <div class="tlrow">
+          <div class="seg t7"><b>第 7 轮收尾</b><span>已完成 · 7 步</span></div>
+          <div class="seg gap"><b>新一轮开始</b><span>清空 phase</span></div>
+          <div class="seg t8 ok"><b>第 8 轮</b><span>显示「已跑 1 步」</span></div>
+        </div>
+        <div class="barwrap"><div class="sweep"></div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:6px">
+          <span class="badge">已完成 · 7 步</span>
+          <span class="badge">← 空格里是不定长</span>
+          <span class="badge">已跑 1 步 · 读取 a.js</span>
+        </div>
+        <p class="cap2">代价：那几秒看不到「第几/共几」，只有一个扫描条。但<b>说的是实话</b>——这一轮的待办还没产生。</p>
+      </div>
+    </div>
+  </div>
+
+  <p class="hint" style="margin-top:12px">我的判断：<b>清空更好</b>。phone 上看进度的人最怕「卡在 100%」，不定长条反而明确表达"刚开始、还不知道一共几步"。改动 <span class="k">turn/start</span> 分支里 `state.phase = null`，约 1 行 + 重绘。</p>
+
+  <!-- ============ 3. F3/F4/F5 ============ -->
+  <h2><span class="n">03</span>F3 / F4 / F5 的 6 个取舍（我的建议已标绿）</h2>
+  <table>
+    <tr><th style="width:120px">项</th><th style="width:250px">选项</th><th>影响 / 代价</th><th style="width:120px">建议</th></tr>
+    <tr>
+      <td>F3 入口</td>
+      <td>A. 派发那一轮末尾一条「⤷ 4 个子代理 · 1 跑中」<br>B. 会话顶部常驻细条<br>C. 会话列表按父会话分组</td>
+      <td>A 不打扰、跟着对话走；B 空间占用小但常驻也常空；C 要改列表结构，风险最大</td>
+      <td class="rec">A</td>
+    </tr>
+    <tr>
+      <td>F3 列表形态</td>
+      <td>A. 底部 sheet（不离开对话）<br>B. 二级页</td>
+      <td>A 轻、可随时收起；B 能放更多信息但多一次跳转</td>
+      <td class="rec">A</td>
+    </tr>
+    <tr>
+      <td>F3 能否回话</td>
+      <td>A. 只读 + 打断<br>B. 支持 <span class="k">/subagents/prompt</span> 追加指令</td>
+      <td>B 能力更强，但「只读」这个心智模型会崩：用户会分不清自己在跟主会话还是子代理说话</td>
+      <td class="rec">A（先只读）</td>
+    </tr>
+    <tr>
+      <td>F4 折叠态</td>
+      <td>A. 就等于原来那行「已停止」+ 计数，点开看四段<br>B. 藏进图标，不占行</td>
+      <td>A 有信息量、零学习成本；B 省一行但没人会点</td>
+      <td class="rec">A</td>
+    </tr>
+    <tr>
+      <td>F4「照这个继续」</td>
+      <td>A. 只预填输入框，不自动发<br>B. 直接发出去</td>
+      <td>B 快，但会替用户说话；A 多一步但可控</td>
+      <td class="rec">A</td>
+    </tr>
+    <tr>
+      <td>F5 新建页</td>
+      <td>A. 频率四选一 + 时间 + 目标 + 工作区 + 提示词，cron 收进「高级」<br>B. 完整 cron 编辑器</td>
+      <td>B 覆盖全部场景，但手机上编辑 cron 表达式是反人类；A 覆盖 90% 的「每天 9 点」</td>
+      <td class="rec">A</td>
+    </tr>
+  </table>
+
+  <p class="hint" style="margin-top:14px">这 6 条你回「都按建议」就行；要改哪条直接说（例如「F3 入口放顶部」），我让设计代理改图再重拍，不用重开一轮。</p>
+</div>
+</body>
+</html>

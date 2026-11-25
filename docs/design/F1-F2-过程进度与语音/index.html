@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="zh-CN" data-skin="paper">
+<head>
+<meta charset="utf-8" />
+<title>DSH Mobile · F1 过程进度 + F2 语音/朗读 设计稿</title>
+<style>
+  /* ===== 取自 index.html 的真实 token（纸面皮肤） ===== */
+  :root{
+    --r-card:24px; --r-bubble:20px;
+    --bg:#F6F5F1; --card:#FFFFFF; --fg:#1A1A16; --dim:#8C8A7F; --line:#E5E2D8;
+    --bubble:#ECEAE2; --accent:#1A1A16; --accent-fg:#FFFFFF; --accent-2:#5E5D54;
+    --ok:#2E6B3F; --bad:#A33B31; --warn:#8A5A12;
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  body{margin:0;background:#fff;color:#12140F;
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro SC","PingFang SC","Segoe UI","Microsoft YaHei",sans-serif}
+  .board{width:900px;padding:36px 24px 44px}
+  .cap{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#8C8A7F;font-weight:700}
+  h1{font-size:27px;margin:6px 0 8px;letter-spacing:-.02em}
+  .sub{color:#5E5D54;font-size:13.5px;margin:0 0 26px;line-height:1.6}
+  .grid{display:grid;grid-template-columns:390px 390px;gap:40px 40px}
+  .cell{width:390px}
+  .cell .lbl{display:flex;align-items:baseline;gap:8px;margin-bottom:10px}
+  .cell .lbl b{font-size:14px}
+  .cell .lbl span{font-size:11.5px;color:#8C8A7F}
+  .note{font-size:12px;color:#5E5D54;margin-top:10px;line-height:1.6}
+  .note b{color:#1A1A16}
+
+  /* ===== 手机框 ===== */
+  .phone{width:390px;height:780px;background:var(--bg);border-radius:38px;border:1px solid #DFDCD2;
+    overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:0 10px 30px rgba(26,26,22,.07)}
+  .sb{height:34px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;
+    font-size:11.5px;font-weight:600;color:var(--fg);flex:none}
+  .sb .r{display:flex;gap:4px;align-items:center;opacity:.85}
+  header{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;gap:4px;padding:0 10px 6px;min-height:44px;flex:none}
+  header h1{font-size:16px;font-weight:600;margin:0;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ico{width:36px;height:36px;display:grid;place-items:center;border-radius:10px;font-size:17px;color:var(--fg)}
+  .body{flex:1;overflow:hidden;padding:0 14px;display:flex;flex-direction:column;gap:14px}
+  .msg{font-size:15px;line-height:1.65}
+  .msg.user{display:flex;justify-content:flex-end}
+  .msg.user .bubble{background:var(--bubble);border-radius:18px 18px 5px 18px;padding:9px 13px;max-width:78%}
+  .tool{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--dim)}
+  .tool .d{width:7px;height:7px;border-radius:50%;background:var(--ok)}
+  .mact{display:flex;gap:14px;font-size:11.5px;color:var(--dim);margin-top:6px;align-items:center}
+  .mact .on{color:var(--fg);font-weight:600}
+
+  /* ===== dock ===== */
+  .dock{padding:6px 12px 10px;background:var(--bg);flex:none}
+  /* F1：进度条（替代原来的 .streamline 单行） */
+  .prog{padding:0 2px 7px}
+  .prog .row{display:flex;align-items:center;gap:7px;font-size:11.5px;line-height:1.4;color:var(--dim)}
+  .prog .row b{font-size:12px;font-weight:650;color:var(--fg);letter-spacing:-.1px}
+  .prog .row .cur{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+  .prog .row .t{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;color:var(--dim);flex:none}
+  .prog .row .cv{flex:none;font-size:10px;color:var(--dim);opacity:.9}
+  .pdot{width:6px;height:6px;border-radius:50%;background:var(--ok);flex:none;
+    box-shadow:0 0 0 3px rgba(46,107,63,.12)}
+  .pbar{height:2px;border-radius:2px;background:var(--line);margin-top:6px;overflow:hidden}
+  .pbar i{display:block;height:100%;background:var(--ok);border-radius:2px}
+  /* 朗读条（与进度条同位置，二选一） */
+  .speak{display:flex;align-items:center;gap:8px;padding:0 2px 7px;font-size:11.5px;color:var(--dim)}
+  .speak .wave{display:flex;align-items:center;gap:2px;height:12px}
+  .speak .wave i{width:2px;border-radius:1px;background:var(--accent);opacity:.55}
+  .speak .x{margin-left:auto;font-size:11px;color:var(--fg);font-weight:600;flex:none}
+  /* composer */
+  .composer{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:10px 12px 9px}
+  .ph{color:var(--dim);font-size:16px;min-height:24px;display:flex;align-items:center}
+  .crow{display:flex;align-items:center;gap:8px;margin-top:8px}
+  .plus{width:34px;height:34px;border-radius:50%;background:var(--bubble);display:grid;place-items:center;font-size:17px;color:var(--dim);flex:none}
+  .chips{display:flex;align-items:center;gap:6px;flex:1;min-width:0;overflow:hidden}
+  .chip{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--dim);
+    border:1px solid var(--line);border-radius:999px;padding:5px 9px;background:var(--card);white-space:nowrap}
+  .sendgroup{display:flex;align-items:center;gap:8px;flex:none;margin-left:auto}
+  .stop{width:34px;height:34px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;flex:none}
+  .stop i{width:10px;height:10px;border-radius:2px;background:var(--fg);display:block}
+  .send,.mic{width:34px;height:34px;border-radius:50%;background:var(--accent);color:var(--accent-fg);
+    display:grid;place-items:center;flex:none}
+  .mic{background:var(--bubble);color:var(--fg);border:1px solid var(--line)}
+  .ic{display:block;line-height:0}
+  .ic svg{width:17px;height:17px;display:block}
+
+  /* sheet */
+  .sheetwrap{position:absolute;inset:0;background:rgba(26,26,22,.28);display:flex;flex-direction:column;justify-content:flex-end}
+  /* 2026-11-25：与 App 全局 `.sheet` 对齐（26px），不再单独用 22px；见验证报告 FAIL #1 的裁定 */
+  .sheet{background:var(--card);border-radius:26px 26px 0 0;padding:8px 16px 16px;border-top:1px solid var(--line)}
+  .handle{width:36px;height:4px;border-radius:2px;background:var(--line);margin:4px auto 12px}
+  .sheet h2{font-size:15px;margin:0 0 2px}
+  .sheet .sm{font-size:11.5px;color:var(--dim);margin-bottom:12px}
+  .step{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);align-items:flex-start}
+  .step:last-of-type{border-bottom:0}
+  .sdot{width:16px;height:16px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:9px;margin-top:2px}
+  .sdot.done{background:rgba(46,107,63,.12);color:var(--ok);font-weight:700}
+  .sdot.now{background:var(--ok);color:#fff}
+  .sdot.todo{border:1.5px solid var(--line);color:transparent}
+  .step .tx{flex:1;font-size:13.5px;line-height:1.45}
+  .step .tx span{display:block;font-size:11px;color:var(--dim);margin-top:1px}
+  .step.now .tx{font-weight:600}
+  .step.todo .tx{color:var(--dim)}
+  .sacts{display:flex;gap:10px;margin-top:14px}
+  .btn{flex:1;text-align:center;border:1px solid var(--line);border-radius:14px;padding:11px;font-size:14px}
+  .btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+
+  /* 语音浮层 */
+  .voice{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:14px 16px;margin-bottom:8px}
+  .voice .wv{display:flex;align-items:flex-end;justify-content:center;gap:3px;height:38px;margin-bottom:8px}
+  .voice .wv i{width:3px;border-radius:2px;background:var(--accent);opacity:.8}
+  .voice .hint{text-align:center;font-size:12px;color:var(--dim)}
+  .voice .hint b{color:var(--fg)}
+  .live{font-size:16px;color:var(--fg);min-height:24px;line-height:1.5}
+  .caret{display:inline-block;width:1.5px;height:16px;background:var(--accent);vertical-align:-2px;margin-left:1px}
+
+  /* 皮肤对照 */
+  .skins{display:flex;gap:24px;margin-top:14px}
+  .sk{width:390px;border-radius:16px;overflow:hidden;border:1px solid #DFDCD2}
+  .sk .in{padding:14px 16px 16px}
+  .sk .tag{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#8C8A7F;margin-bottom:10px}
+  /* carbon */
+  .carbon{--bg:#0B0C0E;--card:#121417;--fg:#EAE8DF;--dim:#6E726C;--line:#24272C;--bubble:#171A1E;--accent:#C6F04E;--accent-fg:#0B0C0E;--ok:#9FE07C;background:var(--bg)}
+  .carbon .pdot{box-shadow:0 0 0 3px rgba(159,224,124,.14)}
+  .carbon .sk .tag{color:var(--dim)}
+
+  table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid #E9E6DC;vertical-align:top}
+  th{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#8C8A7F;background:#FBFAF6}
+  .k{font-family:ui-monospace,Consolas,monospace;font-size:11.5px}
+  .tagline{display:inline-block;font-size:10.5px;padding:1px 7px;border-radius:999px;background:#EDEAE0;color:#5E5D54;margin-left:6px}
+</style>
+</head>
+<body>
+<div class="board">
+
+  <div class="cap">Design review · F1 + F2</div>
+  <h1>会话页：过程进度（F1）与语音/朗读（F2）</h1>
+  <p class="sub">两处都只动 <span class="k">renderSession</span> 的 dock 区与 <span class="k">onFrame</span>，不改布局骨架。配色/圆角/字号全部沿用现有 token（纸面皮肤，390×780 ≈ 430×932 等比缩放）。</p>
+
+  <div class="grid">
+
+    <!-- ============ 1. 运行中 ============ -->
+    <div class="cell">
+      <div class="lbl"><b>① 会话 · 运行中</b><span>F1 主视图</span></div>
+      <div class="phone">
+        <div class="sb"><span>9:41</span><span class="r">▮▮▮ ⌁ ▰</span></div>
+        <header><div class="ico">‹</div><h1>重构 PWA 缓存层</h1><div class="ico">⋯</div></header>
+        <div class="body">
+          <div class="msg user"><div class="bubble">把消息缓存换成 IndexedDB，注意别丢数据</div></div>
+          <div class="msg">
+            <div>缓存层我先读一遍，再决定迁移顺序：先落 IndexedDB，localStorage 只留指针。</div>
+            <div class="mact"><span>复制</span><span>分支</span><span>朗读</span></div>
+          </div>
+          <div class="tool"><span class="d"></span>读取 lib/cache.js<span style="margin-left:auto">0.4s</span></div>
+        </div>
+        <div class="dock">
+          <!-- F1 进度条 -->
+          <div class="prog">
+            <div class="row">
+              <span class="pdot"></span>
+              <b>第 3/7 步</b>
+              <span class="cur">正在改写 saveMsgCache</span>
+              <span class="t">1:15</span>
+              <span class="cv">⌃</span>
+            </div>
+            <div class="pbar"><i style="width:43%"></i></div>
+          </div>
+          <div class="composer">
+            <div class="ph">发消息…</div>
+            <div class="crow">
+              <button class="plus">+</button>
+              <div class="chips">
+                <span class="chip">Vibe</span>
+                <span class="chip">deepseek-flash</span>
+              </div>
+              <div class="sendgroup">
+                <button class="stop"><i></i></button>
+                <button class="mic">🎙</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="note"><b>替换</b>原来那行「深度求索中… 1:15」（<span class="k">.streamline</span>，11.5px 单行）。
+        新增 <b>步数 + 当前动作 + 2px 进度条</b>，高度 26px；点这一行展开 ②。
+        键盘弹起时仍隐藏整条（沿用 <span class="k">html.kb-open .streamline{display:none}</span>）。</p>
+    </div>
+
+    <!-- ============ 2. 过程面板 ============ -->
+    <div class="cell">
+      <div class="lbl"><b>② 过程面板</b><span>F1 展开态 · 底部 sheet</span></div>
+      <div class="phone">
+        <div class="sb"><span>9:41</span><span class="r">▮▮▮ ⌁ ▰</span></div>
+        <header><div class="ico">‹</div><h1>重构 PWA 缓存层</h1><div class="ico">⋯</div></header>
+        <div class="body">
+          <div class="msg user"><div class="bubble">把消息缓存换成 IndexedDB，注意别丢数据</div></div>
+          <div class="msg"><div>缓存层我先读一遍，再决定迁移顺序：先落 IndexedDB，localStorage 只留指针。</div></div>
+        </div>
+        <div class="sheetwrap">
+          <div class="sheet">
+            <div class="handle"></div>
+            <h2>这一轮 · 7 步</h2>
+            <div class="sm">已跑 1:15 · 第 3 步进行中</div>
+            <div class="step"><div class="sdot done">✓</div><div class="tx">读取 lib/cache.js<span>0.4s</span></div></div>
+            <div class="step"><div class="sdot done">✓</div><div class="tx">定位 3 处 localStorage 调用<span>1.2s</span></div></div>
+            <div class="step now"><div class="sdot now">●</div><div class="tx">改写 saveMsgCache<span>进行中 0:38</span></div></div>
+            <div class="step todo"><div class="sdot todo">·</div><div class="tx">新增迁移函数<span>未开始</span></div></div>
+            <div class="step todo"><div class="sdot todo">·</div><div class="tx">补迁移测试<span>未开始</span></div></div>
+            <div class="step todo"><div class="sdot todo">·</div><div class="tx">跑测试并核对条数<span>未开始</span></div></div>
+            <div class="step todo"><div class="sdot todo">·</div><div class="tx">更新台账<span>未开始</span></div></div>
+            <div class="sacts">
+              <div class="btn">收起</div>
+              <div class="btn primary">停止这一轮</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="note"><b>数据来源</b>：<span class="k">todo-phases.js</span> 的「第几条/共几条/那步叫什么」+ <span class="k">live-steps.js</span> 的每步摘要与状态，都是宿主已经算好下发的，前端只画。
+        没有待办时（模型没写 <span class="k">todo_write</span>）→ 标题退化成「已跑 5 步」，进度条改成不定长、只列已跑步骤。</p>
+    </div>
+
+    <!-- ============ 3. 按住说话 ============ -->
+    <div class="cell">
+      <div class="lbl"><b>③ 按住说话</b><span>F2 输入态</span></div>
+      <div class="phone">
+        <div class="sb"><span>9:41</span><span class="r">▮▮▮ ⌁ ▰</span></div>
+        <header><div class="ico">‹</div><h1>重构 PWA 缓存层</h1><div class="ico">⋯</div></header>
+        <div class="body">
+          <div class="msg user"><div class="bubble">把消息缓存换成 IndexedDB，注意别丢数据</div></div>
+          <div class="msg"><div>缓存层我先读一遍，再决定迁移顺序：先落 IndexedDB，localStorage 只留指针。</div>
+            <div class="mact"><span>复制</span><span>分支</span><span class="on">朗读中</span></div>
+          </div>
+        </div>
+        <div class="dock">
+          <div class="voice">
+            <div class="wv">
+              <i style="height:10px"></i><i style="height:22px"></i><i style="height:34px"></i><i style="height:18px"></i>
+              <i style="height:30px"></i><i style="height:38px"></i><i style="height:24px"></i><i style="height:14px"></i>
+              <i style="height:28px"></i><i style="height:36px"></i><i style="height:20px"></i><i style="height:12px"></i>
+            </div>
+            <div class="hint">松开结束 · <b>上滑取消</b></div>
+          </div>
+          <div class="composer">
+            <div class="live">把这个模块的缓存换成 IndexedDB，迁移的时候不要丢<span class="caret"></span></div>
+            <div class="crow">
+              <button class="plus">+</button>
+              <div class="chips"><span class="chip">Vibe</span></div>
+              <div class="sendgroup"><button class="mic" style="background:var(--accent);color:var(--accent-fg);border-color:var(--accent)">🎙</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="note"><b>识别</b>用浏览器原生 <span class="k">webkitSpeechRecognition</span>（iOS 走系统听写，不需要宿主接口），边说边出字到输入框，松手若还在识别就等最后一次 <span class="k">result</span> 落定，<b>只把文字留在输入框、不自动发送</b>（用户要能先改）。
+        首次触发时弹系统麦克风授权；被拒 → toast「没有麦克风权限，可在 设置 → Safari → 麦克风 打开」，不重复弹。</p>
+    </div>
+
+    <!-- ============ 4. 朗读 ============ -->
+    <div class="cell">
+      <div class="lbl"><b>④ 朗读中</b><span>F2 播放态</span></div>
+      <div class="phone">
+        <div class="sb"><span>9:41</span><span class="r">▮▮▮ ⌁ ▰</span></div>
+        <header><div class="ico">‹</div><h1>重构 PWA 缓存层</h1><div class="ico">⋯</div></header>
+        <div class="body">
+          <div class="msg user"><div class="bubble">这个迁移顺序有问题吗</div></div>
+          <div class="msg">
+            <div>顺序没问题，但要注意两点：一是 localStorage 只留指针后，旧版本回滚会读到空，二是首次迁移要能断点续跑。</div>
+            <div class="mact"><span>复制</span><span>分支</span><span class="on">■ 停止朗读</span></div>
+          </div>
+        </div>
+        <div class="dock">
+          <div class="speak">
+            <span class="wave">
+              <i style="height:6px"></i><i style="height:11px"></i><i style="height:8px"></i><i style="height:12px"></i><i style="height:5px"></i>
+            </span>
+            <span>正在朗读 · 第 2 段</span>
+            <span class="x">停止</span>
+          </div>
+          <div class="composer">
+            <div class="ph">发消息…</div>
+            <div class="crow">
+              <button class="plus">+</button>
+              <div class="chips"><span class="chip">Vibe</span><span class="chip">deepseek-flash</span></div>
+              <div class="sendgroup"><button class="mic">🎙</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="note"><b>入口两处</b>：消息操作条「朗读」（长按可只读这一段？）；朗读条上点「停止」。
+        用 <span class="k">speechSynthesis</span>，按句子切段以支持「第 N 段」与进度；切前台 / 锁屏自动停。
+        <b>与 F1 同位置互斥</b>：正在跑时优先显示进度条，朗读条收进消息操作条，不再占 dock。</p>
+    </div>
+
+  </div>
+
+  <!-- ============ 皮肤对照 ============ -->
+  <h1 style="font-size:19px;margin:44px 0 4px">两套皮肤下的同一组件</h1>
+  <p class="sub" style="margin-bottom:14px">只换 token，不换结构：进度条在碳黑皮肤下用荧光绿，朗读波形同理。</p>
+  <div class="skins">
+    <div class="sk">
+      <div class="in">
+        <div class="tag">Paper（默认浅色）</div>
+        <div class="prog">
+          <div class="row"><span class="pdot"></span><b>第 3/7 步</b><span class="cur">正在改写 saveMsgCache</span><span class="t">1:15</span><span class="cv">⌃</span></div>
+          <div class="pbar"><i style="width:43%"></i></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
+          <div class="stop"><i></i></div>
+          <div class="mic" style="background:var(--accent);color:var(--accent-fg);border-color:var(--accent)">🎙</div>
+          <div class="send">↑</div>
+          <span style="font-size:11.5px;color:var(--dim)">运行中 / 空输入 / 有文字</span>
+        </div>
+      </div>
+    </div>
+    <div class="sk carbon">
+      <div class="in">
+        <div class="tag" style="color:#6E726C">Carbon（恒深色）</div>
+        <div class="prog">
+          <div class="row"><span class="pdot"></span><b style="color:#EAE8DF">第 3/7 步</b><span class="cur" style="color:#6E726C">正在改写 saveMsgCache</span><span class="t" style="color:#6E726C">1:15</span><span class="cv" style="color:#6E726C">⌃</span></div>
+          <div class="pbar" style="background:#24272C"><i style="width:43%;background:#9FE07C"></i></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
+          <div class="stop" style="border-color:#24272C"><i style="background:#EAE8DF"></i></div>
+          <div class="mic" style="background:#C6F04E;color:#0B0C0E;border-color:#C6F04E">🎙</div>
+          <div class="send" style="background:#C6F04E;color:#0B0C0E">↑</div>
+          <span style="font-size:11.5px;color:#6E726C">同一组状态</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 状态与边界 ============ -->
+  <h1 style="font-size:19px;margin:44px 0 10px">状态与边界（需要你确认的四个判断）</h1>
+  <table>
+    <tr><th style="width:170px">情况</th><th>界面表现</th><th style="width:230px">为什么这么定</th></tr>
+    <tr><td>模型没写待办</td><td>「已跑 5 步 · 正在读文件」+ 不定长进度条（扫描式）</td><td>不编造总步数；比现在的「深度求索中…」仍然多一层信息</td></tr>
+    <tr><td>这一轮结束</td><td>进度条 → 收成一行「已完成 · 7 步 · 2:03」，3 秒后淡出</td><td>给一个可回看的锚点，不长期占位</td></tr>
+    <tr><td>语音被拒 / 不支持</td><td>🎙 变灰，点击 toast 说明；<span class="k">SpeechRecognition</span> 不存在时直接不渲染麦克风</td><td>iOS 16.4 以下、部分安卓 WebView 没有；不能变成点了没反应</td></tr>
+    <tr><td>朗读中又发新消息</td><td>自动停朗读，不叠加</td><td>两路声音同时出不合适；也省电</td></tr>
+  </table>
+
+  <h1 style="font-size:19px;margin:36px 0 10px">开发面（确认后我动这些地方）</h1>
+  <table>
+    <tr><th style="width:190px">位置</th><th>改动</th><th style="width:90px">量</th></tr>
+    <tr><td><span class="k">onFrame</span></td><td>新增 <span class="k">session/live-steps</span> 帧处理 → <span class="k">state.steps</span></td><td>~30 行</td></tr>
+    <tr><td><span class="k">renderSession</span> dock</td><td><span class="k">.streamline</span> 换成 <span class="k">.prog</span>；点开调 <span class="k">openSheet</span></td><td>~60 行</td></tr>
+    <tr><td>新增 <span class="k">openStepsSheet()</span></td><td>步骤列表 + 停止/收起；复用现有 sheet</td><td>~50 行</td></tr>
+    <tr><td>语音模块</td><td><span class="k">webkitSpeechRecognition</span> 封装：开始/结束/中途结果/错误/权限</td><td>~80 行</td></tr>
+    <tr><td>朗读模块</td><td><span class="k">speechSynthesis</span> 分句 + 进度 + 停止；消息操作条入口</td><td>~70 行</td></tr>
+    <tr><td>设置 → 语音</td><td>按住说话开关、自动朗读开关（默认都关）</td><td>~40 行</td></tr>
+    <tr><td>sw.js / 版本号</td><td>照旧 bump，无新增缓存策略</td><td>2 行</td></tr>
+  </table>
+
+  <p class="note" style="margin-top:22px;border-left:3px solid #E5E2D8;padding-left:12px">
+    <b>不在本次范围</b>：语音通话（fish-pocket 那种实时通话）、朗读音色选择、逐字流式字幕、离线转写。
+    这些要么需要云端 STT，要么是另一个量级的工作。</p>
+
+</div>
+</body>
+</html>
