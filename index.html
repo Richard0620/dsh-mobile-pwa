@@ -595,6 +595,40 @@
   .stepsbody .step{font-size:12px;color:var(--dim);padding:3px 0}
 
   .streamline{font-size:11.5px;color:var(--dim);padding:0 2px 4px}
+  /* F1：过程进度（替代原来的 .streamline 单行；保留 .streamline class 让键盘规则继续生效） */
+  .prog{padding:0 2px 7px}
+  .prog:empty{display:none}
+  .prog .row{display:flex;align-items:center;gap:7px;font-size:11.5px;line-height:1.4;color:var(--dim)}
+  .prog .row b{font-size:12px;font-weight:650;color:var(--fg);letter-spacing:-.1px;flex:none}
+  .prog .row .ltext{display:flex;align-items:center;gap:7px;flex:1;min-width:0}
+  .prog .row .cur{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+  .prog .row .t{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;color:var(--dim);flex:none}
+  .prog .row .cv{flex:none;font-size:10px;color:var(--dim);opacity:.9}
+  .prog .pdot{width:6px;height:6px;border-radius:50%;background:var(--ok);flex:none;
+    box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 13%,transparent)}
+  .prog .pbar{height:2px;border-radius:2px;background:var(--line);margin-top:6px;overflow:hidden}
+  .prog .pbar i{display:block;height:100%;background:var(--ok);border-radius:2px}
+  .prog .pbar.indet i{width:32%;animation:pscan 1.3s cubic-bezier(.4,0,.2,1) infinite}
+  .prog.donefade{opacity:0;transition:opacity .5s ease}
+  @keyframes pscan{0%{transform:translateX(-110%)}55%{transform:translateX(170%)}100%{transform:translateX(360%)}}
+  /* F1：过程面板（底部 sheet） */
+  .stpsheet h2{font-size:15px;margin:0 0 2px}
+  .stpsheet .sm{font-size:11.5px;color:var(--dim);margin-bottom:12px}
+  .stpsheet .step{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);align-items:flex-start}
+  .stpsheet .step:last-of-type{border-bottom:0}
+  .stpsheet .sdot{width:16px;height:16px;border-radius:50%;flex:none;display:grid;place-items:center;
+    font-size:9px;margin-top:2px}
+  .stpsheet .sdot.done{background:color-mix(in srgb,var(--ok) 12%,transparent);color:var(--ok);font-weight:700}
+  .stpsheet .sdot.now{background:var(--ok);color:#fff}
+  .stpsheet .sdot.todo{border:1.5px solid var(--line);color:transparent}
+  .stpsheet .sdot.err{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad);font-weight:700}
+  .stpsheet .sdot.stop{background:var(--bubble);color:var(--dim)}
+  .stpsheet .step .tx{flex:1;font-size:13.5px;line-height:1.45}
+  .stpsheet .step .tx span{display:block;font-size:11px;color:var(--dim);margin-top:1px}
+  .stpsheet .step.now .tx{font-weight:600}
+  .stpsheet .step.todo .tx,.stpsheet .step.stop .tx{color:var(--dim)}
+  .stpsheet .sacts{display:flex;gap:10px;margin-top:14px}
+  .stpsheet .sacts .btn{border-radius:14px;padding:11px}
   /* 运行状态：跟在对话流末尾，不再挂在输入框下面 */
   .typing{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--dim);padding:8px 2px 10px;
     font-family:ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.02em}
@@ -632,7 +666,7 @@
   /* ---------- composer ---------- */
   .dock{padding:6px 12px calc(4px + var(--safe-b));background:var(--bg)}
   html.kb-open .dock{padding-bottom:0}
-  html.kb-open .streamline{display:none}
+  html.kb-open .streamline, html.kb-open .prog{display:none}
   /* 待发送附件 */
   .attach{display:none;gap:8px;padding:2px 2px 8px;overflow-x:auto;scrollbar-width:none}
   .attach::-webkit-scrollbar{display:none}
@@ -1340,6 +1374,12 @@ const state = {
   busy: false,
   // 本轮开始的时间戳（0 = 没在跑，或这一轮是「打开时已经在跑」——那种不显示计时，免得从 0 起算误导）
   busySince: 0,
+  // F1 过程进度：本轮步骤 / 轮次 / 待办阶段。切会话、新一轮开始时清空，避免串台。
+  steps: [],
+  stepsTurn: null,
+  phase: null,
+  stepsDone: null,
+  stepsDoneFade: false,
   stream: 'idle',
   poll: null,
   lastPaint: 0,
@@ -4077,7 +4117,7 @@ function renderList(wrap, opts = {}) {
 // 会话页的「增量渲染」骨架：header / 列表 / 卡片 / composer 各建一次，
 // 之后只动列表和卡片，输入框不会因为来帧而重建（否则会丢焦点、丢输入）。
 let ui = { sessionId:null, body:null, listWrap:null, cardsWrap:null, ta:null, sendBtn:null, strip:null, dot:null, sig:'',
-  atBottom: true };
+  progSig:'', atBottom: true };
 
 // 大图查看器：双指缩放（1–5x）、放大后单指拖动、双击切换、桌面滚轮缩放。
 // 关键点：
@@ -4578,11 +4618,285 @@ function syncBusyTicker() {
   if (want && !busyTicker) {
     busyTicker = setInterval(() => {
       if (!state.busy || !ui.strip) { clearInterval(busyTicker); busyTicker = null; return; }
-      if (state.stream === 'open') ui.strip.textContent = busyText();
+      if (state.stream === 'open') paintProg();
     }, 1000);
   } else if (!want && busyTicker) {
     clearInterval(busyTicker); busyTicker = null;
   }
+}
+
+// ---------------------------------------------------------------- F1 过程进度
+// 数据全部来自宿主：session/live-steps（步骤）与 todo_write.phase（第几/共几/那步叫什么）。
+// 前端只做合并与降级：拿不到 phase 就不显示总步数，绝不编造 total。
+let stepsSheetRefresh = null, stepsSheetRefreshAt = 0;
+function refreshStepsSheet(force = false) {
+  if (!stepsSheetRefresh) return;
+  const now = Date.now();
+  if (!force && now - stepsSheetRefreshAt < 500) return;
+  stepsSheetRefreshAt = now;
+  try { stepsSheetRefresh(); } catch {}
+}
+
+function resetSteps() {
+  state.steps = []; state.stepsTurn = null; state.phase = null;
+  state.stepsDone = null; state.stepsDoneFade = false;
+  clearTimeout(finishSteps._fadeTimer);
+  clearTimeout(finishSteps._clearTimer);
+  if (ui) ui.progSig = '';
+}
+
+function normPhase(p) {
+  if (!p || typeof p !== 'object') return null;
+  const total = Math.max(0, Number(p.total) || 0);
+  if (!total) return null;
+  const index = Math.max(0, Math.min(total, Number(p.index) || 0));
+  return { index, total, label: String(p.label || '') };
+}
+// 兼容几种下发形状：block.phase / block.details.phase / block.result.phase
+function phaseOfTodoBlock(b) {
+  if (!b || typeof b !== 'object' || b.name !== 'todo_write') return null;
+  return normPhase(b.phase) || normPhase(b.details && b.details.phase) || normPhase(b.result && b.result.phase);
+}
+// session/event 里工具块可能埋在 event.data / message.blocks 里：只做有界深搜，找到最后一处
+function findTodoPhase(obj, depth = 0) {
+  if (!obj || typeof obj !== 'object' || depth > 7) return null;
+  if (Array.isArray(obj)) {
+    let hit = null;
+    for (const x of obj) hit = findTodoPhase(x, depth + 1) || hit;
+    return hit;
+  }
+  const direct = phaseOfTodoBlock(obj);
+  if (direct) return direct;
+  let hit = null;
+  for (const k of Object.keys(obj)) {
+    if (k === 'phase') continue;
+    const v = obj[k];
+    if (v && typeof v === 'object') hit = findTodoPhase(v, depth + 1) || hit;
+  }
+  return hit;
+}
+function phaseFromMessages(msgs) {
+  let hit = null;
+  for (const m of msgs || []) {
+    for (const b of (m.blocks || [])) {
+      const p = phaseOfTodoBlock(b);
+      if (p) hit = p;
+    }
+  }
+  return hit;
+}
+const samePhase = (a, b) => !!a && !!b && a.index === b.index && a.total === b.total && a.label === b.label;
+
+// full=true 整份替换；full=false 同 key 覆盖、新的追加；turn 变了按轮隔离。
+function applyLiveSteps(f) {
+  if (!f || (f.sessionId && f.sessionId !== state.sessionId)) return;
+  const list = Array.isArray(f.steps) ? f.steps : [];
+  const turn = f.turn == null ? null : f.turn;
+  const turnChanged = turn != null && state.stepsTurn != null && turn !== state.stepsTurn;
+  if (f.full || turnChanged) {
+    state.steps = [];
+    state.stepsTurn = turn;
+  } else if (turn != null) {
+    state.stepsTurn = turn;
+  }
+  for (const it of list) {
+    if (!it || it.key == null) continue;
+    const key = String(it.key);
+    const step = it.step || {};
+    const cur = state.steps.find(x => x.key === key);
+    if (cur) {
+      cur.step = step;
+      if (step.state === 'running' && !cur._at) cur._at = Date.now();
+    } else {
+      state.steps.push({ key, step, _at: step.state === 'running' ? Date.now() : 0 });
+    }
+  }
+  // 有新的步骤帧 = 新一轮还在跑，旧的一轮完成提示作废
+  state.stepsDone = null;
+  state.stepsDoneFade = false;
+  clearTimeout(finishSteps._fadeTimer);
+  clearTimeout(finishSteps._clearTimer);
+  refreshStepsSheet();
+}
+
+function stepSummary(it) {
+  const s = (it && it.step) || {};
+  return String(s.summary || s.name || (s.kind === 'think' ? '思考中' : '执行中'));
+}
+function currentStep() {
+  const list = state.steps || [];
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (list[i].step && list[i].step.state === 'running') return list[i];
+  }
+  return list[list.length - 1] || null;
+}
+const progElapsed = () => state.busySince ? fmtElapsed(Date.now() - state.busySince) : '';
+
+// 一轮结束：先收成一行「已完成 · N 步 · 2:03」，3 秒后淡出，不长期占位
+function finishSteps() {
+  const count = state.steps.length
+    ? (state.phase && state.phase.total ? state.phase.total : state.steps.length)
+    : 0;
+  if (!count) return;
+  const ms = state.busySince ? Date.now() - state.busySince : 0;
+  state.stepsDone = { count, ms, at: Date.now() };
+  state.stepsDoneFade = false;
+  clearTimeout(finishSteps._fadeTimer);
+  clearTimeout(finishSteps._clearTimer);
+  finishSteps._fadeTimer = setTimeout(() => {
+    state.stepsDoneFade = true;
+    paintProg(true);
+  }, 2500);
+  finishSteps._clearTimer = setTimeout(() => {
+    state.stepsDone = null;
+    state.stepsDoneFade = false;
+    // 面板还开着就留着数据；关掉后下一次整份快照会覆盖
+    if (!stepsSheetRefresh) { state.steps = []; state.stepsTurn = null; }
+    paintProg(true);
+    refreshStepsSheet(true);
+  }, 3000);
+}
+
+async function stopRun() {
+  if (!state.sessionId) return;
+  if (!confirm('中断这次运行？')) return;
+  try {
+    await api('/api/mobile/v1/session/stop', { method:'POST', body: { sessionId: state.sessionId } });
+    markBusy(false); paintProg(true); paintSession();
+  } catch (e) { toast('取消失败：' + (e.message || e)); }
+}
+
+// dock 里那一条：运行中显示步数 + 当前动作 + 进度条；断线 / 完成各有降级
+function paintProg(force = false) {
+  if (!ui || !ui.strip || state.view !== 'session') return;
+  const strip = ui.strip;
+  let mode = 'none';
+  if (state.stream && state.stream !== 'open') mode = 'offline';
+  else if (state.busy) mode = 'run';
+  else if (state.stepsDone) mode = 'done';
+  if (mode === 'none') {
+    if (ui.progSig !== 'none') {
+      strip.replaceChildren();
+      strip.className = 'streamline prog';
+      ui.progSig = 'none';
+    }
+    return;
+  }
+  const cur = currentStep();
+  const phase = state.phase;
+  const total = phase && phase.total ? phase.total : 0;
+  const idx = phase && phase.index ? phase.index : 0;
+  const sig = mode === 'offline' ? 'offline'
+    : mode === 'run'
+      ? `run|${state.busySince ? 1 : 0}|${total}|${idx}|${state.steps.map(x => x.key + ':' + ((x.step && x.step.state) || '')).join(',')}|${cur ? stepSummary(cur) : ''}`
+      : `done|${state.stepsDone.count}|${state.stepsDone.ms}`;
+  if (!force && sig === ui.progSig) {
+    const t = strip.querySelector('.t');
+    if (t) t.textContent = progElapsed();
+    refreshStepsSheet();
+    return;
+  }
+  ui.progSig = sig;
+  strip.className = 'streamline prog' + (state.stepsDoneFade ? ' donefade' : '');
+  strip.replaceChildren();
+  if (mode === 'offline') {
+    strip.append(el('div', { class:'row' }, el('span', { class:'cur', text:'实时连接断开，重连中…' })));
+  } else if (mode === 'run') {
+    const label = total ? `第 ${idx || 1}/${total} 步` : `已跑 ${state.steps.length} 步`;
+    const summary = cur ? stepSummary(cur) : (state.steps.length ? '' : '深度求索中…');
+    const live = el('span', { class:'ltext', 'aria-live':'polite' },
+      el('b', { text: label }),
+      summary ? el('span', { class:'cur', text: summary }) : null);
+    const open = () => openStepsSheet();
+    const row = el('div', {
+      class:'row', role:'button', tabindex:'0', title:'查看这一轮的步骤',
+      onclick: open,
+      onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } },
+    },
+      el('span', { class:'pdot' }), live,
+      el('span', { class:'t', text: progElapsed() }), el('span', { class:'cv', text:'⌃' }));
+    const bar = el('div', { class:'pbar' + (total ? '' : ' indet') });
+    const fill = el('i');
+    if (total) fill.style.width = Math.round(((idx || 1) / total) * 100) + '%';
+    bar.append(fill);
+    strip.append(row, bar);
+  } else {
+    const d = state.stepsDone || { count: 0, ms: 0 };
+    strip.append(el('div', { class:'row' },
+      el('span', { class:'pdot' }),
+      el('span', { class:'ltext', 'aria-live':'polite' },
+        el('b', { text: `已完成 · ${d.count} 步${d.ms ? ' · ' + fmtElapsed(d.ms) : ''}` }))));
+  }
+  refreshStepsSheet();
+}
+
+// 过程面板：列出全部步骤；有 phase 时按总数补「未开始」
+function openStepsSheet() {
+  if (state.view !== 'session' || !ui.strip) return;
+  const mask = el('div', { class:'mask', onclick: (e) => { if (e.target === mask) close(); } });
+  const sheet = el('div', { class:'sheet stpsheet', role:'dialog', 'aria-modal':'true', tabindex:'-1' });
+  const head = el('div');
+  const list = el('div', { class:'stplist' });
+  const acts = el('div', { class:'sacts' });
+  sheet.append(el('div', { class:'grab' }), head, list, acts);
+
+  function renderBody() {
+    const phase = state.phase;
+    const total = phase && phase.total ? phase.total : 0;
+    const n = state.steps.length;
+    const done = state.stepsDone;
+    const ms = done ? done.ms : (state.busySince ? Date.now() - state.busySince : 0);
+    const spent = ms ? `已跑 ${fmtElapsed(ms)}` : `已跑 ${n} 步`;
+    let sub = spent + ' · 进行中';
+    if (done) sub = `${spent} · 已完成`;
+    else if (state.busy && phase && phase.index) sub = `${spent} · 第 ${phase.index} 步进行中`;
+    head.replaceChildren(
+      el('h2', { text: total ? `这一轮 · ${total} 步` : `已跑 ${n} 步` }),
+      el('div', { class:'sm', text: sub }));
+    list.replaceChildren();
+    let shown = 0;
+    for (const it of state.steps) {
+      const s = it.step || {};
+      const cls = s.state === 'ok' ? 'done' : s.state === 'running' ? 'now'
+        : s.state === 'error' ? 'err' : s.state === 'stopped' ? 'stop' : 'todo';
+      const dot = s.state === 'ok' ? '✓' : s.state === 'running' ? '●' : s.state === 'error' ? '!' : '·';
+      const subline = s.state === 'running'
+        ? `进行中${it._at ? ' ' + fmtElapsed(Date.now() - it._at) : ''}`
+        : s.state === 'ok' ? '完成' : s.state === 'error' ? '失败' : s.state === 'stopped' ? '已停止' : '未开始';
+      list.append(el('div', { class:'step ' + cls },
+        el('div', { class:'sdot ' + cls, text: dot }),
+        el('div', { class:'tx' },
+          el('div', { text: stepSummary(it) }),
+          el('span', { text: subline }))));
+      shown++;
+    }
+    for (let i = shown; i < total; i++) {
+      list.append(el('div', { class:'step todo' },
+        el('div', { class:'sdot todo', text:'·' }),
+        el('div', { class:'tx' }, el('div', { text: `第 ${i + 1} 步` }), el('span', { text:'未开始' }))));
+    }
+    if (!shown && !total) list.append(el('div', { class:'sm', text:'这一轮还没有步骤' }));
+    acts.replaceChildren(...[
+      el('button', { class:'btn', text:'收起', onclick: close }),
+      state.busy ? el('button', { class:'btn primary', text:'停止这一轮', onclick: () => { close(); stopRun(); } }) : null,
+    ].filter(Boolean));
+  }
+  function onKey(e) {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+  }
+  function close() {
+    document.removeEventListener('keydown', onKey, true);
+    if (stepsSheetRefresh === renderBody) stepsSheetRefresh = null;
+    mask.remove();
+    paintProg(true);
+  }
+  document.addEventListener('keydown', onKey, true);
+  stepsSheetRefresh = renderBody;
+  stepsSheetRefreshAt = 0;
+  renderBody();
+  mask.append(sheet);
+  document.body.append(mask);
+  requestAnimationFrame(() => { try { sheet.focus({ preventScroll: true }); } catch {} });
 }
 
 function paintSession({ scroll = 'auto' } = {}) {
@@ -4714,12 +5028,8 @@ function paintSession({ scroll = 'auto' } = {}) {
     }
   }
   if (ui.sendBtn) ui.sendBtn.disabled = !!state.sending || (state.pending || []).some(a => a.uploading) || !!queueEditing;
-  // 运行状态只保留 dock 里这一份；对话流末尾不再重复一次
-  if (ui.strip) {
-    ui.strip.textContent = state.stream === 'open'
-      ? busyText()
-      : (state.stream ? '实时连接断开，重连中…' : '');
-  }
+  // 运行状态只保留 dock 里这一条（F1：步数 / 进度条 / 完成提示都在 paintProg 里）
+  paintProg();
   syncBusyTicker();
   if (scroll === 'bottom' || atBottom) {
     ui.atBottom = true;
@@ -4844,7 +5154,7 @@ function renderSession(wrap) {
     expandingHistory = false;
   }, { passive: true });
 
-  const strip = el('div', { class:'streamline' });
+  const strip = el('div', { class:'streamline prog' });
   const ta = el('div', { class:'ta', contenteditable:'true', role:'textbox', 'aria-multiline':'true',
     'data-ph':'发消息或创建任务，/ 调用指令，@ 文件或对话' });
   const getText = () => (ta.innerText || '').replace(/\u00a0/g, ' ').replace(/\n$/, '');
@@ -5147,13 +5457,7 @@ function renderSession(wrap) {
 
 
   // 中断运行：正在跑的时候才出现
-  const stopBtn = el('button', { class:'stop', text:'■', title:'中断运行', onclick: async () => {
-    if (!confirm('中断这次运行？')) return;
-    try {
-      await api('/api/mobile/v1/session/stop', { method:'POST', body: { sessionId: state.sessionId } });
-      markBusy(false); paintSession();
-    } catch (e) { toast('取消失败：' + (e.message || e)); }
-  }});
+  const stopBtn = el('button', { class:'stop', text:'■', title:'中断运行', onclick: () => stopRun() });
   const qDock = el('div', { class:'qdock' });
   // 编辑排队消息时的提示条：文本进输入框，附件留在队列里（走宿主的 edit 动作）
   const editBar = el('div', { class:'qeditbar' });
@@ -5277,7 +5581,7 @@ function renderSession(wrap) {
 
   ui = { sessionId: state.sessionId, body, listWrap, cardsWrap, ta, sendBtn, stopBtn, strip, dot, modelEl: modelRow, effortEl: effortRow,
     send, // 新会话页要借它把第一条发出去（闭合在 renderSession 里，外面拿不到）
-    qDock, editBar, jump, updateJump, loadStats: loadSessionStats, keys: [], nodes: [], cardsKey: '', prevCount: undefined, atBottom: true };
+    qDock, editBar, jump, updateJump, loadStats: loadSessionStats, keys: [], nodes: [], cardsKey: '', prevCount: undefined, atBottom: true, progSig: '' };
   paintSession({ scroll:'bottom' });
   // 进会话只定位到底部，不自动聚焦输入框：多数时候是进来看内容的，弹键盘会挡住正文
   requestAnimationFrame(() => { body.scrollTop = body.scrollHeight; });
@@ -5996,6 +6300,7 @@ function openSession(s) {
   state.sessionId = s.sessionId;
   state.sessionTitle = s.title || '(无标题)';
   state.messages = []; state.cards = []; state.lastSeq = 0; state.busy = !!s.running; state.busySince = 0;
+  resetSteps();   // 切会话必须清空过程进度，别把上一个会话的步骤串过来
   state.model = null; state.pending = []; state.unseen = 0; state.msgLimit = 120;
   state.queue = [];
   state.permCurrent = '';
@@ -6118,6 +6423,12 @@ async function loadMessages(force=false, sidOverride=null) {
     if (state.sessionId !== sid) return;
     state.messages = items;
     state.lastSeq = lastSeq;
+    // F1：历史消息里的 todo_write 也带 phase，取最近一次（宿主已算好第几/共几）
+    const ph = phaseFromMessages(items);
+    if (ph && !samePhase(state.phase, ph)) {
+      state.phase = ph;
+      ui.progSig = '';
+    }
     if (state.view === 'session') paintSession(force ? { scroll:'bottom' } : {});
     // 新回复已经渲染出来，且人就在底部：本地水位立即推进，回列表不再亮未读
     if (state.view === 'session' && state.sessionId === sid && ui && ui.atBottom) markSessionSeen(sid);
@@ -6133,9 +6444,7 @@ function subscribeSession() {
       if (!ui.dot) return;
       ui.dot.className = st === 'open' ? 'dot run' : 'dot';
       ui.dot.title = st === 'open' ? '实时已连接' : `重连中…${err ? ' ' + (err.message || err) : ''}`;
-      if (ui.strip) ui.strip.textContent = st === 'open'
-        ? busyText()
-        : '实时连接断开，重连中…';
+      paintProg(true);
       syncBusyTicker();
     },
     onFrame: f => { if (state.sessionId === sid) onFrame(f); },
@@ -6167,11 +6476,38 @@ function onFrame(frame) {
     state.cards = state.cards.filter(c => c.id !== rid);
     if (state.cards.length !== before) syncBadge();
   }
+  else if (t === 'session/live-steps') {
+    // F1：full=true 整份快照 / full=false 增量；turn 变了按轮隔离
+    if (frame.sessionId && frame.sessionId !== state.sessionId) return;
+    applyLiveSteps(frame);
+    paintProg(true);
+    return;
+  }
   else if (t === 'session/event') {
     const ev = frame.event || {};
     const inner = (ev.data && ev.data.type) || (frame.data && frame.data.type) || ev.type || '';
-    if (inner === 'turn/start') markBusy(true);
-    if (inner === 'turn/end' || inner === 'turn/ended') { markBusy(false); }
+    if (inner === 'turn/start') {
+      // 新一轮开始：上一轮的步骤清空（phase 留着，新的 todo_write 会覆盖）
+      state.steps = []; state.stepsTurn = null;
+      state.stepsDone = null; state.stepsDoneFade = false;
+      clearTimeout(finishSteps._fadeTimer); clearTimeout(finishSteps._clearTimer);
+      markBusy(true);
+      if (ui.stopBtn) ui.stopBtn.style.display = 'grid';
+      paintProg(true);
+      syncBusyTicker();
+    }
+    if (inner === 'turn/end' || inner === 'turn/ended') {
+      finishSteps();
+      markBusy(false);
+      if (ui.stopBtn) ui.stopBtn.style.display = 'none';
+      paintProg(true);
+    }
+    const ph = findTodoPhase(frame);
+    if (ph && !samePhase(state.phase, ph)) {
+      state.phase = ph;
+      paintProg(true);
+      refreshStepsSheet(true);
+    }
     clearTimeout(onFrame._t);
     onFrame._t = setTimeout(loadMessages, 350);
     return;
