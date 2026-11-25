@@ -595,6 +595,52 @@
   .stepsbody .step{font-size:12px;color:var(--dim);padding:3px 0}
 
   .streamline{font-size:11.5px;color:var(--dim);padding:0 2px 4px}
+  /* F1：过程进度（替代原来的 .streamline 单行；保留 .streamline class 让键盘规则继续生效） */
+  .prog{padding:0 2px 7px}
+  .prog:empty{display:none}
+  .prog .row{display:flex;align-items:center;gap:7px;font-size:11.5px;line-height:1.4;color:var(--dim)}
+  .prog .row b{font-size:12px;font-weight:650;color:var(--fg);letter-spacing:-.1px;flex:none}
+  .prog .row .ltext{display:flex;align-items:center;gap:7px;flex:1;min-width:0}
+  .prog .row .cur{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+  .prog .row .t{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;color:var(--dim);flex:none}
+  .prog .row .cv{flex:none;font-size:10px;color:var(--dim);opacity:.9}
+  .prog .pdot{width:6px;height:6px;border-radius:50%;background:var(--ok);flex:none;
+    box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 13%,transparent)}
+  .prog .pbar{height:2px;border-radius:2px;background:var(--line);margin-top:6px;overflow:hidden}
+  .prog .pbar i{display:block;height:100%;background:var(--ok);border-radius:2px}
+  .prog .pbar.indet i{width:32%;animation:pscan 1.3s cubic-bezier(.4,0,.2,1) infinite}
+  .prog.donefade{opacity:0;transition:opacity .5s ease}
+  @keyframes pscan{0%{transform:translateX(-110%)}55%{transform:translateX(170%)}100%{transform:translateX(360%)}}
+  /* F2：朗读条（与进度条同位置，二选一；运行中优先进度条） */
+  .prog .speak{display:flex;align-items:center;gap:8px;padding:0;font-size:11.5px;color:var(--dim)}
+  .prog .speak .wave{display:flex;align-items:center;gap:2px;height:12px}
+  .prog .speak .wave i{width:2px;border-radius:1px;background:var(--accent);opacity:.55}
+  .prog .speak .x{margin-left:auto;font-size:11px;color:var(--fg);font-weight:600;flex:none}
+  /* F2：按住说话的浮层（composer 上方，录音时替代进度条） */
+  .voice{display:none;flex-direction:column;background:var(--card);border:1px solid var(--line);
+    border-radius:20px;padding:14px 16px;margin-bottom:8px}
+  .voice .wv{display:flex;align-items:flex-end;justify-content:center;gap:3px;height:38px;margin-bottom:8px}
+  .voice .wv i{display:block;width:3px;border-radius:2px;background:var(--accent);opacity:.8}
+  .voice .hint{text-align:center;font-size:12px;color:var(--dim)}
+  .voice .hint b{color:var(--fg)}
+  /* F1：过程面板（底部 sheet） */
+  .stpsheet h2{font-size:15px;margin:0 0 2px}
+  .stpsheet .sm{font-size:11.5px;color:var(--dim);margin-bottom:12px}
+  .stpsheet .step{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);align-items:flex-start}
+  .stpsheet .step:last-of-type{border-bottom:0}
+  .stpsheet .sdot{width:16px;height:16px;border-radius:50%;flex:none;display:grid;place-items:center;
+    font-size:9px;margin-top:2px}
+  .stpsheet .sdot.done{background:color-mix(in srgb,var(--ok) 12%,transparent);color:var(--ok);font-weight:700}
+  .stpsheet .sdot.now{background:var(--ok);color:#fff}
+  .stpsheet .sdot.todo{border:1.5px solid var(--line);color:transparent}
+  .stpsheet .sdot.err{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad);font-weight:700}
+  .stpsheet .sdot.stop{background:var(--bubble);color:var(--dim)}
+  .stpsheet .step .tx{flex:1;font-size:13.5px;line-height:1.45}
+  .stpsheet .step .tx span{display:block;font-size:11px;color:var(--dim);margin-top:1px}
+  .stpsheet .step.now .tx{font-weight:600}
+  .stpsheet .step.todo .tx,.stpsheet .step.stop .tx{color:var(--dim)}
+  .stpsheet .sacts{display:flex;gap:10px;margin-top:14px}
+  .stpsheet .sacts .btn{border-radius:14px;padding:11px}
   /* 运行状态：跟在对话流末尾，不再挂在输入框下面 */
   .typing{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--dim);padding:8px 2px 10px;
     font-family:ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.02em}
@@ -632,7 +678,7 @@
   /* ---------- composer ---------- */
   .dock{padding:6px 12px calc(4px + var(--safe-b));background:var(--bg)}
   html.kb-open .dock{padding-bottom:0}
-  html.kb-open .streamline{display:none}
+  html.kb-open .streamline, html.kb-open .prog{display:none}
   /* 待发送附件 */
   .attach{display:none;gap:8px;padding:2px 2px 8px;overflow-x:auto;scrollbar-width:none}
   .attach::-webkit-scrollbar{display:none}
@@ -701,6 +747,19 @@
   .send{width:34px;height:34px;border-radius:50%;background:var(--accent);color:var(--accent-fg);display:grid;
     place-items:center;font-size:16px;flex:none;margin-left:auto;box-shadow:0 2px 8px color-mix(in srgb,var(--accent) 35%,transparent)}
   .send:disabled{opacity:.4;box-shadow:none}
+  /* 空输入时发送占位但不响应（麦克风常驻在它左边） */
+  .send.off{opacity:.35;pointer-events:none;box-shadow:none}
+  .mic{width:34px;height:34px;border-radius:50%;background:var(--bubble);color:var(--fg);
+    display:grid;place-items:center;font-size:16px;flex:none;border:1px solid var(--line);
+    user-select:none;-webkit-user-select:none;touch-action:none;-webkit-touch-callout:none;
+    -webkit-user-drag:none}
+  .mic.on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+  /* 线性图标（与 app 其它 icon 同一套 stroke 语言），不用 emoji */
+  .mic svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.8;
+    stroke-linecap:round;stroke-linejoin:round;display:block}
+  .mic.on svg{stroke-width:2}
+  .mact button .ic svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.7;
+    stroke-linecap:round;stroke-linejoin:round;display:block}
   .stop{width:34px;height:34px;border-radius:50%;background:var(--bubble);color:var(--bad);
     display:none;place-items:center;font-size:13px;flex:none;border:1px solid var(--line)}
   /* 回到底部：悬浮在输入框外部的右上角 */
@@ -1569,13 +1628,13 @@ function markSessionSeen(sessionId) {
   api('/api/mobile/v1/session/read', { method:'POST', body: { sessionId } }).catch(() => {});
 }
 
-function toast(msg) {
+function toast(msg, ms = 2200) {
   let t = document.querySelector('.toast');
   if (!t) { t = el('div', { class:'toast' }); document.body.append(t); }
   t.textContent = msg;
   t.classList.add('on');
   clearTimeout(toast._t);
-  toast._t = setTimeout(() => t.classList.remove('on'), 2200);
+  toast._t = setTimeout(() => t.classList.remove('on'), ms);
 }
 const getDrafts = () => { try { return JSON.parse(localStorage.getItem(LS.draft) || '{}'); } catch { return {}; } };
 const saveDraft = (sid, text) => {
@@ -1776,6 +1835,19 @@ const state = {
   busy: false,
   // 本轮开始的时间戳（0 = 没在跑，或这一轮是「打开时已经在跑」——那种不显示计时，免得从 0 起算误导）
   busySince: 0,
+  // F1 过程进度：本轮步骤 / 轮次 / 待办阶段。切会话、新一轮开始时清空，避免串台。
+  steps: [],
+  stepsTurn: null,
+  phase: null,
+  stepsDone: null,
+  stepsDoneFade: false,
+  // F2：语音输入 / 朗读。rec 是按住说话进行中的识别会话（手一松就清掉）
+  rec: null,
+  speaking: false,
+  speakIndex: 0,
+  speakTotal: 0,
+  speakMsgId: null,
+  autoReadPending: false,
   stream: 'idle',
   poll: null,
   lastPaint: 0,
@@ -2127,7 +2199,7 @@ function heroBackHeader(title, sub, back, action) {
 
 async function renderSubPage(wrap) {
   const page = state.subPage || 'conn';
-  const titles = { conn:'连接', push:'通知', pushdiag:'推送诊断', stats:'统计', about:'关于' };
+  const titles = { conn:'连接', push:'通知', pushdiag:'推送诊断', stats:'统计', voice:'语音', about:'关于' };
   const back = el('button', { class:'ico', html:sheetIconSVG('chevronLeft'), title:'返回设置', 'aria-label':'返回设置', onclick: () => {
     state.view = 'settings'; state.subPage = ''; render();
   }});
@@ -2199,6 +2271,28 @@ async function renderSubPage(wrap) {
     main.append(el('div', { class:'slabel', text:'其他' }), group(
       row('恢复链接', '粘一条带 token 的链接重新登录', '', openRecovery),
       row('重新加载', '清掉页面状态重新进入', '', reloadApp),
+    ));
+    return;
+  }
+
+  if (page === 'voice') {
+    const canRecog = !!speechRecogCtor();
+    const canSpeak = speechSynthOK();
+    main.append(el('div', { class:'slabel', text:'语音' }), group(
+      sw('按住说话', canRecog ? '允许长按麦克风说话'
+        : '这个浏览器没有语音识别（iOS 16.4 以下不支持）', speechHoldOn(), () => {
+          if (!canRecog) { toast('这个浏览器不支持语音识别'); return; }
+          setSpeechHold(!speechHoldOn()); render();
+        }),
+      sw('自动朗读回复', canSpeak ? '每轮回复完成后自动朗读，随时可以停止'
+        : '这个浏览器不支持朗读', speechAutoOn(), () => {
+          if (!canSpeak) { toast('这个浏览器不支持朗读'); return; }
+          setSpeechAuto(!speechAutoOn()); render();
+        }),
+    ));
+    main.append(el('div', { class:'slabel', text:'说明' }), group(
+      row('识别', '浏览器原生识别（iOS 走系统听写，不经过电脑）', '', null),
+      row('朗读', '按句切分播放并显示第几段；切后台自动停', '', null),
     ));
     return;
   }
@@ -2369,6 +2463,11 @@ function renderSettings(wrap) {
     row('皮肤', '纸面 / 碳黑', skin, openSkinSheet),
     row('主题', '跟随系统 / 浅色 / 深色', theme, openThemeSheet),
   ]));
+  main.append(el('div', { class:'slabel', text:'语音' }), card([
+    row('语音', '按住说话、自动朗读回复',
+      speechHoldOn() && speechAutoOn() ? '都开' : speechHoldOn() ? '按住说话' : speechAutoOn() ? '自动朗读' : '',
+      () => { state.view = 'sub'; state.subPage = 'voice'; render(); }),
+  ]));
   main.append(el('div', { class:'slabel', text:'通知' }), card([
     sw('通知提醒', pushLabel, facts.push === 'on', async () => {
       if (facts.push === 'on') await disablePush(); else await enablePush();
@@ -2393,6 +2492,8 @@ function renderSettings(wrap) {
   wrap.append(main);
 }
 function render() {
+  // 离开会话就收掉朗读/录音，别在列表页还有声音
+  if (state.view !== 'session') { stopSpeak(); cancelVoiceInput(); }
   root.replaceChildren();
   if (!state.token) return renderPair();
   try {
@@ -2705,7 +2806,7 @@ function renderNewSession(wrap) {
       openSession(found || { sessionId: r.sessionId, title: '新会话', running: false });
       // 等会话页渲染出输入框，再把第一条塞进去发（send 是 renderSession 里的闭包，走 ui.send）
       await new Promise(res => setTimeout(res, 80));
-      if (ui.ta && ui.send) { ui.ta.textContent = text; await ui.send(); }
+      if (ui.ta && ui.send) { ui.ta.textContent = text; ui.syncInputButtons?.(); await ui.send(); }
       else toast('已建会话，但没能自动发出第一条，请手动粘贴');
     } catch (e) {
       toast('新建失败：' + (e.message || e));
@@ -4519,7 +4620,7 @@ function renderList(wrap, opts = {}) {
 // 会话页的「增量渲染」骨架：header / 列表 / 卡片 / composer 各建一次，
 // 之后只动列表和卡片，输入框不会因为来帧而重建（否则会丢焦点、丢输入）。
 let ui = { sessionId:null, body:null, listWrap:null, cardsWrap:null, ta:null, sendBtn:null, strip:null, dot:null, sig:'',
-  atBottom: true };
+  progSig:'', atBottom: true };
 
 // 大图查看器：双指缩放（1–5x）、放大后单指拖动、双击切换、桌面滚轮缩放。
 // 关键点：
@@ -5020,11 +5121,484 @@ function syncBusyTicker() {
   if (want && !busyTicker) {
     busyTicker = setInterval(() => {
       if (!state.busy || !ui.strip) { clearInterval(busyTicker); busyTicker = null; return; }
-      if (state.stream === 'open') ui.strip.textContent = busyText();
+      if (state.stream === 'open') paintProg();
     }, 1000);
   } else if (!want && busyTicker) {
     clearInterval(busyTicker); busyTicker = null;
   }
+}
+
+// ---------------------------------------------------------------- F1 过程进度
+// 数据全部来自宿主：session/live-steps（步骤）与 todo_write.phase（第几/共几/那步叫什么）。
+// 前端只做合并与降级：拿不到 phase 就不显示总步数，绝不编造 total。
+let stepsSheetRefresh = null, stepsSheetRefreshAt = 0;
+function refreshStepsSheet(force = false) {
+  if (!stepsSheetRefresh) return;
+  const now = Date.now();
+  if (!force && now - stepsSheetRefreshAt < 500) return;
+  stepsSheetRefreshAt = now;
+  try { stepsSheetRefresh(); } catch {}
+}
+
+function resetSteps() {
+  state.steps = []; state.stepsTurn = null; state.phase = null;
+  state.stepsDone = null; state.stepsDoneFade = false;
+  clearTimeout(finishSteps._fadeTimer);
+  clearTimeout(finishSteps._clearTimer);
+  if (ui) ui.progSig = '';
+}
+
+function normPhase(p) {
+  if (!p || typeof p !== 'object') return null;
+  const total = Math.max(0, Number(p.total) || 0);
+  if (!total) return null;
+  const index = Math.max(0, Math.min(total, Number(p.index) || 0));
+  return { index, total, label: String(p.label || '') };
+}
+// 兼容几种下发形状：block.phase / block.details.phase / block.result.phase
+function phaseOfTodoBlock(b) {
+  if (!b || typeof b !== 'object' || b.name !== 'todo_write') return null;
+  return normPhase(b.phase) || normPhase(b.details && b.details.phase) || normPhase(b.result && b.result.phase);
+}
+// session/event 里工具块可能埋在 event.data / message.blocks 里：只做有界深搜，找到最后一处
+function findTodoPhase(obj, depth = 0) {
+  if (!obj || typeof obj !== 'object' || depth > 7) return null;
+  if (Array.isArray(obj)) {
+    let hit = null;
+    for (const x of obj) hit = findTodoPhase(x, depth + 1) || hit;
+    return hit;
+  }
+  const direct = phaseOfTodoBlock(obj);
+  if (direct) return direct;
+  let hit = null;
+  for (const k of Object.keys(obj)) {
+    if (k === 'phase') continue;
+    const v = obj[k];
+    if (v && typeof v === 'object') hit = findTodoPhase(v, depth + 1) || hit;
+  }
+  return hit;
+}
+function phaseFromMessages(msgs, turn = null) {
+  let hit = null;
+  for (const m of msgs || []) {
+    // 指定轮次时只认这一轮的消息：别把上一轮的 todo_write 当成当前轮的进度
+    if (turn != null) {
+      const t = Number(m && m.turn);
+      if (!Number.isFinite(t) || t !== Number(turn)) continue;
+    }
+    for (const b of (m.blocks || [])) {
+      const p = phaseOfTodoBlock(b);
+      if (p) hit = p;
+    }
+  }
+  return hit;
+}
+const samePhase = (a, b) => !!a && !!b && a.index === b.index && a.total === b.total && a.label === b.label;
+
+// full=true 整份替换；full=false 同 key 覆盖、新的追加；turn 变了按轮隔离。
+function applyLiveSteps(f) {
+  if (!f || (f.sessionId && f.sessionId !== state.sessionId)) return;
+  const list = Array.isArray(f.steps) ? f.steps : [];
+  const turn = f.turn == null ? null : f.turn;
+  const turnChanged = turn != null && state.stepsTurn != null && turn !== state.stepsTurn;
+  if (f.full || turnChanged) {
+    state.steps = [];
+    state.stepsTurn = turn;
+  } else if (turn != null) {
+    state.stepsTurn = turn;
+  }
+  for (const it of list) {
+    if (!it || it.key == null) continue;
+    const key = String(it.key);
+    const step = it.step || {};
+    const cur = state.steps.find(x => x.key === key);
+    if (cur) {
+      cur.step = step;
+      if (step.state === 'running' && !cur._at) cur._at = Date.now();
+    } else {
+      state.steps.push({ key, step, _at: step.state === 'running' ? Date.now() : 0 });
+    }
+  }
+  // 有新的步骤帧 = 新一轮还在跑，旧的一轮完成提示作废
+  state.stepsDone = null;
+  state.stepsDoneFade = false;
+  clearTimeout(finishSteps._fadeTimer);
+  clearTimeout(finishSteps._clearTimer);
+  refreshStepsSheet();
+}
+
+function stepSummary(it) {
+  const s = (it && it.step) || {};
+  return String(s.summary || s.name || (s.kind === 'think' ? '思考中' : '执行中'));
+}
+function currentStep() {
+  const list = state.steps || [];
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (list[i].step && list[i].step.state === 'running') return list[i];
+  }
+  return list[list.length - 1] || null;
+}
+const progElapsed = () => state.busySince ? fmtElapsed(Date.now() - state.busySince) : '';
+
+// 一轮结束：先收成一行「已完成 · N 步 · 2:03」，3 秒后淡出，不长期占位
+function finishSteps() {
+  const count = state.steps.length
+    ? (state.phase && state.phase.total ? state.phase.total : state.steps.length)
+    : 0;
+  if (!count) return;
+  const ms = state.busySince ? Date.now() - state.busySince : 0;
+  state.stepsDone = { count, ms, at: Date.now() };
+  state.stepsDoneFade = false;
+  clearTimeout(finishSteps._fadeTimer);
+  clearTimeout(finishSteps._clearTimer);
+  finishSteps._fadeTimer = setTimeout(() => {
+    state.stepsDoneFade = true;
+    paintProg(true);
+  }, 2500);
+  finishSteps._clearTimer = setTimeout(() => {
+    state.stepsDone = null;
+    state.stepsDoneFade = false;
+    // 面板还开着就留着数据；关掉后下一次整份快照会覆盖
+    if (!stepsSheetRefresh) { state.steps = []; state.stepsTurn = null; }
+    paintProg(true);
+    refreshStepsSheet(true);
+  }, 3000);
+}
+
+// 一轮开始/结束：turn/start、turn/end 在两种帧形状下都走同一套状态
+function beginTurn() {
+  // 新一轮：上一轮的步骤和 phase 全部清掉；模型写 todo_write 之前不沿用旧 index/total
+  state.steps = []; state.stepsTurn = null;
+  state.phase = null;
+  state.stepsDone = null; state.stepsDoneFade = false;
+  state.autoReadPending = false;
+  clearTimeout(finishSteps._fadeTimer); clearTimeout(finishSteps._clearTimer);
+  markBusy(true);
+  if (ui.stopBtn) ui.stopBtn.style.display = 'grid';
+  paintProg(true);
+  syncBusyTicker();
+}
+function endTurn() {
+  if (speechAutoOn()) state.autoReadPending = true;
+  finishSteps();
+  markBusy(false);
+  if (ui.stopBtn) ui.stopBtn.style.display = 'none';
+  paintProg(true);
+}
+
+async function stopRun() {
+  if (!state.sessionId) return;
+  if (!confirm('中断这次运行？')) return;
+  try {
+    await api('/api/mobile/v1/session/stop', { method:'POST', body: { sessionId: state.sessionId } });
+    markBusy(false); paintProg(true); paintSession();
+  } catch (e) { toast('取消失败：' + (e.message || e)); }
+}
+
+// dock 里那一条：运行中显示步数 + 当前动作 + 进度条；断线 / 完成各有降级
+function paintProg(force = false) {
+  if (!ui || !ui.strip || state.view !== 'session') return;
+  const strip = ui.strip;
+  // 按住说话时整条让位给语音浮层（设计稿 ③）
+  if (ui.voiceBar) ui.voiceBar.style.display = state.rec ? 'flex' : 'none';
+  if (state.rec) {
+    if (ui.progSig !== 'none') {
+      strip.replaceChildren();
+      strip.className = 'streamline prog';
+      ui.progSig = 'none';
+    }
+    return;
+  }
+  let mode = 'none';
+  if (state.stream && state.stream !== 'open') mode = 'offline';
+  else if (state.busy) mode = 'run';
+  else if (state.speaking) mode = 'speak';
+  else if (state.stepsDone) mode = 'done';
+  if (mode === 'none') {
+    if (ui.progSig !== 'none') {
+      strip.replaceChildren();
+      strip.className = 'streamline prog';
+      ui.progSig = 'none';
+    }
+    return;
+  }
+  const cur = currentStep();
+  const phase = state.phase;
+  const total = phase && phase.total ? phase.total : 0;
+  const idx = phase && phase.index ? phase.index : 0;
+  const sig = mode === 'offline' ? 'offline'
+    : mode === 'run'
+      ? `run|${state.busySince ? 1 : 0}|${total}|${idx}|${state.steps.map(x => x.key + ':' + ((x.step && x.step.state) || '')).join(',')}|${cur ? stepSummary(cur) : ''}`
+      : mode === 'speak' ? `speak|${state.speakIndex}|${state.speakTotal}`
+      : `done|${state.stepsDone.count}|${state.stepsDone.ms}`;
+  if (!force && sig === ui.progSig) {
+    const t = strip.querySelector('.t');
+    if (t) {
+      const v = progElapsed();
+      if (t.textContent !== v) t.textContent = v;
+    }
+    refreshStepsSheet();
+    return;
+  }
+  ui.progSig = sig;
+  strip.className = 'streamline prog' + (mode === 'done' && state.stepsDoneFade ? ' donefade' : '');
+  strip.replaceChildren();
+  if (mode === 'offline') {
+    strip.append(el('div', { class:'row' }, el('span', { class:'cur', text:'实时连接断开，重连中…' })));
+  } else if (mode === 'run') {
+    const label = total ? `第 ${idx || 1}/${total} 步` : `已跑 ${state.steps.length} 步`;
+    const summary = cur ? stepSummary(cur) : (state.steps.length ? '' : '深度求索中…');
+    const live = el('span', { class:'ltext', 'aria-live':'polite' },
+      el('b', { text: label }),
+      summary ? el('span', { class:'cur', text: summary }) : null);
+    const open = () => openStepsSheet();
+    const row = el('div', {
+      class:'row', role:'button', tabindex:'0', title:'查看这一轮的步骤',
+      onclick: open,
+      onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } },
+    },
+      el('span', { class:'pdot' }), live,
+      el('span', { class:'t', text: progElapsed() }), el('span', { class:'cv', text:'⌃' }));
+    const bar = el('div', { class:'pbar' + (total ? '' : ' indet') });
+    const fill = el('i');
+    if (total) fill.style.width = Math.round(((idx || 1) / total) * 100) + '%';
+    bar.append(fill);
+    strip.append(row, bar);
+  } else if (mode === 'speak') {
+    strip.append(el('div', { class:'speak' },
+      el('span', { class:'wave' }, ...[6, 11, 8, 12, 5].map(h => el('i', { style:`height:${h}px` }))),
+      el('span', { text:`正在朗读 · 第 ${state.speakIndex}/${state.speakTotal} 段` }),
+      el('button', { class:'x', text:'停止', onclick: () => stopSpeak() })));
+  } else {
+    const d = state.stepsDone || { count: 0, ms: 0 };
+    strip.append(el('div', { class:'row' },
+      el('span', { class:'pdot' }),
+      el('span', { class:'ltext', 'aria-live':'polite' },
+        el('b', { text: `已完成 · ${d.count} 步${d.ms ? ' · ' + fmtElapsed(d.ms) : ''}` }))));
+  }
+  refreshStepsSheet();
+}
+
+// 过程面板：列出全部步骤；有 phase 时按总数补「未开始」
+function openStepsSheet() {
+  if (state.view !== 'session' || !ui.strip) return;
+  const mask = el('div', { class:'mask', onclick: (e) => { if (e.target === mask) close(); } });
+  const sheet = el('div', { class:'sheet stpsheet', role:'dialog', 'aria-modal':'true', tabindex:'-1' });
+  const head = el('div');
+  const list = el('div', { class:'stplist' });
+  const acts = el('div', { class:'sacts' });
+  sheet.append(el('div', { class:'grab' }), head, list, acts);
+
+  function renderBody() {
+    const phase = state.phase;
+    const total = phase && phase.total ? phase.total : 0;
+    const n = state.steps.length;
+    const done = state.stepsDone;
+    const ms = done ? done.ms : (state.busySince ? Date.now() - state.busySince : 0);
+    const spent = ms ? `已跑 ${fmtElapsed(ms)}` : `已跑 ${n} 步`;
+    let sub = spent + ' · 进行中';
+    if (done) sub = `${spent} · 已完成`;
+    else if (state.busy && phase && phase.index) sub = `${spent} · 第 ${phase.index} 步进行中`;
+    head.replaceChildren(
+      el('h2', { text: total ? `这一轮 · ${total} 步` : `已跑 ${n} 步` }),
+      el('div', { class:'sm', text: sub }));
+    list.replaceChildren();
+    let shown = 0;
+    for (const it of state.steps) {
+      const s = it.step || {};
+      const cls = s.state === 'ok' ? 'done' : s.state === 'running' ? 'now'
+        : s.state === 'error' ? 'err' : s.state === 'stopped' ? 'stop' : 'todo';
+      const dot = s.state === 'ok' ? '✓' : s.state === 'running' ? '●' : s.state === 'error' ? '!' : '·';
+      const subline = s.state === 'running'
+        ? `进行中${it._at ? ' ' + fmtElapsed(Date.now() - it._at) : ''}`
+        : s.state === 'ok' ? '完成' : s.state === 'error' ? '失败' : s.state === 'stopped' ? '已停止' : '未开始';
+      list.append(el('div', { class:'step ' + cls },
+        el('div', { class:'sdot ' + cls, text: dot }),
+        el('div', { class:'tx' },
+          el('div', { text: stepSummary(it) }),
+          el('span', { text: subline }))));
+      shown++;
+    }
+    for (let i = shown; i < total; i++) {
+      list.append(el('div', { class:'step todo' },
+        el('div', { class:'sdot todo', text:'·' }),
+        el('div', { class:'tx' }, el('div', { text: `第 ${i + 1} 步` }), el('span', { text:'未开始' }))));
+    }
+    if (!shown && !total) list.append(el('div', { class:'sm', text:'这一轮还没有步骤' }));
+    acts.replaceChildren(...[
+      el('button', { class:'btn', text:'收起', onclick: close }),
+      state.busy ? el('button', { class:'btn primary', text:'停止这一轮', onclick: () => { close(); stopRun(); } }) : null,
+    ].filter(Boolean));
+  }
+  function onKey(e) {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+  }
+  function close() {
+    document.removeEventListener('keydown', onKey, true);
+    if (stepsSheetRefresh === renderBody) stepsSheetRefresh = null;
+    mask.remove();
+    paintProg(true);
+  }
+  document.addEventListener('keydown', onKey, true);
+  stepsSheetRefresh = renderBody;
+  stepsSheetRefreshAt = 0;
+  renderBody();
+  mask.append(sheet);
+  document.body.append(mask);
+  requestAnimationFrame(() => { try { sheet.focus({ preventScroll: true }); } catch {} });
+}
+
+// ---------------------------------------------------------------- F2 语音 / 朗读
+const SPEECH_HOLD_KEY = 'dsh.speech.hold';
+const SPEECH_AUTO_KEY = 'dsh.speech.auto';
+function speechHoldOn() {
+  try {
+    const v = localStorage.getItem(SPEECH_HOLD_KEY);
+    return v == null ? true : v === '1';   // 默认开；只有明确写 '0' 才算关
+  } catch { return true; }
+}
+function setSpeechHold(v) { try { localStorage.setItem(SPEECH_HOLD_KEY, v ? '1' : '0'); } catch {} }
+function speechAutoOn() { try { return localStorage.getItem(SPEECH_AUTO_KEY) === '1'; } catch { return false; } }
+function setSpeechAuto(v) { try { localStorage.setItem(SPEECH_AUTO_KEY, v ? '1' : '0'); } catch {} }
+function speechRecogCtor() {
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+}
+function speechSynthOK() {
+  return typeof window !== 'undefined' && 'speechSynthesis' in window
+    && typeof window.SpeechSynthesisUtterance === 'function';
+}
+let speechDeniedShown = false;
+let speakState = null;
+let speechPrimed = false;
+// iOS 要求第一次 speak 由用户手势触发；自动朗读没有手势，先在首次点按时用一条静音
+// utterance 解锁（只在没有任何朗读时做，避免打断正在播的）。
+function primeSpeech() {
+  if (speechPrimed || !speechSynthOK() || state.speaking) return;
+  speechPrimed = true;
+  try {
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0;
+    window.speechSynthesis.speak(u);
+    setTimeout(() => {
+      try { if (!state.speaking && !speakState) window.speechSynthesis.cancel(); } catch {}
+    }, 0);
+  } catch {}
+}
+document.addEventListener('pointerdown', primeSpeech, { once: true, capture: true });
+
+// 按句切分：。！？!? 与换行都算边界，标点留在本段（不引 lookbehind，照顾旧 WebView）
+function splitSentences(text) {
+  const s = String(text || '').replace(/\r/g, '').trim();
+  if (!s) return [];
+  const parts = s.split(/((?:[。！？!?]|\n)+)/);
+  const out = [];
+  for (let i = 0; i < parts.length; i += 2) {
+    const t = (parts[i] + (parts[i + 1] || '')).trim();
+    if (t) out.push(t);
+  }
+  return out;
+}
+// 朗读不要把 markdown 符号念出来；代码块只播一句占位
+function speechPlain(s) {
+  return String(s || '')
+    .replace(/```[\s\S]*?```/g, ' 代码块 ')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/^\s{0,3}#{1,6}\s*/gm, '')
+    .replace(/[*_~|>]/g, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function speakBtnHtml(on) {
+  const svg = sheetIconSVG(on ? 'square' : 'speaker');
+  return (svg ? '<span class="ic">' + svg + '</span>' : '') + '<span class="lb">' + (on ? '停止朗读' : '朗读') + '</span>';
+}
+
+function syncSpeakButtons() {
+  for (const b of document.querySelectorAll('[data-speak-mid]')) {
+    const on = !!(state.speaking && state.speakMsgId === b.getAttribute('data-speak-mid'));
+    b.innerHTML = speakBtnHtml(on);
+  }
+}
+
+function stopSpeak() {
+  if (!state.speaking && !speakState) return;
+  speakState = null;
+  state.speaking = false;
+  state.speakIndex = 0;
+  state.speakTotal = 0;
+  state.speakMsgId = null;
+  try { window.speechSynthesis.cancel(); } catch {}
+  syncSpeakButtons();
+  paintProg(true);
+}
+
+function nextSpeakChunk() {
+  const st = speakState;
+  if (!st) return;
+  st.i++;
+  if (st.i >= st.chunks.length) { stopSpeak(); return; }
+  state.speakIndex = st.i + 1;
+  paintProg(true);
+  const u = new SpeechSynthesisUtterance(st.chunks[st.i]);
+  u.lang = 'zh-CN';
+  u.rate = 1;
+  u.onend = () => { if (speakState === st) nextSpeakChunk(); };
+  u.onerror = () => { if (speakState === st) stopSpeak(); };
+  try { window.speechSynthesis.speak(u); } catch { stopSpeak(); }
+}
+
+function speakText(text, msgId) {
+  if (!speechSynthOK()) { toast('这个浏览器不支持朗读'); return; }
+  const chunks = splitSentences(speechPlain(text));
+  if (!chunks.length) { toast('这条消息没有可朗读的文字'); return; }
+  stopSpeak();
+  speakState = { chunks, i: -1 };
+  state.speaking = true;
+  state.speakTotal = chunks.length;
+  state.speakIndex = 1;
+  state.speakMsgId = msgId == null ? null : String(msgId);
+  syncSpeakButtons();
+  paintProg(true);
+  nextSpeakChunk();
+}
+
+function assistantSpeechBody(m) {
+  if (!m || m.role === 'user') return '';
+  const blocks = m.blocks || [];
+  const txt = (m.text && m.text.trim())
+    ? m.text
+    : blocks.filter(b => b.type === 'text' && b.text).map(b => b.text).join('\n');
+  return String(txt || '').trim();
+}
+// 一轮结束后自动读最新一条回复（设置里默认关闭）
+function autoReadLatest(items) {
+  if (!speechSynthOK() || !speechAutoOn()) return;
+  if (document.visibilityState !== 'visible') return;
+  for (let i = (items || []).length - 1; i >= 0; i--) {
+    const m = items[i];
+    if (!m) continue;
+    if (m.role === 'user') break;
+    const body = assistantSpeechBody(m);
+    if (body) { speakText(body, m.id); return; }
+  }
+}
+
+// 切走 / 切后台时收掉还没松手的识别（录音不能带到别的会话）
+function cancelVoiceInput() {
+  const rec = state.rec;
+  if (!rec) return;
+  rec.cancelled = true;
+  state.rec = null;
+  try { rec.recog.abort(); } catch {}
+  if (ui && ui.ta && typeof rec.base === 'string') { try { ui.ta.textContent = rec.base; } catch {} }
+  if (ui && ui.voiceBar) ui.voiceBar.style.display = 'none';
+  if (ui && ui.micBtn) ui.micBtn.classList.remove('on');
+  try { ui && ui.syncInputButtons && ui.syncInputButtons(); } catch {}
+  paintProg(true);
 }
 
 function paintSession({ scroll = 'auto' } = {}) {
@@ -5155,13 +5729,10 @@ function paintSession({ scroll = 'auto' } = {}) {
         el('button', { class:'qmini', text:'保存', onclick: saveQueueEdit }));
     }
   }
-  if (ui.sendBtn) ui.sendBtn.disabled = !!state.sending || (state.pending || []).some(a => a.uploading) || !!queueEditing;
-  // 运行状态只保留 dock 里这一份；对话流末尾不再重复一次
-  if (ui.strip) {
-    ui.strip.textContent = state.stream === 'open'
-      ? busyText()
-      : (state.stream ? '实时连接断开，重连中…' : '');
-  }
+  if (ui.syncSendState) ui.syncSendState();
+  else if (ui.sendBtn) ui.sendBtn.disabled = !!state.sending || (state.pending || []).some(a => a.uploading) || !!queueEditing;
+  // 运行状态只保留 dock 里这一条（F1：步数 / 进度条 / 完成提示都在 paintProg 里）
+  paintProg();
   syncBusyTicker();
   if (scroll === 'bottom' || atBottom) {
     ui.atBottom = true;
@@ -5178,6 +5749,7 @@ function paint() {
 }
 
 function renderSession(wrap) {
+  if (state.rec) cancelVoiceInput();
   const back = el('button', { class:'ico', text:'‹', title:'返回会话列表', onclick: () => {
     try { state.live && state.live.close(); } catch {}
     clearInterval(state.poll);
@@ -5286,11 +5858,11 @@ function renderSession(wrap) {
     expandingHistory = false;
   }, { passive: true });
 
-  const strip = el('div', { class:'streamline' });
+  const strip = el('div', { class:'streamline prog' });
   const ta = el('div', { class:'ta', contenteditable:'true', role:'textbox', 'aria-multiline':'true',
     'data-ph':'发消息或创建任务，/ 调用指令，@ 文件或对话' });
   const getText = () => (ta.innerText || '').replace(/\u00a0/g, ' ').replace(/\n$/, '');
-  const clearText = () => { ta.textContent = ''; ta.style.height = 'auto'; };
+  const clearText = () => { ta.textContent = ''; ta.style.height = 'auto'; try { syncInputButtons(); } catch {} };
   const caretToEnd = () => {
     try {
       const r = document.createRange(); r.selectNodeContents(ta); r.collapse(false);
@@ -5335,6 +5907,7 @@ function renderSession(wrap) {
       return show(hits.map(c => el('div', { class:'sitem', onclick: () => {
         ta.textContent = `/${c.name} `;
         slashBox.replaceChildren(); slashBox.style.display = 'none';
+        syncInputButtons();
         ta.focus(); caretToEnd();
       }}, el('b', { text: `/${c.name}` }), c.description ? el('span', { class:'sdesc', text: c.description }) : null)));
     }
@@ -5372,12 +5945,14 @@ function renderSession(wrap) {
           const nextDir = dirPart ? `${dirPart}/${e.name}` : e.name;
           ta.textContent = `${before}${prefix}@${nextDir}/`;
           ta.focus(); caretToEnd();
+          syncInputButtons();
           updateHints();
           return;
         }
         const ref = /\s/.test(e.path) ? `"${e.path}"` : e.path;
         ta.textContent = `${before}${prefix}${ref} `;
         slashBox.replaceChildren(); slashBox.style.display = 'none';
+        syncInputButtons();
         ta.focus(); caretToEnd();
       }},
         el('b', { text: (e.kind === 'folder' ? '📁 ' : '📄 ') + e.name }),
@@ -5388,6 +5963,7 @@ function renderSession(wrap) {
   }
   ta.addEventListener('input', () => {
     updateHints();
+    syncInputButtons();
     clearTimeout(ta._ht);
     ta._ht = setTimeout(updateHints, 260);   // 兜底：等异步列表回来后再刷一次
     clearTimeout(ta._dt);
@@ -5398,6 +5974,168 @@ function renderSession(wrap) {
   const draft = getDrafts()[state.sessionId];
   if (draft) ta.textContent = draft;
   const sendBtn = el('button', { class:'send', text:'↑', onclick: () => send() });
+
+  // ---- F2 按住说话 ----
+  // 能力存在就常驻麦克风（不再按设置隐藏）；dsh.speech.hold 只决定「按住是否启动识别」。
+  const speechCtor = speechRecogCtor();
+  const voiceBar = el('div', { class:'voice' },
+    el('div', { class:'wv' }, ...[10, 22, 34, 18, 30, 38, 24, 14, 28, 36, 20, 12].map(h => el('i', { style:`height:${h}px` }))),
+    el('div', { class:'hint' }));
+  const micBtn = speechCtor
+    ? el('button', { class:'mic', type:'button', html: sheetIconSVG('mic'), title:'按住说话', 'aria-label':'按住说话' })
+    : null;
+
+  function setVoiceHint(cancel) {
+    const hint = voiceBar.querySelector('.hint');
+    if (!hint) return;
+    hint.replaceChildren();
+    if (cancel) hint.append(document.createTextNode('松开取消'));
+    else hint.append(document.createTextNode('松开结束 · '), el('b', { text:'上滑取消' }));
+  }
+  setVoiceHint(false);
+
+  // 🎙 和 ↑ 常驻：空输入时 ↑ 半透明不响应，有文字/附件时 ↑ 正常；麦克风一直可见，
+  // 但输入非空或设置关掉「按住说话」时按住不启动识别（静默）。
+  let composerHasText = false;
+  function syncSendDisabled() {
+    const blocked = !!state.sending || (state.pending || []).some(a => a.uploading) || !!queueEditing;
+    sendBtn.disabled = blocked || !composerHasText;
+    sendBtn.classList.toggle('off', !composerHasText);
+  }
+  function syncInputButtons() {
+    composerHasText = !!getText().trim() || !!(state.pending || []).length;
+    if (micBtn) {
+      const rec = !!(state.rec && state.rec.sid === state.sessionId);
+      const holdOn = speechHoldOn();
+      micBtn.title = !holdOn ? '按住说话已在设置里关闭'
+        : rec ? '松开结束，上滑取消'
+        : composerHasText ? '请先清空输入' : '按住说话';
+      micBtn.setAttribute('aria-disabled', (!holdOn || (composerHasText && !rec)) ? 'true' : 'false');
+    }
+    syncSendDisabled();
+    if (ui && ui.sessionId === state.sessionId) ui.hasText = composerHasText;
+  }
+
+  function applyVoiceText(rec) {
+    if (!rec || !rec.transcript) return;
+    const base = rec.base || '';
+    const sep = base && !/\s$/.test(base) ? ' ' : '';
+    ta.textContent = base + sep + rec.transcript;
+    try { caretToEnd(); } catch {}
+    syncInputButtons();
+  }
+
+  function finishVoice(doSend) {
+    const rec = state.rec;
+    if (!rec) return;
+    state.rec = null;
+    try { rec.recog.abort(); } catch {}
+    if (micBtn) micBtn.classList.remove('on');
+    setVoiceHint(false);
+    if (rec.cancelled || !String(rec.transcript || '').trim()) {
+      // 取消 / 没识别出字：把输入框还给用户原来的内容
+      ta.textContent = rec.base || '';
+      saveDraft(state.sessionId, getText());
+    } else {
+      applyVoiceText(rec);
+      saveDraft(state.sessionId, getText());
+      // 2026-11-25 用户决策：松手**不自动发送**——识别结果只落进输入框，留给用户改完再按 ↑。
+      try { ta.focus(); caretToEnd(); } catch {}
+    }
+    syncInputButtons();
+    paintProg(true);
+  }
+
+  if (micBtn) {
+    micBtn.addEventListener('pointerdown', (e) => {
+      if (state.rec) return;
+      if (e.button != null && e.button !== 0) return;
+      // 设置关掉、或输入框已有文字/附件：静默忽略，不启动识别也不报错
+      if (!speechHoldOn()) return;
+      if (getText().trim() || (state.pending || []).length) return;
+      e.preventDefault();
+      try { micBtn.setPointerCapture(e.pointerId); } catch {}
+      const Ctor = speechRecogCtor();
+      if (!Ctor) return;
+      const recog = new Ctor();
+      recog.lang = /^zh/i.test(navigator.language || '') ? navigator.language : 'zh-CN';
+      recog.interimResults = true;
+      recog.continuous = false;
+      recog.maxAlternatives = 1;
+      const rec = {
+        recog, base: getText(), transcript: '', cancelled: false, released: false, ended: false,
+        sid: state.sessionId, startY: e.clientY, pointerId: e.pointerId,
+      };
+      state.rec = rec;
+      micBtn.classList.add('on');
+      setVoiceHint(false);
+      syncInputButtons();
+      paintProg(true);
+      recog.onresult = (ev) => {
+        let out = '';
+        for (let i = 0; i < ev.results.length; i++) {
+          const r = ev.results[i];
+          if (r && r[0]) out += r[0].transcript;
+        }
+        rec.transcript = out;
+        applyVoiceText(rec);
+      };
+      recog.onerror = (ev) => {
+        const code = String((ev && ev.error) || '');
+        if (code === 'aborted') return;
+        rec.cancelled = true;
+        if (code === 'not-allowed' || code === 'service-not-allowed') {
+          if (!speechDeniedShown) {
+            speechDeniedShown = true;
+            toast('没有麦克风权限，可在 设置 → Safari → 麦克风 打开', 6000);
+          }
+        } else if (code === 'no-speech') {
+          toast('没有听清，再说一次');
+        } else {
+          toast('语音识别失败：' + (code || '未知错误'));
+        }
+        try { recog.abort(); } catch {}
+      };
+      recog.onend = () => {
+        rec.ended = true;
+        if (rec.cancelled) { finishVoice(false); return; }
+        if (rec.released) finishVoice(true);
+      };
+      try { recog.start(); }
+      catch (err) {
+        state.rec = null;
+        micBtn.classList.remove('on');
+        setVoiceHint(false);
+        syncInputButtons();
+        paintProg(true);
+        toast('语音识别启动失败');
+      }
+    });
+    micBtn.addEventListener('pointermove', (e) => {
+      const rec = state.rec;
+      if (!rec || rec.pointerId !== e.pointerId) return;
+      // 上滑 44px 进入取消态，滑回来可以恢复
+      if (rec.startY - e.clientY > 44) {
+        if (!rec.cancelled) { rec.cancelled = true; setVoiceHint(true); }
+      } else if (rec.cancelled) {
+        rec.cancelled = false; setVoiceHint(false);
+      }
+    });
+    const endHold = (e) => {
+      const rec = state.rec;
+      if (!rec || (e && rec.pointerId !== e.pointerId)) return;
+      try { micBtn.releasePointerCapture(e.pointerId); } catch {}
+      if (rec.cancelled) { finishVoice(false); return; }
+      rec.released = true;
+      if (rec.ended) { finishVoice(true); return; }
+      try { rec.recog.stop(); } catch { finishVoice(true); }
+    };
+    micBtn.addEventListener('pointerup', endHold);
+    micBtn.addEventListener('pointercancel', () => { if (state.rec) finishVoice(false); });
+    micBtn.addEventListener('contextmenu', (e) => e.preventDefault());
+    micBtn.addEventListener('dragstart', (e) => e.preventDefault());
+  }
+  syncInputButtons();
 
   // 待发送附件（缩略图）——选完先挂着，能和文字一起发
   const attach = el('div', { class:'attach' });
@@ -5439,8 +6177,8 @@ function renderSession(wrap) {
       }
       attach.append(chip);
     }
-    // 还有没传完（或正在发送）就不让重复点
-    sendBtn.disabled = !!state.sending || state.pending.some(a => a.uploading);
+    // 附件增减也会改变发送可用态（有附件时即使没文字也能发）
+    try { syncInputButtons(); } catch {}
   }
 
 
@@ -5452,6 +6190,8 @@ function renderSession(wrap) {
     const text = getText().trim();
     const atts = state.pending.slice();
     if ((!text && !atts.length) || sendBtn.disabled) return;
+    if (state.speaking) stopSpeak();   // 发新消息时自动停朗读，不叠两路声音
+    state.autoReadPending = false;     // 用户又发了，上一轮回复不再自动读
     state.sending = true;
     sendBtn.disabled = true;
 
@@ -5472,8 +6212,6 @@ function renderSession(wrap) {
         a.file = null;
       } catch (e) {
         a.uploading = false; state.sending = false;
-        const curSend = document.querySelector('.send');
-        if (curSend) curSend.disabled = false;
         if (sameSession()) { renderAttach(); toast('附件上传失败：' + (e.message || e)); }
         else { saveDraft(sid, text); toast('附件上传失败（原会话）：' + (e.message || e)); }
         return;   // 中止发送，内容与附件都还留在原地
@@ -5518,7 +6256,7 @@ function renderSession(wrap) {
       if (sameSession()) {
         state.messages = state.messages.filter(m => m.id !== tmp.id);
         // 发送失败要把内容和附件还回去：网络抖一下不该把用户打的东西吞掉
-        if (text) { ta.textContent = text; saveDraft(sid, text); try { caretToEnd(); } catch {} }
+        if (text) { ta.textContent = text; saveDraft(sid, text); try { caretToEnd(); } catch {}; syncInputButtons(); }
         state.pending = atts;
         renderAttach();
         paintSession();
@@ -5530,9 +6268,7 @@ function renderSession(wrap) {
       }
     } finally {
       state.sending = false;
-      sendBtn.disabled = false;
-      const curSend = document.querySelector('.send');
-      if (curSend) curSend.disabled = false;
+      if (sameSession()) syncInputButtons();
     }
   }
 
@@ -5589,13 +6325,7 @@ function renderSession(wrap) {
 
 
   // 中断运行：正在跑的时候才出现
-  const stopBtn = el('button', { class:'stop', text:'■', title:'中断运行', onclick: async () => {
-    if (!confirm('中断这次运行？')) return;
-    try {
-      await api('/api/mobile/v1/session/stop', { method:'POST', body: { sessionId: state.sessionId } });
-      markBusy(false); paintSession();
-    } catch (e) { toast('取消失败：' + (e.message || e)); }
-  }});
+  const stopBtn = el('button', { class:'stop', text:'■', title:'中断运行', onclick: () => stopRun() });
   const qDock = el('div', { class:'qdock' });
   // 编辑排队消息时的提示条：文本进输入框，附件留在队列里（走宿主的 edit 动作）
   const editBar = el('div', { class:'qeditbar' });
@@ -5677,11 +6407,12 @@ function renderSession(wrap) {
     attach,
     qDock,
     editBar,
+    voiceBar,
     strip,
     el('div', { class:'composer' }, ta,
       el('div', { class:'crow' },
         el('button', { class:'plus', text:'+', onclick: () => fileInput.click() }),
-        chips,        el('div', { class:'sendgroup' }, stopBtn, sendBtn))),
+        chips,        el('div', { class:'sendgroup' }, stopBtn, micBtn, sendBtn))),
     fileInput,
     metabar,
   );
@@ -5719,7 +6450,8 @@ function renderSession(wrap) {
 
   ui = { sessionId: state.sessionId, body, listWrap, cardsWrap, ta, sendBtn, stopBtn, strip, dot, modelEl: modelRow, effortEl: effortRow,
     send, // 新会话页要借它把第一条发出去（闭合在 renderSession 里，外面拿不到）
-    qDock, editBar, jump, updateJump, loadStats: loadSessionStats, keys: [], nodes: [], cardsKey: '', prevCount: undefined, atBottom: true };
+    voiceBar, micBtn, syncInputButtons, syncSendState: syncSendDisabled, hasText: composerHasText,
+    qDock, editBar, jump, updateJump, loadStats: loadSessionStats, keys: [], nodes: [], cardsKey: '', prevCount: undefined, atBottom: true, progSig: '' };
   paintSession({ scroll:'bottom' });
   // 进会话只定位到底部，不自动聚焦输入框：多数时候是进来看内容的，弹键盘会挡住正文
   requestAnimationFrame(() => { body.scrollTop = body.scrollHeight; });
@@ -5789,6 +6521,7 @@ function quoteToComposer(text) {
   if (!ui.ta) return;
   const quoted = String(text).split('\n').slice(0, 3).map(l => `> ${l}`).join('\n');
   ui.ta.textContent = quoted + '\n\n';
+  try { ui.syncInputButtons && ui.syncInputButtons(); } catch {}
   ui.ta.focus();
   try {
     const r = document.createRange();
@@ -5846,6 +6579,7 @@ function startQueueEdit(it) {
   if (!ta) return;
   queueEditing = { id: it.id };
   ta.textContent = queueText(it);
+  try { ui.syncInputButtons && ui.syncInputButtons(); } catch {}
   ta.focus();
   try {
     const r = document.createRange(); r.selectNodeContents(ta); r.collapse(false);
@@ -5857,7 +6591,7 @@ function startQueueEdit(it) {
 function cancelQueueEdit() {
   queueEditing = null;
   const ta = ui && ui.ta;
-  if (ta) { ta.textContent = ''; try { saveDraft(state.sessionId, ''); } catch {} }
+  if (ta) { ta.textContent = ''; try { saveDraft(state.sessionId, ''); } catch {}; try { ui.syncInputButtons && ui.syncInputButtons(); } catch {} }
   paintSession();
 }
 
@@ -5880,6 +6614,7 @@ async function saveQueueEdit() {
   queueEditing = null;
   ta.textContent = '';
   try { saveDraft(state.sessionId, ''); } catch {}
+  try { ui.syncInputButtons && ui.syncInputButtons(); } catch {}
   paintSession();
 }
 
@@ -5995,6 +6730,19 @@ function msgActions(m, alignRight) {
     }}, '¶ 分段'));
   }
   const seq = Number.isSafeInteger(m && m.seq) ? m.seq : null;
+  if (!alignRight && text) {
+    const mid = m && m.id != null ? String(m.id) : '';
+    const on = !!(state.speaking && state.speakMsgId === mid);
+    row.append(el('button', {
+      'data-speak-mid': mid,
+      onclick: (e) => {
+        e.stopPropagation();
+        if (state.speaking && state.speakMsgId === mid) stopSpeak();
+        else speakText(text, mid);
+      },
+      html: speakBtnHtml(on),
+    }));
+  }
   if (seq !== null && seq > 0) {
     row.append(el('button', { onclick: (e) => { e.stopPropagation(); forkSessionAt(m, seq); } }, '⑂ 分支'));
   }
@@ -6304,6 +7052,9 @@ function sheetIconSVG(name) {
     plus: '<path d="M12 5.5v13M5.5 12h13"/>',
     file: '<path d="M7 4.5h6.5L18 9v10.5H7z"/><path d="M13.5 4.5V9H18"/>',
     code: '<path d="M9 7.5L4.5 12 9 16.5M15 7.5L19.5 12 15 16.5"/>',
+    mic: '<rect x="9" y="3.2" width="6" height="9.6" rx="3"/><path d="M5.5 11.2a6.5 6.5 0 0 0 13 0"/><path d="M12 17.7v2.6"/>',
+    speaker: '<path d="M4.5 9.4h3L12 6v12l-4.5-3.4h-3z"/><path d="M15.4 9.3a3.7 3.7 0 0 1 0 5.4"/><path d="M18 6.9a7.2 7.2 0 0 1 0 10.2"/>',
+    square: '<rect x="8" y="8" width="8" height="8" rx="1.6"/>',
   };
   const d = P[name];
   return d ? '<svg viewBox="0 0 24 24">' + d + '</svg>' : '';
@@ -6436,10 +7187,14 @@ function pruneCards() {
 
 function openSession(s) {
   closeDrawer();
+  stopSpeak();
+  cancelVoiceInput();
+  state.autoReadPending = false;
   state.view = 'session';
   state.sessionId = s.sessionId;
   state.sessionTitle = s.title || '(无标题)';
   state.messages = []; state.cards = []; state.lastSeq = 0; state.busy = !!s.running; state.busySince = 0;
+  resetSteps();   // 切会话必须清空过程进度，别把上一个会话的步骤串过来
   state.model = null; state.pending = []; state.unseen = 0; state.msgLimit = 120;
   state.queue = [];
   state.permCurrent = '';
@@ -6564,7 +7319,23 @@ async function loadMessages(force=false, sidOverride=null) {
     if (state.sessionId !== sid) return;
     state.messages = items;
     state.lastSeq = lastSeq;
+    // F1：历史 phase 只在「当前轮还没有实时 phase」时回填：
+    // 运行中只认同一 turn 的 todo_write；如果连当前 turn 都还不知道（刚进一个在跑的会话），
+    // 一律不回填，避免上一轮的 index/total 被当成这一轮。
+    const allowTurn = state.busy ? state.stepsTurn : null;
+    if (!state.phase && !(state.busy && allowTurn == null)) {
+      const found = phaseFromMessages(items, allowTurn);
+      if (found) {
+        state.phase = found;
+        ui.progSig = '';
+      }
+    }
     if (state.view === 'session') paintSession(force ? { scroll:'bottom' } : {});
+    // F2：这一轮结束且开了自动朗读 → 读最新一条回复
+    if (state.autoReadPending) {
+      state.autoReadPending = false;
+      if (state.view === 'session') autoReadLatest(items);
+    }
     // 新回复已经渲染出来，且人就在底部：本地水位立即推进，回列表不再亮未读
     if (state.view === 'session' && state.sessionId === sid && ui && ui.atBottom) markSessionSeen(sid);
   } catch (e) { console.warn('messages', e); }
@@ -6579,9 +7350,7 @@ function subscribeSession() {
       if (!ui.dot) return;
       ui.dot.className = st === 'open' ? 'dot run' : 'dot';
       ui.dot.title = st === 'open' ? '实时已连接' : `重连中…${err ? ' ' + (err.message || err) : ''}`;
-      if (ui.strip) ui.strip.textContent = st === 'open'
-        ? busyText()
-        : '实时连接断开，重连中…';
+      paintProg(true);
       syncBusyTicker();
     },
     onFrame: f => { if (state.sessionId === sid) onFrame(f); },
@@ -6613,11 +7382,38 @@ function onFrame(frame) {
     state.cards = state.cards.filter(c => c.id !== rid);
     if (state.cards.length !== before) syncBadge();
   }
+  else if (t === 'turn/start') {
+    beginTurn();
+    if (state.view === 'session') paint();
+    return;
+  }
+  else if (t === 'turn/end' || t === 'turn/ended') {
+    endTurn();
+    clearTimeout(onFrame._t);
+    onFrame._t = setTimeout(loadMessages, 350);
+    if (state.view === 'session') paint();
+    return;
+  }
+  else if (t === 'session/live-steps') {
+    // F1：full=true 整份快照 / full=false 增量；turn 变了按轮隔离
+    if (frame.sessionId && frame.sessionId !== state.sessionId) return;
+    applyLiveSteps(frame);
+    paintProg(true);
+    return;
+  }
   else if (t === 'session/event') {
     const ev = frame.event || {};
     const inner = (ev.data && ev.data.type) || (frame.data && frame.data.type) || ev.type || '';
-    if (inner === 'turn/start') markBusy(true);
-    if (inner === 'turn/end' || inner === 'turn/ended') { markBusy(false); }
+    if (inner === 'turn/start') beginTurn();
+    if (inner === 'turn/end' || inner === 'turn/ended') endTurn();
+    const ph = findTodoPhase(frame);
+    if (ph) {
+      if (!samePhase(state.phase, ph)) {
+        state.phase = ph;
+        paintProg(true);
+        refreshStepsSheet(true);
+      }
+    }
     clearTimeout(onFrame._t);
     onFrame._t = setTimeout(loadMessages, 350);
     return;
@@ -6727,7 +7523,9 @@ function subscribeDevice() {
 })();
 
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && state.token) {
+  // F2：切后台/锁屏时停朗读、收掉录音（iOS 也会自己中断，这里保证状态一致）
+  if (document.hidden) { stopSpeak(); cancelVoiceInput(); return; }
+  if (state.token) {
     (async () => {
       // 回前台先确认通道：从公司网络回到家、或手机刚连上 Wi-Fi，都靠这一下切过去
       try { await applyNetMode(); } catch {}
