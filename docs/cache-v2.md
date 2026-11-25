@@ -4,8 +4,9 @@
 改动文件：`index.html`（单文件），本说明。
 不改界面、不改接口、不改 `APP_VERSION` / `sw.js` / `PWA-优化清单.md`。
 
-**一期只做「影子写 + 可开关读取」；2026-11-25 用户决策改为默认开启（`localStorage['dsh.cache.v2'] = '0'` 可回退，回退后与 v249 逐字节一致）。**
-打开开关后：读走 IndexedDB，写是双写（localStorage 照老规则写一份当影子/回滚保险，IndexedDB 再写一份）。
+**一期只做「影子写 + 可开关读取」：默认开启。** `localStorage['dsh.cache.v2'] = '0'` 才回退 legacy，
+回退后与 v249 逐字节一致；**删掉这个键即恢复默认开启**。
+开启时：读走 IndexedDB，写是双写（localStorage 照老规则写一份当影子/回滚保险，IndexedDB 再写一份）。
 唯一的限额差异：**IndexedDB 单会话保留 400 条、最多 30 个会话**；localStorage（legacy）仍是 120 条 / 10 个会话。
 
 ---
@@ -15,17 +16,19 @@
 | 项 | 值 |
 | --- | --- |
 | 开关 key | `localStorage['dsh.cache.v2']` |
-| 打开 | 值为字符串 `'1'` |
-| `'0'`（回退） | 一切走 legacy，与改动前完全一致 |
+| 默认（键不存在 / 任何非 `'0'` 值） | 走 IndexedDB（v2） |
+| `'0'`（回退） | 一切走 legacy，与改动前逐字节一致 |
+| 删除该键 | 恢复默认开启（v2） |
 | 生效时机 | **模块加载时读取一次**，必须完全杀掉 App 重开（或 `location.reload()`） |
 
 ```js
-localStorage.setItem('dsh.cache.v2', '1');   // 打开
-localStorage.removeItem('dsh.cache.v2');     // 回滚（等价于关）
+localStorage.setItem('dsh.cache.v2', '0');   // 回退到 legacy
+localStorage.removeItem('dsh.cache.v2');     // 恢复默认开启 v2
 ```
 
 源码里的对应常量：`CACHE_V2`（`index.html` 缓存存储层一节），只在启动时求值一次。
-开关关闭时：不会 `indexedDB.open()`、不会注册任何异步任务，四个缓存函数的写入内容、裁剪策略、JSON 字节都与改动前相同。
+`CACHE_V2 === false` 时：不会 `indexedDB.open()`、不会注册任何异步任务，四个缓存函数的写入内容、
+裁剪策略、JSON 字节都与改动前相同。
 
 ## 2. 存储布局
 
@@ -45,9 +48,9 @@ IndexedDB: dsh-mobile (version 1)
 
 ## 3. 四个函数的读写路径
 
-对外签名不变，内部按开关分派：
+对外签名不变，内部按开关分派（默认走 idb 列，`'0'` 回退走 legacy 列）：
 
-| 函数 | 开关关闭（legacy） | 开关打开（idb） |
+| 函数 | legacy（`'0'` 回退） | idb（默认） |
 | --- | --- | --- |
 | `saveListCache(sessions)` | 原逻辑，80 条 | 原逻辑照写 + 同一份 slim 写 IDB |
 | `readListCache()` | 读 `dsh.cache.list` | 读内存镜像（由 IDB 预热） |
@@ -69,14 +72,15 @@ IndexedDB: dsh-mobile (version 1)
 
 ## 4. 首次迁移
 
-开关打开后的第一次运行：
+第一次以 idb 模式运行（默认首次安装、或从回退模式恢复开启后的第一次）：
 
 1. 读 `dsh.cache.list` / `dsh.cache.msgs`（legacy 结构）；
 2. 逐条写进 IDB，**只补不覆盖**：IDB 里已有 `at` 更新（或相同）的记录就跳过；
 3. 写 `localStorage['dsh.cache.migrated.v2'] = '1'`（搬完才写，失败下次启动重试）。
 
-之后不再重复搬。因此：**先关后开的来回切，IDB 可能比 legacy 旧**（关掉那段时间 IDB 没人写）。
-需要重新对齐时，清掉 `dsh.cache.migrated.v2` 再重启，迁移会按 `at` 把更新的记录补进去。
+之后不再重复搬。因此：**回退到 legacy 跑过一段、再恢复 v2 时，IDB 可能比 legacy 旧**
+（回退那段时间 IDB 没人写）。需要重新对齐时，清掉 `dsh.cache.migrated.v2` 再重启，
+迁移会按 `at` 把更新的记录补进去。
 
 ## 5. 降级（不弹 toast）
 
@@ -87,7 +91,8 @@ IndexedDB: dsh-mobile (version 1)
 - `onversionchange`（别的标签页/代码要升级库，本连接被要求关闭）；
 - 单次写失败（配额等）：warn 一次后继续用 legacy，不重试、不打断发消息。
 
-开关打开但库还没暖好（启动前 1.2 秒内）或已降级时，四个函数自动读/写 legacy。
+idb 模式但库还没暖好（启动前 1.2 秒内）或已降级时，四个函数自动读/写 legacy。
+初始化失败后 `initP` 会被放开，同页重新登录或下次调用还能再试一次。
 
 ## 6. 限额差异（本期唯一的行为差异）
 
@@ -101,45 +106,63 @@ IndexedDB: dsh-mobile (version 1)
 一条记录本身就可能上 MB；30 个会话极端情况下会到几百 MB，接近 Safari 的配额时会写失败并 warn，
 此时仍能靠 legacy 那份继续用。真出现再补体积兜底，一期先不改。
 
-## 7. 回滚
+## 7. 回滚 / 退登
 
 | 想做什么 | 做法 | 结果 |
 | --- | --- | --- |
-| 立即回滚行为 | `localStorage.removeItem('dsh.cache.v2')` 后彻底重开 App | 读写都回 legacy；IDB 里残留数据不读不写，不影响功能 |
-| 回滚并清干净 | 上面一步 + 删除 IndexedDB 库 `dsh-mobile`（DevTools Application/Storage 面板 Delete database） | 没有版本/开关缓存残留 |
-| 让 idb 追上 legacy 再开 | 删 `dsh.cache.migrated.v2` 后重开一次 | 迁移按 `at` 只补更新 |
-| 退登清凭据 | 已有的「退出登录」已改成 `clearLocalCaches()`：`localStorage.clear()` **加** 清空 IDB store | 换账号不会读到上个账号的消息 |
+| 回退行为 | `localStorage.setItem('dsh.cache.v2','0')` 后彻底重开 App | 读写都回 legacy；IDB 里残留数据不读不写，不影响功能 |
+| 恢复默认 v2 | `localStorage.removeItem('dsh.cache.v2')` 后彻底重开 App | 重新走 IndexedDB |
+| 回退并清干净 | 回退 + 删除 IndexedDB 库 `dsh-mobile`（DevTools Application/Storage 面板 Delete database） | 没有版本/开关缓存残留 |
+| 让 idb 追上 legacy | 删 `dsh.cache.migrated.v2` 后重开一次 | 迁移按 `at` 只补更新 |
+| 退登清凭据 | 「退出登录」走 `clearLocalCaches()`：`localStorage.clear()` **加** 清空 IDB store | 换账号不会读到上个账号的消息 |
+| 退登后同页重登 | 恢复链接 / 配对码登录会重新起 v2 库（`idbInit()`），不用整页刷新 | 重登后缓存继续可用 |
 
-回滚不需要回退代码：开关是纯运行时数据。代码回退只需要 revert 这一个 commit（除 `clearLocalCaches`
-外没有外部依赖，`clearLocalCaches` 只是多了清 IDB 的动作）。
+`clearLocalCaches()` 除了清数据，还会复位缓存层的运行态：代数 `gen + 1`（让在飞的初始化/迁移/预热自废）、
+`initP` / `hydrateP` 置空、`failed` 复位、关闭并放开 `db`、清空内存镜像、清空 `msgCacheSig`。
+不这么做的话，同一页里重登会拿到旧的已 resolve 的 `initP`（`ready` 永远回不到 true），
+且 `msgCacheSig` 会把「内容相同」的写入判重吞掉，表现为缓存到整页刷新前都失效。
+
+回滚不需要回退代码：开关是纯运行时数据。代码回退只需要 revert 这个功能的 commit（`clearLocalCaches`
+只是多了清 IDB 的动作，没有外部依赖）。
 
 ## 8. 手机验证步骤
 
-> 本机没有浏览器环境，以下必须在真机上过一遍。**没有桌面调试环境时**：让主会话在 preview 里
-> 临时把 `CACHE_V2` 初值改成 `true`（一行）再发一版，验证完还原；否则用下面的调试器步骤。
+> 本机没有浏览器环境，以下必须在真机上过一遍。用 `chrome://inspect`（Android）或
+> Mac Safari 的「开发 → 设备」（iOS）看 console / Application 面板。
 
 ### 8.1 准备
 
 - Android：USB 调试 + 桌面 Chrome `chrome://inspect`。
 - iOS：iPhone 设置 → Safari → 高级 → 网页检查器 打开；Mac Safari → 开发 → 设备。PWA 独立窗口也能被检查。
-- 先在**旧版**（还没打开开关）里正常用一会儿：进出几个会话（最好有一个 >120 条消息的长会话）、
-  让列表攒到 10 个以上会话，保证 `dsh.cache.list` / `dsh.cache.msgs` 有内容。
+- 先在**旧版**（或回退开关 `'0'`，等同 v249）里正常用一会儿：进出几个会话（最好有一个 >120 条消息的
+  长会话）、让列表攒到 10 个以上会话，保证 `dsh.cache.list` / `dsh.cache.msgs` 有内容。
 
-### 8.2 回退开关（`dsh.cache.v2='0'`，安全网，先过这条）
+### 8.2 默认开启（不设任何键）
 
-1. 冷启动 App，不设任何开关。
-2. console 跑 `await indexedDB.databases()`（不支持就跳过）：**不应出现 `dsh-mobile`**。
+1. 冷启动 App（`dsh.cache.v2` 不存在）。
+2. console 跑 `await indexedDB.databases()`（不支持就跳过）：**应出现 `dsh-mobile`**。
 3. console **不应**出现任何 `[cache-v2]` warn。
-4. 正常用：首屏秒开、切会话、发消息、本地搜索命中缓存消息、退出登录清凭据 —— 与线上现在一致。
-5. 在 console 断开点看 `dsh.cache.list` 的 `at` 会随刷新变大（说明 legacy 照写）。
+4. 列表秒出、会话秒开；打开一个 >120 条的会话后，`kv` 里 `msg:<sid>` 的 `messages.length` 可以超过 120。
+5. 正常用一轮：切会话、发消息、本地搜索命中缓存消息、退出登录清凭据。
 
-**失败判定**：出现 `dsh-mobile` 库、出现 `[cache-v2]` warn、或任何界面/操作手感与线上不同。
+**失败判定**：没有 `dsh-mobile` 库、出现 `[cache-v2]` warn、或任何界面/操作手感与线上不同。
 
-### 8.3 打开开关 + 首次迁移
+### 8.3 回退开关（`dsh.cache.v2='0'`，安全网）
 
-1. console（或重启前注入）执行 `localStorage.setItem('dsh.cache.v2','1')`，然后**彻底杀掉 App 重开**
+1. console 执行 `localStorage.setItem('dsh.cache.v2','0')`，然后**彻底杀掉 App 重开**
    （不是切后台；模块加载时才读开关）。
-2. 列表仍能秒出（和开关前一样），console 无报错。
+2. `await indexedDB.databases()` 里 `dsh-mobile` 可能还在（数据残留）但不应再被写：发一条消息后看
+   `dsh.cache.msgs` 更新、而 `msg:<sid>.at` 停在旧值。
+3. 四条路径都回到 v249 的行为：80 条列表 / 120 条消息 / 300KB 兜底 / 10 个会话；本地搜索仍只搜得到
+   legacy 那份；首屏、会话、发消息手感与线上一致。
+4. 再 `localStorage.removeItem('dsh.cache.v2')` 重开：恢复 v2（本步与 8.2 等价）。
+
+**失败判定**：回退后仍从 IDB 读（删掉 legacy 缓存还能秒出内容）、或消息条数超过 120。
+
+### 8.4 首次迁移
+
+1. 在**回退模式**（`'0'`）下用一会儿，保证 legacy 有 list/msgs；记下 `dsh.cache.list` 里的会话数。
+2. 删掉 `dsh.cache.v2`，彻底杀掉重开（默认开启 + 迁移）。
 3. 检查迁移结果（Application/Storage → IndexedDB 或 console）：
 
 ```js
@@ -162,36 +185,47 @@ msg 条数与 legacy 里同会话一致（legacy 那 120 条以内）；`localSt
 4. 再彻底重开一次：迁移不重复覆盖（记录 `at` 不会被更早的 legacy 值盖掉）。
 
 **失败判定**：kv 里没有 `list`；`migrated.v2` 没写；消息条数与 legacy 对不上（丢数据）；
-出现 toast；首屏比开关前明显慢（>1.2 秒）。
+出现 toast；首屏比回退模式明显慢（>1.2 秒）。
 
-### 8.4 读的是 IDB，不是 localStorage
+### 8.5 读的是 IDB，不是 localStorage
 
-1. 开关打开状态下，DevTools 里删掉 `localStorage['dsh.cache.list']` 和 `localStorage['dsh.cache.msgs']`。
+1. 默认开启状态下，DevTools 里删掉 `localStorage['dsh.cache.list']` 和 `localStorage['dsh.cache.msgs']`。
 2. 彻底杀掉重开：列表仍能秒显示（说明来自 IDB）；之后 `refreshAll` 会把 legacy 两份重新写回来。
 
 **失败判定**：首屏空白/骨架直到网络回来才出列表。
 
-### 8.5 核心痛点：长会话从后台回来
+### 8.6 核心痛点：长会话从后台回来
 
 1. 进入一个 >120 条消息的长会话，等最后一条加载完（保证写进 IDB）。
 2. 切后台 10 分钟以上（或锁屏），回前台，进入**同一个**会话。
 3. 预期：消息内容立即出现（先缓存后网络），不出现空白骨架；随后新消息正常追加。
 4. 换一个从没打开过的会话：允许首次空白（等网络），之后再打开应秒开。
 
-**失败判定**：开关打开后长会话的秒开效果比开关关闭时更差（例如第一条消息都不显示、或要等网络）。
+**失败判定**：v2 模式下长会话的秒开效果比回退模式更差（例如第一条消息都不显示、或要等网络）。
 
-### 8.6 400 条 / 30 会话
+### 8.7 400 条 / 30 会话
 
 - 400 条：对上面那个长会话，在 console 读 `msg:<sid>` 的 `messages.length`，应可能 >120（最多 400）；
   同时 `dsh.cache.msgs` 里该会话仍是 ≤120（影子写按老限额）。
 - 30 会话：依次打开 31 个不同会话各刷新一次，`kv` 里 `msg:*` 记录数应稳定在 30；
   `idx.msgAt` 的 key 数同步 ≤30；最旧的那个会话重新打开时会走网络（缓存已淘汰，属预期）。
 
-### 8.7 降级（不弹 toast）
+### 8.8 退登 → 同页重登（本次修掉的 bug）
+
+1. 默认开启下正常用（打开一个会话、看到消息），确认 `kv` 里有 `msg:<sid>`。
+2. 设置 → 退出登录（`localStorage` 被清、IDB 被清）。
+3. **不要刷新页面**：直接在同页粘贴恢复链接（或用配对码）重新登录。
+4. 打开刚才那个会话，等网络把消息拉回来，然后在 console 看：
+   `kv` 里应重新出现 `msg:<sid>`，`localStorage['dsh.cache.msgs']` 也不再是 `{}`；
+   关掉会话再打开应能秒开（读走 IDB）。
+
+**失败判定**：重登后 `msg:*` 一直为空，只有整页刷新才恢复。
+
+### 8.9 降级（不弹 toast）
 
 任选一种制造失败：
 
-- 隐私浏览/无痕窗口（iOS 无痕、或系统「阻止所有 Cookie」）里打开同一页面并打开开关；
+- 隐私浏览/无痕窗口（iOS 无痕、或系统「阻止所有 Cookie」）里打开同一页面；
 - 或者 App 正常跑着时，在 console 执行 `indexedDB.open('dsh-mobile', 99)` 强制升级：
   App 的 `onversionchange` 会关闭连接并降级（这条也顺带验证了版本冲突路径）。
 
@@ -200,22 +234,27 @@ msg 条数与 legacy 里同会话一致（legacy 那 120 条以内）；`localSt
 **收尾**：版本冲突测试后，Application 面板 Delete database `dsh-mobile`（否则之后 `version 1` 会开不起来，
 一直处于降级状态 —— 这本身也算一次降级验证，但别留在正式验收机上）。
 
-### 8.8 回滚
+### 8.10 回滚
 
-1. `localStorage.removeItem('dsh.cache.v2')`，彻底重开。
-2. `await indexedDB.databases()` 里 `dsh-mobile` 还在（数据残留）但不应再被写：
-   发一条消息后看 `msg:<sid>.at` 是否停在旧值、`dsh.cache.msgs` 是否更新。
-3. 行为回到 8.2 全部预期。
+按 8.3 执行即可；回滚不需要回退代码，也不需要清 IDB（残留数据不再被读写）。
+要「看起来和线上完全一样」，再在 Application 面板删掉 `dsh-mobile` 库。
 
 ## 9. 风险点（留给合并/验收时判断）
 
 1. **内存镜像成本**：IDB 最多 30 会话 × 400 条全在 JS 内存里。老机型/超大会话下常驻内存可能几十 MB；
    一期按「长会话要能秒开」优先，真出问题再改成按会话懒加载 + 打开会话时异步补画。
-2. **启动等待**：开关打开时启动会 `await` 暖库，最长 1.2 秒（`Promise.race` 兜底）；正常 20–50ms。
-   开关关闭时零影响。
+2. **启动等待**：默认开启时启动会 `await` 暖库，最长 1.2 秒（`Promise.race` 兜底）；正常 20–50ms。
+   `'0'` 回退时零影响。
 3. **首次打开只有一次空白**：库刚暖好、正文镜像还没灌完时打开会话说 miss → 返回 `null`，等下一次打开才命中。
    已在 miss 时后台 `prefetch`，但不会补画，避免动渲染路径。
 4. **读写都在主线程**：400 条 structured clone 在低端机可能有 10–30ms 抖动，但被 `msgCacheSig` 限流到「内容真变才写」。
-5. **先关后开的数据陈旧**：见第 4 节，需要清 `dsh.cache.migrated.v2` 才会再对齐。
+5. **回退后再开启的数据陈旧**：见第 4 节，需要清 `dsh.cache.migrated.v2` 才会再对齐。
 6. **IDB 无体积兜底**：见第 6 节尾部。
-7. **没有自动化测试**：语法检查 + 真机手工验收是本期唯一验证手段；默认关闭是安全网。
+7. **没有自动化测试**：语法检查 + 真机手工验收是唯一验证手段；默认开启，`'0'` 回退开关是安全网。
+
+## 10. 变更记录
+
+| 日期 | 内容 |
+| --- | --- |
+| 2026-11-25 | 一期落地：影子写 + 可开关读取；初期默认关闭，同日按用户决策改为**默认开启**（`'0'` 回退） |
+| 2026-11-25 | 修复：退登后同页用恢复链接/配对码重登，缓存到整页刷新前失效（复位 `initP`/`hydrateP`/`failed`/`db`/`msgCacheSig`，并在登录路径重新起库） |

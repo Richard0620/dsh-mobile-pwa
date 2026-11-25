@@ -816,9 +816,10 @@ try {
 
 // ---------------------------------------------------------------- 缓存存储层 v2
 // 一期只做「影子写 + 可开关读取」，不改界面、不改接口：
-//   - 默认（localStorage['dsh.cache.v2'] !== '1'）只有下面的 legacy 路径，行为与之前逐字节一致；
-//   - 开关打开后：读走 IndexedDB，写仍然照老规则写 localStorage（当影子 + 回滚保险），
-//     另外再写一份到 IndexedDB（限额更大：单会话 400 条 / 最多 30 个会话）。
+//   - 默认开启：读走 IndexedDB，写仍然照老规则写 localStorage（当影子 + 回滚保险），
+//     另外再写一份到 IndexedDB（限额更大：单会话 400 条 / 最多 30 个会话）；
+//   - 回退：localStorage['dsh.cache.v2'] = '0' 后彻底重开 App，就只剩下面的 legacy 路径，
+//     行为与改动前逐字节一致；删掉这个键即恢复默认开启。
 // 四个对外函数 saveListCache / readListCache / saveMsgCache / readMsgCache 签名和行为保持。
 const CACHE_V2_KEY = 'dsh.cache.v2';
 const CACHE_V2_MIGRATED_KEY = 'dsh.cache.migrated.v2';
@@ -835,6 +836,7 @@ const CACHE_V2 = (() => { try { return localStorage.getItem(CACHE_V2_KEY) !== '0
 // 键：'list' / 'msg:<sid>'；另有一条 'idx' 只存 { sid: at }，用于在「不读消息正文」的前提下裁会话数。
 const idbState = {
   ready: false, failed: false, db: null,
+  gen: 0,                   // 每次退登 +1：在飞的初始化/迁移/预热看到代数变了就自废
   memList: null,            // 会话列表（读走它）
   memMsgs: new Map(),       // sid -> { at, lastSeq, messages }
   msgAt: new Map(),         // sid -> at（裁剪排序用）
@@ -935,7 +937,7 @@ function idbIdxValue() {
 
 // 首次迁移：把 localStorage 里已有的 list/msgs 一次性搬进 IDB，搬完记 dsh.cache.migrated.v2。
 // 只补不覆盖：IDB 里已有更新的记录就保留 IDB 的。
-async function idbMigrateOnce() {
+async function idbMigrateOnce(gen) {
   try { if (localStorage.getItem(CACHE_V2_MIGRATED_KEY) === '1') return; } catch {}
   const recs = [];
   try {
@@ -965,15 +967,19 @@ async function idbMigrateOnce() {
     ops.push({ type:'put', key: rec.key, value: rec.value });
     if (rec.key.startsWith('msg:')) idbState.msgAt.set(rec.key.slice(4), rec.value.at);
   }
+  // 退登可能发生在迁移中间：代数变了就放弃，别把旧账号数据写回去、也别记「已迁移」
+  if (gen !== idbState.gen) return;
   ops.push({ type:'put', key:'idx', value: idbIdxValue() });   // 顺手把 schema 戳写上，后面的版本校验才有依据
   await idbTx(ops);
+  if (gen !== idbState.gen) return;
   try { localStorage.setItem(CACHE_V2_MIGRATED_KEY, '1'); } catch {}
 }
 
 // 正文灌进内存镜像（后台做，不挡启动）。长会话从后台回来能立刻有内容靠的就是这一步。
-async function idbHydrateMsgs() {
+async function idbHydrateMsgs(gen) {
   let all = [];
   try { all = await idbGetAll(); } catch (e) { idbWarn('读消息缓存失败', e); return; }
+  if (gen !== idbState.gen) return;   // 退登过：别把旧账号的数据灌进内存镜像
   for (const rec of all) {
     if (!rec || typeof rec !== 'object') continue;
     const key = String(rec.key || '');
@@ -987,21 +993,48 @@ async function idbHydrateMsgs() {
   }
 }
 
+// 退登发生在初始化/迁移半路：把这半路开的库连接清干净再关掉，别把旧账号数据留给下一次登录
+async function idbAbortAndClear(db) {
+  const conn = db || idbState.db;
+  if (idbState.db === conn) idbState.db = null;
+  idbState.ready = false;
+  if (!conn) return false;
+  try {
+    await new Promise((resolve) => {
+      let tx;
+      try { tx = conn.transaction(IDB_STORE, 'readwrite'); } catch (e) { return resolve(); }
+      try { tx.objectStore(IDB_STORE).clear(); } catch {}
+      tx.oncomplete = () => resolve();
+      tx.onabort = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  } catch {}
+  try { conn.close(); } catch {}
+  return false;
+}
+
 async function idbInit() {
-  if (!CACHE_V2) return false;                 // 开关关着：连库都不开，零开销
+  if (!CACHE_V2) return false;                 // 回退开关 = '0'：连库都不开，零开销
   if (idbState.initP) return idbState.initP;
+  const gen = idbState.gen;                    // 记下代数：退登会让它 +1，在飞的任务据此自废
+  const alive = () => gen === idbState.gen;
   idbState.initP = (async () => {
+    let db = null;
     try {
       if (typeof indexedDB === 'undefined' || !indexedDB) throw new Error('indexedDB 不存在');
-      idbState.db = await idbOpenDb();
-      idbState.db.onversionchange = () => {
-        try { idbState.db.close(); } catch {}
-        idbState.db = null; idbState.ready = false;
+      db = await idbOpenDb();
+      if (!alive()) return await idbAbortAndClear(db);
+      idbState.db = db;
+      db.onversionchange = () => {
+        try { db.close(); } catch {}
+        if (idbState.db === db) idbState.db = null;
+        idbState.ready = false;
         idbWarn('IndexedDB 被要求升级/关闭，本次会话回落 localStorage');
       };
       // schema 不兼容：整库清掉（跟 localStorage 那边同一规则），也不再把旧结构迁进来
       let idx = null;
       try { idx = await idbGet('idx'); } catch {}
+      if (!alive()) return await idbAbortAndClear(db);
       if (idx && idx.schema !== CACHE_SCHEMA) {
         await idbTx([{ type:'clear' }]);
         idbState.msgAt.clear(); idbState.memMsgs.clear(); idbState.memList = null;
@@ -1009,15 +1042,22 @@ async function idbInit() {
       } else if (idx && idx.msgAt && typeof idx.msgAt === 'object') {
         for (const sid of Object.keys(idx.msgAt)) idbState.msgAt.set(String(sid), Number(idx.msgAt[sid]) || 0);
       }
-      try { await idbMigrateOnce(); } catch (e) { idbWarn('迁移旧缓存失败（下次启动再试）', e); }
+      try { await idbMigrateOnce(gen); } catch (e) { if (alive()) idbWarn('迁移旧缓存失败（下次启动再试）', e); }
+      if (!alive()) return await idbAbortAndClear(db);
       const list = await idbGet('list');
+      if (!alive()) return await idbAbortAndClear(db);
       if (list && Array.isArray(list.sessions)) idbState.memList = list.sessions;
       idbState.ready = true;
-      idbState.hydrateP = idbHydrateMsgs().catch(e => idbWarn('预热消息缓存失败', e));
+      idbState.hydrateP = idbHydrateMsgs(gen).catch(e => idbWarn('预热消息缓存失败', e));
       return true;
     } catch (e) {
-      idbState.db = null; idbState.ready = false;
-      if (!idbState.failed) { idbState.failed = true; idbWarn('IndexedDB 不可用，自动回落 localStorage（不弹提示）', e); }
+      if (alive()) {
+        idbState.db = null; idbState.ready = false;
+        if (!idbState.failed) { idbState.failed = true; idbWarn('IndexedDB 不可用，自动回落 localStorage（不弹提示）', e); }
+        // 别把已 resolve 的 promise 留在 initP 里：退登后同页重登 / 下次调用还要能重新起库
+        idbState.initP = null;
+      }
+      if (db) { try { db.close(); } catch {} }
       return false;
     }
   })();
@@ -1062,17 +1102,29 @@ function idbPrefetchMsg(sid) {
 }
 
 // 退登：localStorage 一直是一把清，现在消息正文还多了一份在 IDB，必须一起清
-// （否则换账号后开关一开就能读到上一个账号的消息）
+// （否则换账号后重启就能读到上一个账号的消息）。
+// 同时把「启动状态 + 判重状态」全部复位：否则同一页里用恢复链接/配对码重登时，
+// 旧的 initP 会被 idbInit() 永远返回、msgCacheSig 会挡住重写，缓存到整页刷新前都是死的。
 function clearLocalCaches() {
   try { localStorage.clear(); } catch {}
   const db = idbState.db;
-  idbState.ready = false; idbState.failed = true;
-  idbState.memList = null; idbState.memMsgs.clear(); idbState.msgAt.clear();
+  idbState.gen++;                       // 在飞的初始化/迁移/预热看到代数变了就自废
+  idbState.initP = null;                // 允许同页重登时重新起库
+  idbState.hydrateP = null;
+  idbState.failed = false;
+  idbState.ready = false;
+  idbState.db = null;
+  idbState.memList = null;
+  idbState.memMsgs.clear();
+  idbState.msgAt.clear();
+  idbState.prefetching.clear();
+  msgCacheSig = '';                     // 判重状态也清：重登后同样内容要能重新写进两份缓存
   if (!db) return;
   try {
     const tx = db.transaction(IDB_STORE, 'readwrite');
     tx.objectStore(IDB_STORE).clear();
   } catch {}
+  try { db.close(); } catch {}          // close 会等这笔 clear 事务跑完才真正关闭
 }
 
 const THEME_KEY = 'dsh.theme';
@@ -1091,7 +1143,7 @@ function applySkin(id) {
   try { localStorage.setItem(SKIN_KEY, v); } catch {}
 }
 
-// ---- legacy 路径：开关关闭时唯一路径，逻辑与原版逐字节一致 ----
+// ---- legacy 路径：回退开关 = '0' 时的唯一路径，逻辑与原版逐字节一致 ----
 function legacySaveListCache(sessions) {
   let slim = null;
   try {
@@ -1196,7 +1248,7 @@ function readMsgCache(sid) {
   }
   return legacyReadMsgCache(sid);
 }
-// 开关打开时早点开始开库/迁移，跟启动流程并行（await 在启动段）
+// 默认开启时早点开始开库/迁移，跟启动流程并行（await 在启动段）；退登后由登录路径重新触发
 if (CACHE_V2) idbInit();
 // ---------------- 待查看提醒（图标角标） ----------------
 // iOS 16.4+ 的主屏 Web App、以及 Chrome 安装的 PWA 都支持 Badging API：
@@ -2426,6 +2478,8 @@ function renderPair() {
       state.view = 'list';
       state.authError = '';
       render();
+      // 退登后同一页重登：v2 缓存层已复位，这里把库重新起起来（不 await，别挡首屏）
+      if (CACHE_V2 && !idbState.ready) idbInit();
       refreshAll();
     } catch (e) {
       err.textContent = friendlyAuthError(e, 'pair');
@@ -2450,6 +2504,8 @@ function renderPair() {
     state.authError = '';
     state.view = 'list';
     render();
+    // 恢复链接是「退登后同页重登」的主要路径：同样要把 v2 库重新起起来
+    if (CACHE_V2 && !idbState.ready) idbInit();
     refreshAll();
   }}, '用链接登录');
 
@@ -6535,8 +6591,8 @@ function subscribeDevice() {
       }
     } catch {}
   }
-  // 缓存层 v2（默认关）：开关打开时先把 IndexedDB 暖好（打开 / 迁移 / 索引 / 列表镜像）。
-  // 打不开会自动回落 legacy，这里不用额外处理；开关关着时这一段不执行，启动路径不变。
+  // 缓存层 v2（默认开启，'0' 可回退）：启动时先把 IndexedDB 暖好（打开 / 迁移 / 索引 / 列表镜像）。
+  // 打不开会自动回落 legacy，这里不用额外处理；回退开关为 '0' 时这一段不执行，启动路径与旧版一致。
   // 最多等 1.2 秒：JS 线程卡住时也不能让首屏一直白着，暖好后后续读写照常走 IDB。
   if (CACHE_V2) {
     try { await Promise.race([idbInit(), new Promise(r => setTimeout(r, 1200))]); } catch {}
