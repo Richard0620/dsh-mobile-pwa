@@ -5798,6 +5798,16 @@ function cancelVoiceInput() {
   paintProg(true);
 }
 
+// 子代理目录刷新会重画父会话；用户不在底部时，重画不能把他弹回底部（否则打开子代理
+// 面板那一下就把阅读位置丢了，返回时 openSubagentView 再快照到的已经是底部）。
+function repaintSessionKeepingScroll() {
+  if (state.view !== 'session' || !ui || !ui.body) return;
+  const keep = !ui.atBottom;
+  const y = ui.body.scrollTop;
+  paintSession(keep ? { scroll:'none' } : undefined);
+  if (keep && ui.body) { try { ui.body.scrollTop = y; } catch {} }
+}
+
 function paintSession({ scroll = 'auto' } = {}) {
   if (!ui.body || !ui.body.isConnected) return;
   state.lastPaint = Date.now();
@@ -7487,7 +7497,7 @@ async function loadSubagents(sid, { force = false } = {}) {
       }
     }
     if (sigOf(list, parentAvailable) !== before) {
-      if (state.view === 'session') paintSession();
+      repaintSessionKeepingScroll();
       if (subagentSheet) subagentSheet.paint();
     }
   } catch {
@@ -7496,7 +7506,7 @@ async function loadSubagents(sid, { force = false } = {}) {
     state.subagents = [];
     state.subagentsParentAvailable = true;
     state.subagentsFor = sid;
-    if (state.view === 'session') paintSession();
+    if (state.view === 'session') repaintSessionKeepingScroll();
     if (subagentSheet) subagentSheet.paint();
   } finally {
     state.subagentsLoading = false;
@@ -7624,10 +7634,8 @@ async function interruptSubagent(entry) {
 
 /** 只读视图：先切页（hero + 状态条 + 骨架立刻在），消息回来再填。 */
 function openSubagentView(entry) {
-  state.subagentSheetReturn = !!subagentSheet;
-  if (subagentSheet) closeSubagentSheet();
-  // 记住父会话的位置（绑定会话 id）：返回时不能在 openSession 的「滚到底部」里丢掉。
-  // atBottom 用几何位置现算，不读 ui.atBottom —— 程序化滚动时 scroll 事件还没跑完。
+  // 先快照父会话位置（在任何重画/关面板之前）：关 sheet、目录刷新都会触发重画，
+  // 顺序一旦反了，这里记到的就是"已经被弹到底部"的位置。
   const body = ui && ui.body;
   state.sessionRestore = body && state.sessionId
     ? {
@@ -7636,6 +7644,8 @@ function openSubagentView(entry) {
         atBottom: body.scrollHeight - body.scrollTop - body.clientHeight < 90,
       }
     : null;
+  state.subagentSheetReturn = !!subagentSheet;
+  if (subagentSheet) closeSubagentSheet();
   state.subagent = entry;
   state.subagentMessages = [];
   state.subagentMsgSig = '';
@@ -8984,10 +8994,17 @@ async function loadMessages(force=false, sidOverride=null) {
       }
     }
     if (state.view === 'session') paintSession(force ? { scroll:'bottom' } : {});
-    // F2：这一轮结束且开了自动朗读 → 读最新一条回复
+    // F2：这一轮结束且开了自动朗读 → 读最新一条回复。
+    // 延到进度条「已完成 · N 步」收尾之后（2.5s 开始淡出、约 3.3s 清空）再开口：
+    // 朗读条和完成行占的是同一个位置，立刻读会把完成行顶掉，用户看不到这一轮跑了几步。
     if (state.autoReadPending) {
       state.autoReadPending = false;
-      if (state.view === 'session') autoReadLatest(items);
+      const readSid = sid;
+      setTimeout(() => {
+        if (state.view !== 'session' || state.sessionId !== readSid) return;
+        if (state.speaking || state.rec) return;
+        autoReadLatest(items);
+      }, 3300);
     }
     // 新回复已经渲染出来，且人就在底部：本地水位立即推进，回列表不再亮未读
     if (state.view === 'session' && state.sessionId === sid && ui && ui.atBottom) markSessionSeen(sid);
