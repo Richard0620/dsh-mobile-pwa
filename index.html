@@ -754,6 +754,12 @@
     user-select:none;-webkit-user-select:none;touch-action:none;-webkit-touch-callout:none;
     -webkit-user-drag:none}
   .mic.on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+  /* 线性图标（与 app 其它 icon 同一套 stroke 语言），不用 emoji */
+  .mic svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.8;
+    stroke-linecap:round;stroke-linejoin:round;display:block}
+  .mic.on svg{stroke-width:2}
+  .mact button .ic svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.7;
+    stroke-linecap:round;stroke-linejoin:round;display:block}
   .stop{width:34px;height:34px;border-radius:50%;background:var(--bubble);color:var(--bad);
     display:none;place-items:center;font-size:13px;flex:none;border:1px solid var(--line)}
   /* 回到底部：悬浮在输入框外部的右上角 */
@@ -5064,10 +5070,15 @@ function speechPlain(s) {
     .trim();
 }
 
+function speakBtnHtml(on) {
+  const svg = sheetIconSVG(on ? 'square' : 'speaker');
+  return (svg ? '<span class="ic">' + svg + '</span>' : '') + '<span class="lb">' + (on ? '停止朗读' : '朗读') + '</span>';
+}
+
 function syncSpeakButtons() {
   for (const b of document.querySelectorAll('[data-speak-mid]')) {
     const on = !!(state.speaking && state.speakMsgId === b.getAttribute('data-speak-mid'));
-    b.textContent = on ? '■ 停止朗读' : '🔊 朗读';
+    b.innerHTML = speakBtnHtml(on);
   }
 }
 
@@ -5529,7 +5540,7 @@ function renderSession(wrap) {
     el('div', { class:'wv' }, ...[10, 22, 34, 18, 30, 38, 24, 14, 28, 36, 20, 12].map(h => el('i', { style:`height:${h}px` }))),
     el('div', { class:'hint' }));
   const micBtn = speechCtor
-    ? el('button', { class:'mic', type:'button', text:'🎙', title:'按住说话', 'aria-label':'按住说话' })
+    ? el('button', { class:'mic', type:'button', html: sheetIconSVG('mic'), title:'按住说话', 'aria-label':'按住说话' })
     : null;
 
   function setVoiceHint(cancel) {
@@ -5537,7 +5548,7 @@ function renderSession(wrap) {
     if (!hint) return;
     hint.replaceChildren();
     if (cancel) hint.append(document.createTextNode('松开取消'));
-    else hint.append(document.createTextNode('松开发送 · '), el('b', { text:'上滑取消' }));
+    else hint.append(document.createTextNode('松开结束 · '), el('b', { text:'上滑取消' }));
   }
   setVoiceHint(false);
 
@@ -5555,7 +5566,7 @@ function renderSession(wrap) {
       const rec = !!(state.rec && state.rec.sid === state.sessionId);
       const holdOn = speechHoldOn();
       micBtn.title = !holdOn ? '按住说话已在设置里关闭'
-        : rec ? '松开发送，上滑取消'
+        : rec ? '松开结束，上滑取消'
         : composerHasText ? '请先清空输入' : '按住说话';
       micBtn.setAttribute('aria-disabled', (!holdOn || (composerHasText && !rec)) ? 'true' : 'false');
     }
@@ -5586,12 +5597,11 @@ function renderSession(wrap) {
     } else {
       applyVoiceText(rec);
       saveDraft(state.sessionId, getText());
+      // 2026-11-25 用户决策：松手**不自动发送**——识别结果只落进输入框，留给用户改完再按 ↑。
+      try { ta.focus(); caretToEnd(); } catch {}
     }
     syncInputButtons();
     paintProg(true);
-    if (doSend && !rec.cancelled && String(rec.transcript || '').trim()) {
-      setTimeout(() => { try { if (state.sessionId === rec.sid) send(); } catch {} }, 60);
-    }
   }
 
   if (micBtn) {
@@ -6288,7 +6298,8 @@ function msgActions(m, alignRight) {
         if (state.speaking && state.speakMsgId === mid) stopSpeak();
         else speakText(text, mid);
       },
-    }, on ? '■ 停止朗读' : '🔊 朗读'));
+      html: speakBtnHtml(on),
+    }));
   }
   if (seq !== null && seq > 0) {
     row.append(el('button', { onclick: (e) => { e.stopPropagation(); forkSessionAt(m, seq); } }, '⑂ 分支'));
@@ -6599,6 +6610,9 @@ function sheetIconSVG(name) {
     plus: '<path d="M12 5.5v13M5.5 12h13"/>',
     file: '<path d="M7 4.5h6.5L18 9v10.5H7z"/><path d="M13.5 4.5V9H18"/>',
     code: '<path d="M9 7.5L4.5 12 9 16.5M15 7.5L19.5 12 15 16.5"/>',
+    mic: '<rect x="9" y="3.2" width="6" height="9.6" rx="3"/><path d="M5.5 11.2a6.5 6.5 0 0 0 13 0"/><path d="M12 17.7v2.6"/>',
+    speaker: '<path d="M4.5 9.4h3L12 6v12l-4.5-3.4h-3z"/><path d="M15.4 9.3a3.7 3.7 0 0 1 0 5.4"/><path d="M18 6.9a7.2 7.2 0 0 1 0 10.2"/>',
+    square: '<rect x="8" y="8" width="8" height="8" rx="1.6"/>',
   };
   const d = P[name];
   return d ? '<svg viewBox="0 0 24 24">' + d + '</svg>' : '';
