@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>F3 回话 / F4 折叠与继续 / F5 新建格式</title>
+<style>
+  :root{
+    --bg:#F6F5F1; --card:#FFFFFF; --fg:#1A1A16; --dim:#8C8A7F; --line:#E5E2D8;
+    --bubble:#ECEAE2; --accent:#1A1A16; --accent-fg:#FFFFFF; --ok:#2E6B3F; --warn:#8A5A12; --bad:#A33B31;
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  body{margin:0;background:#fff;color:#12140F;
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro SC","PingFang SC","Segoe UI","Microsoft YaHei",sans-serif}
+  .board{width:900px;padding:32px 26px 38px}
+  .cap{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#8C8A7F;font-weight:700}
+  h1{font-size:23px;margin:6px 0 6px;letter-spacing:-.02em}
+  .sub{color:#5E5D54;font-size:13px;margin:0 0 18px;line-height:1.6}
+  .q{margin:22px 0 6px;font-size:15px;font-weight:700}
+  .q .qno{display:inline-block;width:22px;height:22px;border-radius:6px;background:#1A1A16;color:#fff;
+    font-size:12px;text-align:center;line-height:22px;margin-right:8px;vertical-align:1px}
+  .why{font-size:12.5px;color:#8C8A7F;margin:0 0 12px}
+  .pair{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  .opt{min-width:0}
+  .lbl{font-size:12px;font-weight:700;margin:0 0 7px;display:flex;gap:7px;align-items:center}
+  .tag{font-size:10.5px;padding:1px 7px;border-radius:999px;font-weight:600}
+  .tag.a{background:#EDEAE0;color:#5E5D54}
+  .tag.b{background:#E7F0E9;color:#2E6B3F}
+  .snip{border:1px solid #E2DED2;border-radius:12px;background:var(--bg);padding:12px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 12px;font-size:12.5px}
+  .row{display:flex;align-items:center;gap:8px;margin-top:9px}
+  .btn{font-size:12px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:#fff}
+  .btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+  .btn.danger{color:var(--bad);border-color:#E7C9C4}
+  .muted{font-size:11.5px;color:var(--dim)}
+  .composer{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:8px 10px}
+  .ph{font-size:12.5px;color:var(--dim);min-height:18px}
+  .keyboard{font-size:10.5px;color:#8C8A7F;margin-top:6px}
+
+  /* 定时任务表单 */
+  .form{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .frow{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line);font-size:12px}
+  .frow:last-child{border-bottom:0}
+  .frow .k{width:56px;color:#8C8A7F;flex:none}
+  .frow .v{flex:1;min-width:0}
+  .segs{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .segs span{padding:3px 8px;font-size:11px;border-right:1px solid var(--line);color:#5E5D54}
+  .segs span:last-child{border-right:0}
+  .segs .on{background:var(--accent);color:var(--accent-fg)}
+  .mono{font-family:ui-monospace,Consolas,monospace;font-size:11.5px}
+  .cap2{font-size:11.5px;color:#8C8A7F;margin-top:7px;line-height:1.55}
+</style>
+</head>
+<body>
+<div class="board">
+  <div class="cap">Choices · Q3 – Q6</div>
+  <h1>剩下四题的左右对比</h1>
+  <p class="sub">一题一题问；这张图四组都在，回答时对着看就行，不用记。</p>
+
+  <!-- Q3 -->
+  <div class="q"><span class="qno">3</span>F3：点进子代理之后，能不能直接给它补话？</div>
+  <p class="why">背景：子代理是被派出去干活的；有时你想临时补一句「别改测试文件，只改实现」。区别在于手机上有没有这个入口。</p>
+  <div class="pair">
+    <div class="opt">
+      <p class="lbl"><span class="tag a">A</span>只读 + 打断</p>
+      <div class="snip">
+        <div class="card">这会话你只能看：消息、工具步、状态。</div>
+        <div class="row">
+          <span class="muted" style="flex:1">只读视图 · 发消息请回主会话</span>
+          <span class="btn danger">■ 打断</span>
+        </div>
+        <div class="keyboard">底部没有输入框</div>
+      </div>
+      <p class="cap2">心智简单：这里只观察、必要时掐断。想改需求回主会话说。</p>
+    </div>
+    <div class="opt">
+      <p class="lbl"><span class="tag b">B</span>可以直接补话</p>
+      <div class="snip">
+        <div class="card">这会话你只能看：消息、工具步、状态。</div>
+        <div class="row">
+          <div class="composer" style="flex:1"><div class="ph">给这个子代理补一句…</div></div>
+          <span class="btn primary">↑</span>
+        </div>
+        <div class="keyboard">底部有输入框（宿主 /subagents/prompt）</div>
+      </div>
+      <p class="cap2">省一次切回主会话；但你会分不清自己是在跟谁说话，主会话也不知道你插了这句。</p>
+    </div>
+  </div>
+
+  <!-- Q4 -->
+  <div class="q" style="margin-top:28px"><span class="qno">4</span>F4：停止之后那张「交代卡」，收起时是什么样？</div>
+  <p class="why">背景：你点停止，现在那一轮只剩一行「已停止」。F4 要在原处换一张卡：做了什么 / 看到了什么 / 没做完什么 / 对外发了几次。</p>
+  <div class="pair">
+    <div class="opt">
+      <p class="lbl"><span class="tag a">A</span>就是一行摘要，点开看四段</p>
+      <div class="snip">
+        <div class="card" style="padding:9px 12px">
+          <div style="display:flex;gap:8px;align-items:center">
+            <span style="color:var(--bad)">■</span>
+            <b style="font-size:12.5px">这一轮被停止</b>
+            <span class="muted" style="margin-left:auto">1:42 · 做了什么 4 · 没做完 2</span>
+            <span style="color:#8C8A7F">›</span>
+          </div>
+        </div>
+        <div class="keyboard">点这一行 → 展开四段；再点收起</div>
+      </div>
+      <p class="cap2">占一行，信息量够（4 件事、2 件没做完）；代价是比原来多一行高度。</p>
+    </div>
+    <div class="opt">
+      <p class="lbl"><span class="tag b">B</span>只留一个图标，不占行</p>
+      <div class="snip">
+        <div class="card" style="padding:9px 12px">
+          <div style="display:flex;gap:8px;align-items:center">
+            <span style="color:var(--bad)">■</span>
+            <span class="muted">已停止</span>
+            <span class="muted" style="margin-left:auto">1:42</span>
+          </div>
+          <div class="row" style="margin-top:6px">
+            <span class="btn" style="padding:3px 9px;font-size:11px">ⓘ</span>
+            <span class="muted">点图标看这轮做了什么</span>
+          </div>
+        </div>
+      </div>
+      <p class="cap2">省空间，但没人会主动点一个 ⓘ；F4 的价值基本等于 0。</p>
+    </div>
+  </div>
+
+  <!-- Q5 -->
+  <div class="q" style="margin-top:28px"><span class="qno">5</span>F4：卡上那颗「照这个继续」按下去之后？</div>
+  <p class="why">背景：停止后你常想「接着做完」，卡上给一颗按钮，把「没做完的那几条」变成下一步的指令。</p>
+  <div class="pair">
+    <div class="opt">
+      <p class="lbl"><span class="tag a">A</span>只预填输入框，你自己按发送</p>
+      <div class="snip">
+        <div class="composer">
+          <div class="ph" style="color:var(--fg)">继续：把迁移测试补完、更新台账这两项没做完，接着做</div>
+          <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px"><span class="btn primary" style="padding:4px 10px">↑</span></div>
+        </div>
+        <div class="keyboard">文字已就位，发送与否由你决定</div>
+      </div>
+      <p class="cap2">多一步，但你可以在发送前删掉/改掉不想继续的部分。</p>
+    </div>
+    <div class="opt">
+      <p class="lbl"><span class="tag b">B</span>直接发出去</p>
+      <div class="snip">
+        <div class="card" style="padding:9px 12px">已按「继续」发出，等回复…</div>
+        <div class="keyboard">点一下就开跑，没有二次确认</div>
+      </div>
+      <p class="cap2">快一步；但可能把「没做完」里你并不想继续的部分也一起推下去，还费 token。</p>
+    </div>
+  </div>
+
+  <!-- Q6 -->
+  <div class="q" style="margin-top:28px"><span class="qno">6</span>F5：新建定时任务，表单做到什么程度？</div>
+  <p class="why">背景：F5 是把宿主的定时任务搬到手机：几点、发到哪个会话、说什么。难点是"多久一次"怎么写。</p>
+  <div class="pair">
+    <div class="opt">
+      <p class="lbl"><span class="tag a">A</span>四个常用频率 + 时间，cron 收进「高级」</p>
+      <div class="snip">
+        <div class="form">
+          <div class="frow"><span class="k">频率</span><span class="v"><span class="segs"><span class="on">每天</span><span>工作日</span><span>每周</span><span>仅一次</span></span></span></div>
+          <div class="frow"><span class="k">时间</span><span class="v">09:00</span></div>
+          <div class="frow"><span class="k">发到</span><span class="v">新会话 · Vibe</span></div>
+          <div class="frow"><span class="k">说什么</span><span class="v" style="color:#8C8A7F">每天早上汇总昨天的工作区改动</span></div>
+          <div class="frow"><span class="k"></span><span class="v" style="color:#8C8A7F">高级（cron 表达式）›</span></div>
+        </div>
+      </div>
+      <p class="cap2">覆盖「每天 9 点」「工作日 18 点」「每周一」这类 90% 需求；特殊表达式仍能写。</p>
+    </div>
+    <div class="opt">
+      <p class="lbl"><span class="tag b">B</span>直接给 cron 表达式输入框</p>
+      <div class="snip">
+        <div class="form">
+          <div class="frow"><span class="k">cron</span><span class="v mono">0 9 * * 1-5</span></div>
+          <div class="frow"><span class="k">时区</span><span class="v">America/Los_Angeles</span></div>
+          <div class="frow"><span class="k">发到</span><span class="v">新会话 · Vibe</span></div>
+          <div class="frow"><span class="k">说什么</span><span class="v" style="color:#8C8A7F">每天早上汇总昨天的工作区改动</span></div>
+        </div>
+      </div>
+      <p class="cap2">灵活、一次到位；但手机上敲 cron 容易错位，错一位就静默不跑，排查很痛。</p>
+    </div>
+  </div>
+
+  <p class="sub" style="margin-top:20px">我的建议依次是：<b>Q3 = A、Q4 = A、Q5 = A、Q6 = A</b>（都选"少一点惊喜"的那个）。</p>
+</div>
+</body>
+</html>

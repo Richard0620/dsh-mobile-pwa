@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>麦克风槽位 · F3 入口三选一</title>
+<style>
+  :root{
+    --bg:#F6F5F1; --card:#FFFFFF; --fg:#1A1A16; --dim:#8C8A7F; --line:#E5E2D8;
+    --bubble:#ECEAE2; --accent:#1A1A16; --accent-fg:#FFFFFF; --ok:#2E6B3F; --warn:#8A5A12; --bad:#A33B31;
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  body{margin:0;background:#fff;color:#12140F;
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro SC","PingFang SC","Segoe UI","Microsoft YaHei",sans-serif}
+  .board{width:900px;padding:34px 26px 40px}
+  .cap{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#8C8A7F;font-weight:700}
+  h1{font-size:24px;margin:6px 0 8px;letter-spacing:-.02em}
+  .sub{color:#5E5D54;font-size:13.5px;margin:0 0 24px;line-height:1.6}
+  h2{font-size:18px;margin:30px 0 6px}
+  .hint{font-size:12.5px;color:#8C8A7F;margin:0 0 14px;line-height:1.6}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:22px 26px}
+  .cell{min-width:0}
+  .lbl{font-size:12px;font-weight:700;margin:0 0 7px;display:flex;align-items:center;gap:8px}
+  .tag{font-size:10.5px;padding:1px 7px;border-radius:999px;font-weight:600}
+  .tag.a{background:#EDEAE0;color:#5E5D54}
+  .tag.b{background:#E7F0E9;color:#2E6B3F}
+  .tag.c{background:#F1EDF7;color:#5B4A82}
+  .snippet{border:1px solid #E2DED2;border-radius:14px;background:var(--bg);padding:12px;position:relative}
+  .cap2{font-size:11.5px;color:#8C8A7F;margin-top:7px;line-height:1.55}
+
+  /* composer */
+  .composer{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:9px 11px 8px}
+  .ph{color:var(--dim);font-size:14px;min-height:20px}
+  .crow{display:flex;align-items:center;gap:7px;margin-top:7px}
+  .plus{width:30px;height:30px;border-radius:50%;background:var(--bubble);display:grid;place-items:center;font-size:15px;color:var(--dim);flex:none}
+  .chips{display:flex;gap:5px;flex:1;min-width:0}
+  .chip{font-size:11.5px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:3px 8px;white-space:nowrap}
+  .sg{display:flex;gap:7px;margin-left:auto;flex:none}
+  .btn{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;flex:none}
+  .btn.send{background:var(--accent);color:var(--accent-fg);font-size:14px}
+  .btn.send.off{opacity:.35}
+  .btn.mic{background:var(--bubble);border:1px solid var(--line);color:var(--fg)}
+  .btn.mic svg{width:15px;height:15px}
+  .btn.mic.hot{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+  .voice{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:10px 12px;margin-bottom:7px}
+  .wv{display:flex;align-items:flex-end;justify-content:center;gap:3px;height:26px;margin-bottom:5px}
+  .wv i{width:3px;border-radius:2px;background:var(--accent);opacity:.85}
+  .vh{text-align:center;font-size:11px;color:var(--dim)}
+
+  /* message + subbar */
+  .msg{border:1px solid #E2DED2;background:#fff;border-radius:12px;padding:10px 12px;font-size:12.5px;line-height:1.5}
+  .subbar{display:flex;align-items:center;gap:8px;margin-top:9px;padding:8px 10px;border:1px dashed #CFC9B8;
+    border-radius:10px;background:#FBFAF6;font-size:12px;color:#5E5D54}
+  .subbar .arrow{color:#8C8A7F}
+  .subbar .stat{margin-left:auto;font-size:11px;color:#8C8A7F;white-space:nowrap}
+  .dotk{width:6px;height:6px;border-radius:50%;background:var(--ok);display:inline-block;margin-right:4px}
+  .dotw{width:6px;height:6px;border-radius:50%;background:var(--warn);display:inline-block;margin-right:4px}
+
+  /* 顶部细条 / 列表 */
+  .head{border:1px solid #E2DED2;background:#fff;border-radius:12px 12px 0 0;padding:9px 12px;font-size:12.5px;font-weight:600;text-align:center}
+  .topbar{display:flex;align-items:center;gap:7px;padding:6px 12px;background:#FBFAF6;border:1px solid #E2DED2;border-top:0;font-size:11.5px;color:#5E5D54}
+  .topbar .stat{margin-left:auto;color:#8C8A7F}
+  .rowitem{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid #E2DED2;border-top:0;background:#fff;font-size:12.5px}
+  .rowitem.child{padding-left:26px;background:#FBFAF6;color:#5E5D54;font-size:11.5px}
+  .rowitem .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:10px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid #E9E6DC;vertical-align:top}
+  th{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#8C8A7F;background:#FBFAF6}
+  .k{font-family:ui-monospace,Consolas,monospace;font-size:11.5px}
+</style>
+</head>
+<body>
+<div class="board">
+  <div class="cap">Clarification · F2 + F3</div>
+  <h1>麦克风的槽位怎么用，以及 F3 入口的三个位置</h1>
+  <p class="sub">麦克风和发送是<b>同一个槽位在不同时刻的样子</b>，不会同时出现——录音时不需要发送键，松手就发出去了。下面四张图是这四种时刻。</p>
+
+  <!-- ============ 麦克风 ============ -->
+  <div class="grid">
+    <div class="cell">
+      <p class="lbl"><span class="tag a">状态 1</span>空输入 → 🎙（按住说话）</p>
+      <div class="snippet">
+        <div class="composer">
+          <div class="ph">发消息…</div>
+          <div class="crow">
+            <button class="plus">+</button>
+            <div class="chips"><span class="chip">Vibe</span><span class="chip">deepseek-flash</span></div>
+            <div class="sg"><div class="btn mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="10" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v3"></path></svg></div></div>
+          </div>
+        </div>
+      </div>
+      <p class="cap2">没有文字时不显示发送键，因为没有东西可发。</p>
+    </div>
+
+    <div class="cell">
+      <p class="lbl"><span class="tag a">状态 2</span>一打字 → ↑（发送）</p>
+      <div class="snippet">
+        <div class="composer">
+          <div class="ph" style="color:var(--fg)">把缓存换成 IndexedDB</div>
+          <div class="crow">
+            <button class="plus">+</button>
+            <div class="chips"><span class="chip">Vibe</span></div>
+            <div class="sg"><div class="btn send">↑</div></div>
+          </div>
+        </div>
+      </div>
+      <p class="cap2">🎙 消失、↑ 出现。同一个位置，不会并排。</p>
+    </div>
+
+    <div class="cell">
+      <p class="lbl"><span class="tag a">状态 3</span>按住不放 → 录音中</p>
+      <div class="snippet">
+        <div class="voice">
+          <div class="wv"><i style="height:8px"></i><i style="height:18px"></i><i style="height:26px"></i><i style="height:14px"></i><i style="height:22px"></i><i style="height:10px"></i><i style="height:20px"></i><i style="height:12px"></i></div>
+          <div class="vh">松开发送 · <b>上滑取消</b></div>
+        </div>
+        <div class="composer">
+          <div class="ph" style="color:var(--fg)">把这个模块的缓存换成…<span style="opacity:.6">▍</span></div>
+          <div class="crow">
+            <button class="plus">+</button>
+            <div class="chips"><span class="chip">Vibe</span></div>
+            <div class="sg"><div class="btn mic hot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="10" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v3"></path></svg></div></div>
+          </div>
+        </div>
+      </div>
+      <p class="cap2">按住期间 🎙 变实心、文字实时进输入框；手指一松就发出，所以这一刻不需要 ↑。</p>
+    </div>
+
+    <div class="cell">
+      <p class="lbl"><span class="tag b">备选</span>两个按钮都常驻</p>
+      <div class="snippet">
+        <div class="composer">
+          <div class="ph">发消息…</div>
+          <div class="crow">
+            <button class="plus">+</button>
+            <div class="chips"><span class="chip">Vibe</span></div>
+            <div class="sg">
+              <div class="btn mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="10" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v3"></path></svg></div>
+              <div class="btn send off">↑</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="cap2">🎙 在左、↑ 在右、空输入时 ↑ 半透明不可点。好处是两个功能都能看见；代价是右侧常年两个圆钮，略挤。</p>
+    </div>
+  </div>
+
+  <table>
+    <tr><th style="width:150px">你担心的冲突</th><th>实际情况</th></tr>
+    <tr><td>麦克风挡了发送</td><td>不会：它们是同一个槽位的两种状态，任意时刻只出现一个；打字过程里一直是 ↑</td></tr>
+    <tr><td>录音时怎么发</td><td>松手就发（微信同款）；上滑是取消。录音期间不需要按 ↑</td></tr>
+    <tr><td>想边打字边录音</td><td>做不到也不需要——输入框有文字时槽位就是 ↑，要录音先清空或长按 🎙（可选）</td></tr>
+  </table>
+  <p class="hint" style="margin-top:10px">如果你更想要"两个都看得见"，选上面第四个（备选），我把它作为默认形态。</p>
+
+  <!-- ============ F3 入口 ============ -->
+  <h2>F3 的入口放哪：三个位置</h2>
+  <p class="hint">F3 是「主会话派了子代理，手机上看得见、点得开、能打断」。差别只在这条入口出现在哪。</p>
+
+  <div class="grid" style="grid-template-columns:1fr 1fr 1fr">
+    <div class="cell">
+      <p class="lbl"><span class="tag a">A</span>派发那一轮末尾</p>
+      <div class="snippet">
+        <div class="msg">缓存层我拆成四块并行做：迁移测试、台账、调用点排查、待发文案核对。</div>
+        <div class="subbar">
+          <span class="arrow">⤷</span><span>4 个子代理</span>
+          <span class="stat"><span class="dotk"></span>1 跑中 · <span class="dotw"></span>1 待批</span>
+        </div>
+      </div>
+      <p class="cap2">跟着对话长出来，只在派过子代理的地方出现；往下翻就看不到。</p>
+    </div>
+
+    <div class="cell">
+      <p class="lbl"><span class="tag b">B</span>会话顶部常驻</p>
+      <div class="snippet">
+        <div class="head">重构 PWA 缓存层</div>
+        <div class="topbar">子代理 4 · 1 跑中 <span class="stat">展开 ›</span></div>
+        <div class="msg" style="margin-top:8px;border-radius:10px">缓存层我拆成四块并行做…</div>
+      </div>
+      <p class="cap2">一直在最上面，随时能点；但没子代理时这条是空占位，得隐藏。</p>
+    </div>
+
+    <div class="cell">
+      <p class="lbl"><span class="tag c">C</span>会话列表里分组</p>
+      <div class="snippet">
+        <div class="rowitem"><span class="t">重构 PWA 缓存层</span><span style="color:#8C8A7F;font-size:11px">2 分钟</span></div>
+        <div class="rowitem child"><span class="t">↳ 补迁移测试</span><span style="color:var(--ok);font-size:11px">跑中</span></div>
+        <div class="rowitem child"><span class="t">↳ 更新台账</span><span style="color:#8C8A7F;font-size:11px">待批</span></div>
+        <div class="rowitem"><span class="t">修连接状态胶囊</span><span style="color:#8C8A7F;font-size:11px">昨天</span></div>
+      </div>
+      <p class="cap2">在列表就能看到全貌；但要改列表结构（父子缩进、折叠），风险最大。</p>
+    </div>
+  </div>
+
+  <p class="hint" style="margin-top:14px">我的建议：<b>A</b>。它是唯一"零常驻成本 + 默认上下文正确"的方案；B 有常驻空占位问题，C 要动列表结构、和置顶/归档/分组全都会打架。</p>
+</div>
+</body>
+</html>
