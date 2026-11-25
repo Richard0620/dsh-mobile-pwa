@@ -827,7 +827,9 @@ const IDB_VERSION = 1;
 const IDB_STORE = 'kv';
 // 本期唯一的行为差异：IDB 单会话 400 条 / 最多 30 个会话；legacy 仍是 120 条 / 10 个会话
 const IDB_LIMITS = { msgsPerSession: 400, sessions: 30 };
-const CACHE_V2 = (() => { try { return localStorage.getItem(CACHE_V2_KEY) === '1'; } catch { return false; } })();
+// 2026-11-25 用户决策：默认开启（一期先发 preview 真机跑一天）。
+// 回退开关保留：`localStorage['dsh.cache.v2'] = '0'` 后彻底重开 App 即回到 legacy。
+const CACHE_V2 = (() => { try { return localStorage.getItem(CACHE_V2_KEY) !== '0'; } catch { return true; } })();
 
 // 读接口是同步的（调用点都在渲染路径上），所以 IndexedDB 的内容先灌进内存镜像，读只查内存。
 // 键：'list' / 'msg:<sid>'；另有一条 'idx' 只存 { sid: at }，用于在「不读消息正文」的前提下裁会话数。
