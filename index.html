@@ -167,6 +167,7 @@
   .connpill.static{cursor:default}
   .hero.hero-back{align-items:center;justify-content:flex-start;gap:8px}
   .hero.hero-back .hero-main{flex:1;min-width:0}
+  .hero.hero-back .hero-main h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .hero.hero-back .acts{margin-left:auto;margin-top:0;padding-top:0}
   .hero.hero-back .ico{flex:none;color:var(--dim);margin-left:-8px}
   .hero.hero-back .ico svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8}
@@ -268,6 +269,7 @@
   .subbar .cnt.wait{color:var(--warn)} .subbar .cnt.wait i{background:var(--warn)}
   .subbar .cnt.fail{color:var(--bad)}  .subbar .cnt.fail i{background:var(--bad)}
   .subbar .all{flex:none;font-size:11.5px;color:var(--dim)}
+  .subbar.done b{color:var(--dim);font-weight:600}
   .subbar .cv{margin-left:auto;flex:none;font-size:15px;color:var(--dim);letter-spacing:-.5px}
 
   /* ---------- F3 子代理列表（沿用 .mask/.sheet，行铺满） ---------- */
@@ -352,6 +354,68 @@
     padding-top:2px}
   .fsec .fi.more{color:var(--dim);font-size:11.5px}
   .facts{display:flex;gap:8px;margin-top:11px}
+
+  /* ---------- F5 定时任务：列表 / 详情 / 新建 ---------- */
+  .trow{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);
+    width:100%;text-align:left;background:none;color:inherit}
+  .trow:last-child{border-bottom:0}
+  .trow:active{background:var(--bubble)}
+  .trow.new{background:color-mix(in srgb,var(--accent) 10%,var(--card));
+    box-shadow:inset 3px 0 0 var(--accent)}
+  .trow .tw{flex:none;width:54px;min-width:0}
+  .trow .tw b{display:block;font:600 13px/1.1 ui-monospace,SFMono-Regular,Consolas,monospace;
+    letter-spacing:-.3px;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .trow .tw span{display:block;font:10px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace;
+    color:var(--dim);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .trow .ts{flex:1;min-width:0}
+  .trow .ts b{display:block;font-size:14px;font-weight:550;letter-spacing:-.1px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .trow .ts span{display:block;font-size:11.5px;color:var(--dim);margin-top:2px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .trow .ta{flex:none;display:flex;align-items:center;gap:6px}
+  .tbtn{width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--card);
+    display:grid;place-items:center;flex:none;font-size:10px;color:var(--fg);line-height:1}
+  .tbtn:active{background:var(--bubble)}
+  .tbtn.dis{opacity:.32}
+  .runpill{display:inline-flex;align-items:center;gap:4px;flex:none;font:10px ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--ok)}
+  .runpill .dot{width:6px;height:6px;margin-top:0}
+  .trow.paused{opacity:.6}
+  .trow.paused .tw b,.trow.paused .ts b{color:var(--dim)}
+  .hrow{display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--line);
+    font-size:12px;color:var(--dim)}
+  .hrow:last-child{border-bottom:0}
+  .hrow .hw{flex:none;width:70px;font:10.5px ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--dim)}
+  .hrow .hn{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    font-size:12.5px;color:var(--fg)}
+  .hrow .hr{flex:none;font:10.5px ui-monospace,SFMono-Regular,Consolas,monospace}
+  .hrow .hr.ok{color:var(--ok)} .hrow .hr.bad{color:var(--bad)}
+  .pbox{width:100%;border:1px solid var(--line);border-radius:14px;background:var(--card);
+    padding:12px 13px;font-size:16px;line-height:1.55;color:var(--fg);min-height:72px;
+    resize:vertical;font-family:inherit;outline:none;display:block}
+  .pbox:focus{border-color:color-mix(in srgb,var(--accent) 38%,var(--line))}
+  .phint{font-size:11.5px;color:var(--dim);line-height:1.55;padding:8px 6px 0}
+  .advrow{display:flex;align-items:center;gap:8px;margin-top:10px;padding:11px 14px;
+    border:1px solid var(--line);border-radius:14px;background:var(--card);
+    font-size:12.5px;color:var(--dim);width:100%;text-align:left}
+  .advrow:active{background:var(--bubble)}
+  .advrow .ac{margin-left:auto;color:var(--dim);font-size:14px;flex:none}
+  .advbox{margin-top:8px}
+  .advbox input{width:100%;border:1px solid var(--line);border-radius:12px;background:var(--card);
+    padding:11px 12px;font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--fg);
+    outline:none}
+  .advbox input:focus{border-color:color-mix(in srgb,var(--accent) 38%,var(--line))}
+  .cta{margin:14px 0 calc(20px + var(--safe-b));background:var(--accent);color:var(--accent-fg);
+    border-radius:14px;text-align:center;padding:13px;font-size:14.5px;font-weight:600;width:100%}
+  .cta:disabled{opacity:.5}
+  .srow .sv input{width:96px;text-align:right;font:11px ui-monospace,SFMono-Regular,Consolas,monospace;
+    color:var(--dim);background:transparent;border:0;outline:none;padding:0}
+  .srow .sv input:focus{color:var(--fg)}
+  .schedsec{margin:0 0 10px}
+  .schedsec .groupcard{margin:0}
+  .schedhint{font-size:11.5px;color:var(--dim);line-height:1.6;padding:10px 6px 0}
+  .schedwarn{font-size:11.5px;color:var(--warn);line-height:1.6;padding:8px 6px 0}
+  .schedtitle{font-size:13px;font-weight:650;margin:0 0 6px;letter-spacing:-.1px}
+  .schedprompt{font-size:13.5px;line-height:1.6;color:var(--accent-2);white-space:pre-wrap;word-break:break-word}
 
   /* ---------- 会话详情 ---------- */
   .msg{margin:14px 0}
@@ -1469,6 +1533,11 @@ const state = {
   turn: null,
   turnStartedAt: 0,
   stopSummary: null,           // { turn, data, expanded, durationMs }
+  // F5 定时任务：目录、新建草稿、详情（含历史）
+  schedule: null,
+  scheduleDraft: null,
+  scheduleDetail: null,
+  scheduleHighlight: '',
   tab: 'all',
   archived: null,
   archivedError: '',
@@ -2057,6 +2126,9 @@ function renderSettings(wrap) {
     }),
     row('推送诊断', '订阅端点、最近投递', '', () => { state.view = 'sub'; state.subPage = 'pushdiag'; render(); }),
   ]));
+  main.append(el('div', { class:'slabel', text:'自动化' }), card([
+    row('定时任务', '每天 / 工作日 / 每周 / 仅一次', '', openSchedule),
+  ]));
   main.append(el('div', { class:'slabel', text:'连接' }), card([
     row('连接', '自动 / 仅中转 / 仅局域网', '', () => { state.view = 'sub'; state.subPage = 'conn'; render(); }),
     row('统计', '会话数、词元与用量', '', () => { state.view = 'sub'; state.subPage = 'stats'; render(); }),
@@ -2081,6 +2153,9 @@ function render() {
     else if (state.view === 'new') renderNewSession(wrap);
     else if (state.view === 'sub') renderSubPage(wrap);
     else if (state.view === 'subagent') renderSubagentView(wrap);
+    else if (state.view === 'schedule') renderSchedule(wrap);
+    else if (state.view === 'scheduleNew') renderScheduleNew(wrap);
+    else if (state.view === 'scheduleDetail') renderScheduleDetail(wrap);
     else if (state.view === 'git') renderGit(wrap);
     else renderSession(wrap);
     if (state.view === 'list' || state.view === 'files' || state.view === 'settings') wrap.append(tabBar(state.view));
@@ -6147,7 +6222,7 @@ function subagentBarItem() {
 function renderSubagentBar() {
   const counts = subagentCounts();
   const allDone = counts.running === 0 && counts.pending === 0 && counts.failed === 0;
-  const bar = el('button', { class:'subbar', type:'button', onclick: () => openSubagentsSheet() },
+  const bar = el('button', { class:'subbar' + (allDone ? ' done' : ''), type:'button', onclick: () => openSubagentsSheet() },
     el('span', { class:'ar', text:'⤷' }),
     el('b', { text:`${state.subagents.length} 个子代理` }));
   if (allDone) bar.append(el('span', { class:'all', text:'全部完成' }));
@@ -6187,7 +6262,7 @@ async function loadSubagents(sid, { force = false } = {}) {
       const fresh = list.find(entry => entry.sessionId === state.subagent.sessionId);
       if (fresh && (fresh.status !== state.subagent.status || fresh.lastActivityAt !== state.subagent.lastActivityAt)) {
         state.subagent = fresh;
-        if (state.view === 'subagent') render();
+        if (state.view === 'subagent') paintSubagentView();
       }
     }
     if (sigOf(list, parentAvailable) !== before) {
@@ -6319,7 +6394,7 @@ async function interruptSubagent(entry) {
     if (state.subagent && state.subagent.sessionId === entry.sessionId) {
       const fresh = state.subagents.find(item => item.sessionId === entry.sessionId);
       if (fresh) state.subagent = fresh;
-      if (state.view === 'subagent') render();
+      if (state.view === 'subagent') paintSubagentView();
     }
   } catch (e) {
     toast('打断失败：' + String((e && e.message) || e));
@@ -6357,16 +6432,24 @@ function goBackFromSubagent() {
   if (wantSheet) setTimeout(openSubagentsSheet, 0);
 }
 
+/** 只读视图的局部重绘：轮询来了新消息不把用户正在看的位置拉回顶部。 */
+function paintSubagentView() {
+  if (state.view !== 'subagent') return;
+  const current = document.querySelector('.roview');
+  const top = current ? current.scrollTop : 0;
+  const atBottom = current ? current.scrollHeight - current.scrollTop - current.clientHeight < 60 : false;
+  render();
+  requestAnimationFrame(() => {
+    const next = document.querySelector('.roview');
+    if (!next) return;
+    next.scrollTop = atBottom ? next.scrollHeight : top;
+  });
+}
+
 /** 子会话消息：必须带 parentSessionId + mode 才是 durable address，缺一就读不到。 */
 async function loadSubagentMessages({ silent = false } = {}) {
   const entry = state.subagent;
   if (!entry) return;
-  if (!state.subagentsParentAvailable) {
-    state.subagentLoading = false;
-    state.subagentError = '主会话已删除，读不到这个子代理的消息；状态和打断仍然可用。';
-    if (state.view === 'subagent') render();
-    return;
-  }
   const parent = entry.parentSessionId || state.sessionId;
   if (!silent && !state.subagentMessages.length) state.subagentLoading = true;
   try {
@@ -6386,14 +6469,14 @@ async function loadSubagentMessages({ silent = false } = {}) {
       state.subagentMsgSig = sig;
     }
     state.subagentLoading = false;
-    if ((changed || !silent) && state.view === 'subagent') render();
+    if ((changed || !silent) && state.view === 'subagent') paintSubagentView();
   } catch (e) {
     if (!state.subagent || state.subagent.sessionId !== entry.sessionId) return;
     state.subagentLoading = false;
     const msg = String((e && e.message) || e);
     if (msg !== state.subagentError) {
       state.subagentError = msg;
-      if (state.view === 'subagent') render();
+      if (state.view === 'subagent') paintSubagentView();
     }
   } finally {
     state.subagentLoading = false;
@@ -6465,6 +6548,10 @@ function renderSubagentView(wrap) {
     main.append(el('div', { class:'dispatch' },
       el('div', { class:'dl', text:'派发指令' }),
       el('div', { class:'dt', text: entry.desc })));
+  }
+  if (!state.subagentsParentAvailable) {
+    main.append(el('div', { class:'childnote warn',
+      text:'主会话已删除，读到的消息可能不全；状态和打断仍然可用。' }));
   }
   if (state.subagentLoading) {
     for (const width of ['92%', '78%', '86%']) main.append(el('div', { class:'skel', style:`width:${width}` }));
@@ -6643,6 +6730,805 @@ function continueFromStop(data) {
   } catch {}
   ui.atBottom = true;
   try { if (ui.body) ui.body.scrollTop = ui.body.scrollHeight; } catch {}
+}
+
+// ---------------------------------------------------------------- F5 定时任务
+// 宿主字段（schedule.js / schedule-edit.js 实测）：
+//   list/catalog → { records:[{ id, title, kind, status, state, time, timeZone, weekdays,
+//     expression, everySeconds, afterSeconds, scheduledAt, updatedAt, lastDelivery,
+//     target:{kind:'session'|'new_once'|'new', sessionId?, create?{cwd,agentPreset}}, executionActive }], serverNow }
+//   create → { title, prompt, timing, target?, sessionId? }；timing 用 snake_case 嵌套
+//   update → { id, patch, expectedUpdatedAt? }；pause/resume → { id, expectedUpdatedAt? }
+// 页面只做「四选一 + 时间 + 目标 + 工作区 + 提示词」，cron 收进高级。
+
+const SCHEDULE_FREQ_LABEL = { daily:'每天', weekdays:'工作日', weekly:'每周', once:'仅一次' };
+
+function scheduleZone() {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; }
+}
+
+function scheduleLocalDate(offsetDays = 0) {
+  const d = new Date(Date.now() + offsetDays * 86400000);
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+function scheduleTimeValue(value) {
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(value || '').trim());
+  if (!m) return '09:00';
+  return `${String(Math.min(23, Number(m[1]))).padStart(2, '0')}:${m[2]}`;
+}
+
+function scheduleWeekdayName(n) {
+  return ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'][Number(n)] || '';
+}
+
+function scheduleWeekdayLabel(days) {
+  const list = (Array.isArray(days) ? days : []).map(Number).filter(n => n >= 1 && n <= 7).sort((a, b) => a - b);
+  if (!list.length) return '每周';
+  const key = list.join(',');
+  if (key === '1,2,3,4,5') return '工作日';
+  if (key === '6,7') return '周末';
+  return list.map(scheduleWeekdayName).join('、');
+}
+
+function scheduleEveryLabel(seconds) {
+  const n = Number(seconds) || 0;
+  if (n <= 0) return '周期';
+  if (n < 3600) return `每 ${Math.max(1, Math.round(n / 60))} 分钟`;
+  if (n < 86400) return `每 ${Math.max(1, Math.round(n / 3600))} 小时`;
+  return `每 ${Math.max(1, Math.round(n / 86400))} 天`;
+}
+
+/** 列表时间位只有 54px：compact 版（每 2h / 每 30m）才放得下。 */
+function scheduleEveryCompact(seconds) {
+  const n = Number(seconds) || 0;
+  if (n <= 0) return '周期';
+  if (n < 3600) return `每 ${Math.max(1, Math.round(n / 60))}m`;
+  if (n < 86400) return `每 ${Math.max(1, Math.round(n / 3600))}h`;
+  return `每 ${Math.max(1, Math.round(n / 86400))}d`;
+}
+
+/** 下次/上次运行的人话时间；未来跨天用星期，过去用日期。 */
+function fmtScheduleAt(value) {
+  const t = typeof value === 'number' ? value : Date.parse(String(value || ''));
+  if (!Number.isFinite(t) || !t) return '';
+  const d = new Date(t);
+  const now = new Date();
+  const p = n => String(n).padStart(2, '0');
+  const hm = `${p(d.getHours())}:${p(d.getMinutes())}`;
+  const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  if (sameDay(d, now)) return `今天 ${hm}`;
+  const tomorrow = new Date(now.getTime() + 86400000);
+  if (sameDay(d, tomorrow)) return `明天 ${hm}`;
+  const yesterday = new Date(now.getTime() - 86400000);
+  if (sameDay(d, yesterday)) return `昨天 ${hm}`;
+  if (t > now.getTime() && t - now.getTime() < 7 * 86400000) return `${'日一二三四五六'[d.getDay()]} ${hm}`.replace(/^/, '周');
+  return `${d.getMonth() + 1}月${d.getDate()}日 ${hm}`;
+}
+
+function scheduleBasename(path) {
+  const parts = String(path || '').split(/[\\/]/).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : '';
+}
+
+function scheduleSessionTitle(sessionId) {
+  if (!sessionId) return '';
+  const found = (state.sessions || []).find(s => s.sessionId === sessionId);
+  if (found) return found.title || '(无标题)';
+  return `…${String(sessionId).slice(-6)}`;
+}
+
+function scheduleSessionGone(sessionId) {
+  if (!sessionId || !(state.sessions || []).length) return false;
+  return !state.sessions.some(s => s.sessionId === sessionId);
+}
+
+/** 宿主的 status 是 active/paused/ended/inactive；老宿主只有 state（active/inactive）。 */
+function normalizeScheduleRecord(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const id = String(raw.id || '').trim();
+  if (!id) return null;
+  const status = ['active', 'paused', 'ended', 'inactive'].includes(raw.status)
+    ? raw.status
+    : (raw.state === 'inactive' ? 'paused' : 'active');
+  return { ...raw, id, title: String(raw.title || '').trim() || '未命名任务', status };
+}
+
+function scheduleTargetText(record) {
+  const target = record.target && typeof record.target === 'object' ? record.target : null;
+  // v2 宿主把目标放在 target 里，行上的 sessionId 只是「创建者」：新会话目标必须优先认 target，
+  // 否则每条新会话任务都会被写成「会话 <创建它的那条>」。
+  if (target && (target.kind === 'new_once' || target.kind === 'new')) {
+    const cwd = target.create && target.create.cwd;
+    return { text: `新会话${cwd ? ' · ' + scheduleBasename(cwd) : ''}`, dead:false };
+  }
+  const sessionId = (target && target.kind === 'session' && target.sessionId)
+    || (record.sessionId || '');
+  if (sessionId) {
+    const dead = scheduleSessionGone(sessionId);
+    return { text: `会话 ${scheduleSessionTitle(sessionId)}`, dead };
+  }
+  return { text:'未设目标', dead:false };
+}
+
+function scheduleTimeCell(record) {
+  if (record.status !== 'active') {
+    return { big:'—', small: record.status === 'ended' ? '已结束' : '暂停' };
+  }
+  switch (record.kind) {
+    case 'daily':
+      return { big: scheduleTimeValue((record.daily && record.daily.time) || record.time), small:'每天' };
+    case 'weekly':
+      return { big: scheduleTimeValue((record.weekly && record.weekly.time) || record.time),
+        small: scheduleWeekdayLabel((record.weekly && record.weekly.weekdays) || record.weekdays) };
+    case 'every':
+      return { big: scheduleEveryCompact(record.everySeconds),
+        small: record.scheduledAt ? fmtScheduleAt(record.scheduledAt) : '' };
+    case 'after':
+      return { big:'一次', small:'延后' };
+    case 'at': {
+      const at = record.at;
+      if (typeof at === 'string') {
+        const d = new Date(at);
+        return Number.isFinite(d.getTime())
+          ? { big:`${d.getMonth() + 1}-${d.getDate()}`, small:scheduleTimeValue(`${d.getHours()}:${d.getMinutes()}`) }
+          : { big:'一次', small:'' };
+      }
+      if (at && typeof at === 'object') return { big:String(at.date || '').slice(5) || '—', small:String(at.time || '') };
+      return { big:'一次', small:'' };
+    }
+    case 'cron':
+      return { big:'cron', small: record.expression || '' };
+    case 'rrule':
+      return { big:'规则', small:'rrule' };
+    default:
+      return { big:'—', small: record.kind || '未知' };
+  }
+}
+
+function scheduleFrequencyDetail(record) {
+  switch (record.kind) {
+    case 'daily': return `每天 ${scheduleTimeValue((record.daily && record.daily.time) || record.time)}`;
+    case 'weekly': return `${scheduleWeekdayLabel((record.weekly && record.weekly.weekdays) || record.weekdays)} ${scheduleTimeValue((record.weekly && record.weekly.time) || record.time)}`;
+    case 'every': return scheduleEveryLabel(record.everySeconds);
+    case 'after': return `置后 ${Math.max(1, Math.round((Number(record.afterSeconds) || 0) / 60))} 分钟跑一次`;
+    case 'at': {
+      const at = record.at;
+      if (typeof at === 'string') return `仅一次 ${fmtScheduleAt(at)}`;
+      if (at && typeof at === 'object') return `仅一次 ${at.date || ''} ${at.time || ''}`.trim();
+      return '仅一次';
+    }
+    case 'cron': return `cron ${record.expression || ''}`;
+    case 'rrule': return 'rrule 规则';
+    default: return record.kind || '未知';
+  }
+}
+
+function scheduleRow(title, desc, value, run) {
+  return el(run ? 'button' : 'div', run ? { class:'srow', type:'button', onclick:run } : { class:'srow' },
+    el('div', { class:'st' }, el('b', { text:title }), desc ? el('span', { text:desc }) : null),
+    value == null ? null : (value.nodeType ? el('span', { class:'sv' }, value) : el('span', { class:'sv', text:String(value) })));
+}
+
+function scheduleInput(type, value, onInput, extra = {}) {
+  const input = el('input', { type, value, ...extra });
+  input.addEventListener('input', onInput);
+  input.addEventListener('change', onInput);
+  return input;
+}
+
+function scheduleRecentDeliveries(records, limit = 5) {
+  const rows = [];
+  for (const record of records) {
+    const delivery = record.lastDelivery;
+    const at = delivery && Date.parse(String(delivery.deliveredAt || ''));
+    if (!Number.isFinite(at) || !at) continue;
+    rows.push({ record, at });
+  }
+  return rows.sort((a, b) => b.at - a.at).slice(0, limit);
+}
+
+function scheduleDeliveryRow(entry) {
+  return el('div', { class:'hrow' },
+    el('span', { class:'hw', text: fmtScheduleAt(entry.at) }),
+    el('span', { class:'hn', text: entry.record.title }),
+    el('span', { class:'hr ok', text:'已投递' }));
+}
+
+function renderScheduleRow(record) {
+  const cell = scheduleTimeCell(record);
+  const target = scheduleTargetText(record);
+  const row = el('div', {
+    class: 'trow' + (record.status !== 'active' ? ' paused' : '') + (state.scheduleHighlight === record.id ? ' new' : ''),
+    role:'button', tabindex:'0', onclick: () => openScheduleDetail(record),
+  });
+  row.append(el('div', { class:'tw' }, el('b', { text:cell.big }), cell.small ? el('span', { text:cell.small }) : null));
+  const sub = el('span', { text: target.dead ? '目标会话已不可用' : target.text });
+  if (target.dead) sub.style.color = 'var(--bad)';
+  row.append(el('div', { class:'ts' }, el('b', { text:record.title }), sub));
+  const acts = el('div', { class:'ta' });
+  if (record.executionActive) acts.append(el('span', { class:'runpill' }, el('span', { class:'dot run' }), '跑中'));
+  if (record.status === 'active') {
+    const run = el('button', { class:'tbtn' + (record.executionActive ? ' dis' : ''), type:'button',
+      title:'立刻跑', 'aria-label':`立刻跑 ${record.title}`, text:'▶', disabled: !!record.executionActive,
+      onclick: (ev) => { ev.stopPropagation(); scheduleAction(record, 'run'); } });
+    acts.append(run);
+    acts.append(el('button', { class:'tbtn', type:'button', title:'暂停', 'aria-label':`暂停 ${record.title}`,
+      text:'⏸', onclick: (ev) => { ev.stopPropagation(); scheduleAction(record, 'pause'); } }));
+  } else {
+    acts.append(el('button', { class:'tbtn', type:'button', title:'恢复', 'aria-label':`恢复 ${record.title}`,
+      text:'▶', onclick: (ev) => { ev.stopPropagation(); scheduleAction(record, 'resume'); } }));
+  }
+  row.append(acts);
+  row.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); openScheduleDetail(record); }
+  });
+  return row;
+}
+
+function openSchedule() {
+  state.view = 'schedule';
+  if (!state.schedule || state.schedule.error) state.schedule = { loading:true, records:[], error:'' };
+  render();
+  loadSchedule();
+}
+
+async function loadSchedule() {
+  try {
+    const r = await api('/api/mobile/v1/schedule/catalog');
+    const records = (Array.isArray(r && r.records) ? r.records : []).map(normalizeScheduleRecord).filter(Boolean);
+    state.schedule = { loading:false, records, error:'', at:Date.now(), serverNow:Number(r && r.serverNow) || Date.now() };
+  } catch (e) {
+    state.schedule = { loading:false, records:[], error:String((e && e.message) || e), code:e && e.code, at:Date.now() };
+  }
+  if (state.view === 'schedule') render();
+}
+
+function renderSchedule(wrap) {
+  const data = state.schedule;
+  const records = (data && data.records) || [];
+  const active = records.filter(r => r.status === 'active');
+  const paused = records.filter(r => r.status !== 'active');
+  const sub = data && data.loading ? '读取中…'
+    : data && data.error ? '读取失败'
+    : (records.length ? `${active.length} 个启用 · ${paused.length} 个暂停` : '还没有任务');
+  const back = el('button', { class:'ico', html:sheetIconSVG('chevronLeft'), title:'返回设置',
+    'aria-label':'返回设置', onclick: () => { state.view = 'settings'; state.subPage = ''; render(); } });
+  const plus = data && data.error ? null
+    : el('button', { class:'ico', html:sheetIconSVG('plus'), title:'新建定时任务',
+      'aria-label':'新建定时任务', onclick: openScheduleNew });
+  wrap.append(heroBackHeader('定时任务', sub, back, plus));
+  const main = el('div', { class:'settings' });
+  wrap.append(main);
+
+  if (!data || data.loading) {
+    for (const width of ['82%', '68%', '74%', '58%']) {
+      main.append(el('div', { class:'skel', style:`width:${width};margin:14px 6px` }));
+    }
+    return;
+  }
+  if (data.error) {
+    main.append(el('div', { class:'empty', text:'读不到定时任务' }),
+      el('div', { class:'err', style:'text-align:center', text:data.error }),
+      el('button', { class:'cta', type:'button', text:'重试', onclick: () => loadSchedule() }));
+    return;
+  }
+  if (!records.length) {
+    main.append(el('div', { class:'empty' },
+      el('div', { text:'还没有定时任务' }),
+      el('div', { style:'font-size:12.5px;padding-top:6px', text:'存在电脑上，关掉手机也会跑。' })));
+    main.append(el('button', { class:'cta', type:'button', text:'新建定时任务', onclick: openScheduleNew }));
+    return;
+  }
+  if (active.length) {
+    main.append(el('div', { class:'slabel', text:'启用中' }),
+      el('div', { class:'groupcard' }, ...active.map(renderScheduleRow)));
+  }
+  if (paused.length) {
+    main.append(el('div', { class:'slabel', text:'已暂停' }),
+      el('div', { class:'groupcard' }, ...paused.map(renderScheduleRow)));
+  }
+  const recent = scheduleRecentDeliveries(records);
+  if (recent.length) {
+    main.append(el('div', { class:'slabel', text:'最近运行' }),
+      el('div', { class:'groupcard' }, ...recent.map(scheduleDeliveryRow)));
+  }
+  main.append(el('div', { class:'schedhint',
+    text:'点一行进详情：看完整历史、暂停 / 恢复、立刻执行或删除。' }));
+}
+
+/** 新建草稿：四选一 + 时间（仅一次另带日期）+ 目标 + 工作区 + 提示词。 */
+function openScheduleNew() {
+  const now = new Date();
+  state.scheduleDraft = {
+    freq:'daily',
+    time:'09:00',
+    weekday: now.getDay() || 7,
+    date: scheduleLocalDate(1),
+    target:'new',
+    sessionId:'',
+    workspaceCwd: (state.workspaces[0] && (state.workspaces[0].path || state.workspaces[0].cwd)) || state.sessionCwd || '',
+    prompt:'',
+    advanced:false,
+    cron:'',
+    saving:false,
+    error:'',
+    editingId:'',
+    expectedUpdatedAt:'',
+  };
+  state.view = 'scheduleNew';
+  render();
+  // 从设置直接进来时这两个列表可能还没拉过：补一次，选目标/工作区才有东西可选。
+  // 不重绘页面：用户可能正在输入提示词，重绘会丢焦点；选择面板点开时读的是最新 state。
+  if (!state.workspaces.length) {
+    api('/api/mobile/v1/workspaces').then(r => {
+      state.workspaces = (r && r.items) || [];
+    }).catch(() => {});
+  }
+  if (!state.sessions.length) {
+    api('/api/mobile/v1/sessions').then(r => {
+      state.sessions = (r && r.items) || [];
+    }).catch(() => {});
+  }
+}
+
+/** 详情页「改时间」：复用新建表单，保存走 /schedule/update（带 CAS）。 */
+function openScheduleEdit(record) {
+  const time = scheduleTimeValue((record.daily && record.daily.time) || (record.weekly && record.weekly.time) || record.time);
+  const draft = {
+    freq:'daily', time, weekday:new Date().getDay() || 7,
+    date:scheduleLocalDate(1),
+    target:'new', sessionId:'', workspaceCwd:'', prompt:record.prompt || '',
+    advanced:false, cron:'', saving:false, error:'',
+    editingId:record.id, expectedUpdatedAt:record.updatedAt || '',
+    originalCreate:null, originalTargetKind:'', originalTitle:record.title || '', originalKind:record.kind || '',
+  };
+  const target = record.target && typeof record.target === 'object' ? record.target : null;
+  if (target && (target.kind === 'new' || target.kind === 'new_once')) {
+    draft.originalTargetKind = target.kind;
+    if (target.create && typeof target.create === 'object') draft.originalCreate = { ...target.create };
+  }
+  if (target && target.kind === 'session' && target.sessionId) {
+    draft.target = 'session';
+    draft.sessionId = target.sessionId;
+  } else if (target && (target.kind === 'new_once' || target.kind === 'new')) {
+    draft.workspaceCwd = (target.create && target.create.cwd) || '';
+  } else if (record.sessionId) {
+    draft.target = 'session';
+    draft.sessionId = record.sessionId;
+  }
+  if (record.kind === 'daily') {
+    draft.freq = 'daily';
+  } else if (record.kind === 'weekly') {
+    const days = (record.weekly && record.weekly.weekdays) || record.weekdays || [];
+    const list = (Array.isArray(days) ? days : []).map(Number).filter(n => n >= 1 && n <= 7);
+    if (list.join(',') === '1,2,3,4,5') draft.freq = 'weekdays';
+    else { draft.freq = 'weekly'; draft.weekday = list[0] || 1; }
+  } else if (record.kind === 'at') {
+    const at = record.at;
+    if (typeof at === 'string') {
+      const d = new Date(at);
+      if (!Number.isFinite(d.getTime())) { toast('这条任务的时间读不出来'); return; }
+      const p = n => String(n).padStart(2, '0');
+      draft.freq = 'once';
+      draft.date = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+      draft.time = `${p(d.getHours())}:${p(d.getMinutes())}`;
+    } else if (at && typeof at === 'object') {
+      draft.freq = 'once';
+      draft.date = String(at.date || draft.date);
+      draft.time = scheduleTimeValue(at.time);
+    }
+  } else if (record.kind === 'cron') {
+    draft.advanced = true;
+    draft.cron = record.expression || '';
+  } else {
+    toast('这类任务暂不支持在手机上改时间');
+    return;
+  }
+  state.scheduleDraft = draft;
+  state.view = 'scheduleNew';
+  render();
+}
+
+function renderScheduleNew(wrap) {
+  const draft = state.scheduleDraft;
+  if (!draft) { state.view = 'schedule'; render(); return; }
+  const editing = !!draft.editingId;
+  const back = el('button', { class:'ico', html:sheetIconSVG('chevronLeft'), title: editing ? '返回任务详情' : '返回定时任务',
+    'aria-label':'返回', onclick: () => {
+      if (editing && state.scheduleDetail) { state.view = 'scheduleDetail'; render(); loadScheduleDetail(); }
+      else { state.view = 'schedule'; render(); loadSchedule(); }
+    } });
+  wrap.append(heroBackHeader(editing ? '编辑定时任务' : '新建定时任务',
+    editing ? '保存后按新时间重算下次运行' : '存在宿主上 · 关掉手机也会跑', back));
+  const main = el('div', { class:'settings' });
+  wrap.append(main);
+
+  main.append(el('div', { class:'slabel', text:'什么时候' }));
+  const whenRows = [];
+  whenRows.push(scheduleRow('频率', '每天 / 工作日 / 每周 / 仅一次', SCHEDULE_FREQ_LABEL[draft.freq] || '每天', () => {
+    openSheet([
+      { label:'每天', checked:draft.freq === 'daily', run:() => { draft.freq = 'daily'; render(); } },
+      { label:'工作日（周一至周五）', checked:draft.freq === 'weekdays', run:() => { draft.freq = 'weekdays'; render(); } },
+      { label:'每周', checked:draft.freq === 'weekly', run:() => { draft.freq = 'weekly'; render(); } },
+      { label:'仅一次', checked:draft.freq === 'once', run:() => { draft.freq = 'once'; render(); } },
+    ], '频率');
+  }));
+  if (draft.freq === 'weekly') {
+    whenRows.push(scheduleRow('星期几', '', scheduleWeekdayName(draft.weekday) || '周三', () => {
+      openSheet([1, 2, 3, 4, 5, 6, 7].map(n => ({
+        label: scheduleWeekdayName(n), checked:Number(draft.weekday) === n,
+        run:() => { draft.weekday = n; render(); },
+      })), '星期几');
+    }));
+  }
+  whenRows.push(scheduleRow('时间', '按本机时区', scheduleInput('time', scheduleTimeValue(draft.time), (ev) => {
+    draft.time = ev.target.value || '09:00';
+  })));
+  if (draft.freq === 'once') {
+    whenRows.push(scheduleRow('日期', '仅在一天跑一次', scheduleInput('date', draft.date || scheduleLocalDate(1), (ev) => {
+      draft.date = ev.target.value || scheduleLocalDate(1);
+    }, { min: scheduleLocalDate(0), style:'width:128px' })));
+  }
+  main.append(el('div', { class:'groupcard' }, ...whenRows));
+
+  main.append(el('div', { class:'slabel', text:'发到哪' }));
+  const targetRows = [];
+  targetRows.push(scheduleRow('目标', '新会话（推荐）/ 已有会话',
+    draft.target === 'session' ? '已有会话' : '新会话', () => {
+      openSheet([
+        { label:'新会话（推荐）', checked:draft.target !== 'session', run:() => { draft.target = 'new'; render(); } },
+        { label:'已有会话', checked:draft.target === 'session', run:() => { draft.target = 'session'; render(); } },
+      ], '目标');
+    }));
+  if (draft.target === 'session') {
+    targetRows.push(scheduleRow('会话', '触发时发到这条会话', draft.sessionId ? scheduleSessionTitle(draft.sessionId) : '选择会话', () => {
+      const sessions = (state.sessions || []).slice(0, 40);
+      if (!sessions.length) { toast('会话列表还没加载'); return; }
+      openSheet(sessions.map(s => ({
+        label: s.title || '(无标题)',
+        sub: [scheduleBasename(s.cwd), s.sessionId === draft.sessionId ? '当前选择' : ''].filter(Boolean).join(' · '),
+        checked: s.sessionId === draft.sessionId,
+        run: () => { draft.sessionId = s.sessionId; render(); },
+      })), '选一条会话');
+    }));
+  }
+  const workspaceLabel = draft.target === 'session' ? '跟随会话'
+    : (draft.workspaceCwd ? scheduleBasename(draft.workspaceCwd) : '跟随宿主');
+  targetRows.push(scheduleRow('工作区', draft.target === 'session' ? '由目标会话决定' : '决定 cwd 与权限', workspaceLabel,
+    draft.target === 'session' ? null : () => {
+      const list = state.workspaces || [];
+      if (!list.length) { toast('工作区列表还没加载'); return; }
+      openSheet(list.map(w => ({
+        label: w.title || scheduleBasename(w.path) || '工作区',
+        sub: w.path || '',
+        checked: w.path === draft.workspaceCwd,
+        run: () => { draft.workspaceCwd = w.path || ''; render(); },
+      })), '工作区');
+    }));
+  main.append(el('div', { class:'groupcard' }, ...targetRows));
+
+  main.append(el('div', { class:'slabel', text:'提示词' }));
+  const promptInput = el('textarea', { class:'pbox', rows:'3',
+    placeholder:'每次触发就是把这段当一条新消息发出去，不要写「明天」这类相对时间。' });
+  promptInput.value = draft.prompt;
+  promptInput.addEventListener('input', () => { draft.prompt = promptInput.value; });
+  main.append(promptInput);
+  main.append(el('div', { class:'phint', text:'写清要做什么、做到什么程度、完成后回什么。' }));
+
+  main.append(el('button', { class:'advrow', type:'button',
+    onclick: () => { draft.advanced = !draft.advanced; render(); } },
+    el('span', { text:'高级 · cron 表达式' }),
+    el('span', { class:'ac', text:draft.advanced ? '⌄' : '›' })));
+  if (draft.advanced) {
+    const cronInput = el('input', { type:'text', placeholder:'0 9 * * *', value:draft.cron,
+      autocomplete:'off', autocapitalize:'off', spellcheck:'false' });
+    cronInput.addEventListener('input', () => { draft.cron = cronInput.value; });
+    main.append(el('div', { class:'advbox' }, cronInput,
+      el('div', { class:'phint', text:'五段式（分 时 日 月 周）。填了就按 cron 跑，忽略上面的频率；时区用本机的。' })));
+  }
+
+  if (draft.error) main.append(el('div', { class:'schedwarn', text:draft.error }));
+  main.append(el('button', { class:'cta', type:'button', disabled:!!draft.saving,
+    text: draft.saving ? (draft.editingId ? '保存中…' : '创建中…') : (draft.editingId ? '保存' : '创建'),
+    onclick: createScheduleFromDraft }));
+}
+
+function scheduleTimingFromDraft(draft) {
+  const zone = scheduleZone();
+  const time = scheduleTimeValue(draft.time);
+  const cron = String(draft.cron || '').trim();
+  if (draft.advanced && cron) {
+    if (cron.split(/\s+/).length !== 5) return null;
+    return { kind:'cron', cron:{ expression:cron, time_zone:zone } };
+  }
+  // 原来就是 cron 的任务不能把表达式清空后静默变成每天
+  if (draft.originalKind === 'cron') return null;
+  if (draft.freq === 'daily') return { kind:'daily', daily:{ time, time_zone:zone } };
+  if (draft.freq === 'weekdays') {
+    return { kind:'weekly', weekly:{ time, time_zone:zone, weekdays:[1, 2, 3, 4, 5] } };
+  }
+  if (draft.freq === 'weekly') {
+    return { kind:'weekly', weekly:{ time, time_zone:zone, weekdays:[Number(draft.weekday) || 1] } };
+  }
+  if (draft.freq === 'once') {
+    const date = String(draft.date || '').trim() || scheduleLocalDate(1);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+    return { kind:'at', at:{ date, time, time_zone:zone } };
+  }
+  return null;
+}
+
+function scheduleTargetFromDraft(draft) {
+  if (draft.target === 'session') {
+    const sessionId = String(draft.sessionId || '').trim();
+    return sessionId ? { kind:'session', sessionId } : null;
+  }
+  // 编辑时保留原有的 create（cwd / agentPreset）与 new / new_once 语义，只覆盖用户改过的工作区
+  const kind = draft.originalTargetKind === 'new' ? 'new' : 'new_once';
+  const create = { ...(draft.originalCreate || {}) };
+  const cwd = String(draft.workspaceCwd || '').trim();
+  if (cwd) create.cwd = cwd;
+  return Object.keys(create).length ? { kind, create } : { kind };
+}
+
+function scheduleTitleFromPrompt(prompt) {
+  const first = String(prompt || '').split('\n').map(line => line.trim()).find(Boolean) || '';
+  // 自动标题取第一句（到句号/分号为止），比整段提示词更适合当列表标题
+  const clause = plain(first).split(/[。；;！!？?]/)[0].trim();
+  const title = clause.slice(0, 24).trim();
+  return title || `定时任务 ${new Date().toLocaleDateString('zh-CN', { month:'2-digit', day:'2-digit' })}`;
+}
+
+async function createScheduleFromDraft() {
+  const draft = state.scheduleDraft;
+  if (!draft || draft.saving) return;
+  const prompt = String(draft.prompt || '').trim();
+  if (!prompt) { toast('先写提示词'); return; }
+  const timing = scheduleTimingFromDraft(draft);
+  if (!timing) {
+    toast(draft.advanced && String(draft.cron || '').trim() ? 'cron 要填五段（分 时 日 月 周）' : '时间还没填好');
+    return;
+  }
+  const target = scheduleTargetFromDraft(draft);
+  if (!target) { toast('先选一条目标会话'); return; }
+  draft.saving = true;
+  draft.error = '';
+  if (state.view === 'scheduleNew') render();
+  try {
+    // 编辑时不覆盖用户原有的标题（表单里没有标题格，自动标题只用于新建）
+    const title = (draft.editingId && draft.originalTitle) || scheduleTitleFromPrompt(prompt);
+    if (draft.editingId) {
+      const body = { id: draft.editingId, patch: { title, prompt, timing, target } };
+      if (draft.expectedUpdatedAt) body.expectedUpdatedAt = draft.expectedUpdatedAt;
+      const r = await api('/api/mobile/v1/schedule/update', { method:'POST', body });
+      const updated = r && r.record ? normalizeScheduleRecord(r.record) : null;
+      toast('已保存');
+      state.scheduleDetail = updated ? {
+        id: updated.id, record: updated, loading:true, loadingMore:false,
+        viewError:'', history:null, historyError:'',
+      } : null;
+      state.view = updated ? 'scheduleDetail' : 'schedule';
+      render();
+      if (updated) loadScheduleDetail();
+      loadSchedule();
+      return;
+    }
+    const body = { title, prompt, timing, target };
+    if (target.kind === 'session') body.sessionId = target.sessionId;
+    const r = await api('/api/mobile/v1/schedule/create', { method:'POST', body });
+    const id = r && r.record && r.record.id;
+    state.scheduleHighlight = id || '';
+    state.schedule = null;
+    state.view = 'schedule';
+    toast('已创建定时任务');
+    render();
+    loadSchedule();
+    if (id) {
+      setTimeout(() => {
+        if (state.scheduleHighlight === id) {
+          state.scheduleHighlight = '';
+          if (state.view === 'schedule') render();
+        }
+      }, 3000);
+    }
+  } catch (e) {
+    draft.saving = false;
+    draft.error = String((e && e.message) || e);
+    if (state.view === 'scheduleNew') render();
+    toast((draft.editingId ? '保存失败：' : '创建失败：') + draft.error);
+  }
+}
+
+/** 列表行上的 run / pause / resume；CAS 冲突单独说人话。 */
+async function scheduleAction(record, action) {
+  try {
+    let result = null;
+    if (action === 'run') {
+      result = await api('/api/mobile/v1/schedule/run', { method:'POST', body:{ id:record.id } });
+      if (result && result.ran === false) toast('这条任务正在执行中');
+      else toast('已触发一次');
+    } else {
+      const body = { id: record.id };
+      if (record.updatedAt) body.expectedUpdatedAt = record.updatedAt;
+      await api(`/api/mobile/v1/schedule/${action}`, { method:'POST', body });
+      toast(action === 'pause' ? '已暂停' : '已恢复');
+    }
+    await loadSchedule();
+    if (state.view === 'scheduleDetail') await loadScheduleDetail();
+  } catch (e) {
+    const code = e && e.code;
+    if (code === 'schedule_conflict') toast('这条任务刚被改过，刷新后再试');
+    else if (code === 'schedule_execution_pending') toast('这条任务正在执行中');
+    else if (code === 'schedule_not_found') toast('这条任务已经不在了，回列表刷新一下');
+    else toast('操作失败：' + String((e && e.message) || e));
+  }
+}
+
+function normalizeScheduleHistory(raw) {
+  const source = raw && typeof raw === 'object' ? raw : {};
+  const records = (Array.isArray(source.records) ? source.records : [])
+    .filter(item => item && typeof item.messageId === 'string')
+    .map(item => ({ ...item }));
+  return {
+    records,
+    earlierRecordsUnavailable: source.earlierRecordsUnavailable === true,
+    earlierRecordsPruned: source.earlierRecordsPruned === true,
+    retention: source.retention && typeof source.retention === 'object' ? source.retention : { days:0, records:0 },
+    nextBefore: typeof source.nextBefore === 'string' ? source.nextBefore : '',
+  };
+}
+
+function openScheduleDetail(record) {
+  state.view = 'scheduleDetail';
+  state.scheduleHighlight = '';
+  state.scheduleDetail = {
+    id: record.id, record, loading:true, loadingMore:false,
+    viewError:'', history:null, historyError:'',
+  };
+  render();
+  loadScheduleDetail();
+}
+
+async function loadScheduleDetail({ historyBefore = '' } = {}) {
+  const detail = state.scheduleDetail;
+  if (!detail) return;
+  if (!historyBefore) detail.loading = true;
+  else detail.loadingMore = true;
+  const id = detail.id;
+  const historyPath = `/api/mobile/v1/schedule/history?id=${encodeURIComponent(id)}&limit=20`
+    + (historyBefore ? `&before=${encodeURIComponent(historyBefore)}` : '');
+  const [viewRes, historyRes] = await Promise.allSettled([
+    api(`/api/mobile/v1/schedule/view?id=${encodeURIComponent(id)}`),
+    api(historyPath),
+  ]);
+  if (!state.scheduleDetail || state.scheduleDetail !== detail) return;
+  if (viewRes.status === 'fulfilled' && viewRes.value && viewRes.value.record) {
+    const fresh = normalizeScheduleRecord(viewRes.value.record);
+    if (fresh) detail.record = fresh;
+    detail.viewError = '';
+  } else if (viewRes.status === 'rejected') {
+    detail.viewError = String((viewRes.reason && viewRes.reason.message) || viewRes.reason);
+  }
+  if (historyRes.status === 'fulfilled') {
+    const page = normalizeScheduleHistory(historyRes.value);
+    if (historyBefore && detail.history) {
+      const seen = new Set(detail.history.records.map(item => item.messageId));
+      for (const item of page.records) if (!seen.has(item.messageId)) detail.history.records.push(item);
+      detail.history.nextBefore = page.nextBefore;
+      detail.history.earlierRecordsUnavailable = page.earlierRecordsUnavailable;
+      detail.history.earlierRecordsPruned = page.earlierRecordsPruned;
+      detail.history.retention = page.retention;
+    } else {
+      detail.history = page;
+    }
+    detail.historyError = '';
+  } else {
+    detail.historyError = String((historyRes.reason && historyRes.reason.message) || historyRes.reason);
+  }
+  detail.loading = false;
+  detail.loadingMore = false;
+  if (state.view === 'scheduleDetail') render();
+}
+
+function scheduleHistoryRow(item, fallbackTitle) {
+  const at = fmtScheduleAt(item.deliveredAt || item.scheduledAt);
+  const text = item.prompt ? plain(item.prompt).slice(0, 40)
+    : (item.targetSessionId ? scheduleSessionTitle(item.targetSessionId) : (fallbackTitle || '（无提示词）'));
+  return el('div', { class:'hrow' },
+    el('span', { class:'hw', text: at || '—' }),
+    el('span', { class:'hn', text }),
+    el('span', { class:'hr ok', text:'已投递' }));
+}
+
+async function deleteSchedule(record) {
+  if (!confirm(`删除「${record.title}」？\n删除后不会再触发，已投递的记录不再保留。`)) return;
+  const body = { id: record.id };
+  if (record.updatedAt) body.expectedUpdatedAt = record.updatedAt;
+  if (record.sessionId) body.sessionId = record.sessionId;
+  try {
+    await api('/api/mobile/v1/schedule/delete', { method:'POST', body });
+    toast('已删除');
+    state.scheduleDetail = null;
+    state.scheduleHighlight = '';
+    state.schedule = null;
+    state.view = 'schedule';
+    render();
+    loadSchedule();
+  } catch (e) {
+    const code = e && e.code;
+    if (code === 'schedule_conflict') toast('这条任务刚被改过，刷新后再试');
+    else toast('删除失败：' + String((e && e.message) || e));
+  }
+}
+
+function renderScheduleDetail(wrap) {
+  const detail = state.scheduleDetail;
+  if (!detail || !detail.record) { state.view = 'schedule'; render(); return; }
+  const record = detail.record;
+  const back = el('button', { class:'ico', html:sheetIconSVG('chevronLeft'), title:'返回定时任务',
+    'aria-label':'返回定时任务', onclick: () => { state.view = 'schedule'; render(); loadSchedule(); } });
+  wrap.append(heroBackHeader(record.title, '定时任务 · 详情', back));
+  const meta = el('div', { class:'metabar2' },
+    el('span', { class:`dot ${record.status === 'active' ? 'run' : 'done'}` }),
+    el('span', { class: record.status === 'active' ? 'w' : '',
+      text: record.status === 'active' ? '启用中' : record.status === 'paused' ? '已暂停' : record.status === 'ended' ? '已结束' : '未启用' }));
+  if (record.status === 'active' && record.scheduledAt) {
+    meta.append(el('span', { class:'sep', text:'·' }), el('span', { text:`下次 ${fmtScheduleAt(record.scheduledAt)}` }));
+  }
+  if (record.executionActive) meta.append(el('span', { class:'sep', text:'·' }), el('span', { text:'正在执行' }));
+  wrap.append(meta);
+
+  const main = el('div', { class:'settings' });
+  wrap.append(main);
+  const target = scheduleTargetText(record);
+  main.append(el('div', { class:'slabel', text:'任务' }),
+    el('div', { class:'groupcard' },
+      scheduleRow('频率', '', scheduleFrequencyDetail(record), null),
+      scheduleRow('下次运行', '', record.status !== 'active' ? '暂停中'
+        : (record.scheduledAt ? fmtScheduleAt(record.scheduledAt) : '—'), null),
+      scheduleRow('目标', target.dead ? '目标会话已不可用' : '', target.text, null),
+      scheduleRow('时区', '', record.timeZone || scheduleZone(), null),
+      scheduleRow('修订', '', record.updatedAt ? fmtTime(Date.parse(record.updatedAt)) : '—', null)));
+
+  main.append(el('div', { class:'slabel', text:'提示词' }));
+  main.append(el('div', { class:'groupcard' },
+    el('div', { style:'padding:12px 14px' }, el('div', { class:'schedprompt', text: record.prompt || '（空）' }))));
+
+  if (detail.viewError) main.append(el('div', { class:'schedwarn', text:'读最新任务失败：' + detail.viewError }));
+
+  main.append(el('div', { class:'facts' },
+    el('button', { class:'btn', type:'button', text:'▶ 立刻执行', disabled: !!record.executionActive,
+      onclick: () => scheduleAction(record, 'run') }),
+    el('button', { class:'btn', type:'button', text: record.status === 'active' ? '⏸ 暂停' : '▶ 恢复',
+      onclick: () => scheduleAction(record, record.status === 'active' ? 'pause' : 'resume') })));
+  main.append(el('div', { class:'facts', style:'margin-top:8px' },
+    el('button', { class:'btn', type:'button', text:'改时间', onclick: () => openScheduleEdit(record) }),
+    el('button', { class:'btn no', type:'button', text:'删除任务', onclick: () => deleteSchedule(record) })));
+
+  main.append(el('div', { class:'slabel', text:'最近运行' }));
+  if (detail.loading && !detail.history) {
+    main.append(el('div', { class:'skel', style:'width:80%;margin:12px 6px' }),
+      el('div', { class:'skel', style:'width:66%;margin:12px 6px' }));
+  } else if (detail.historyError) {
+    main.append(el('div', { class:'empty', text:'读不到运行记录' }),
+      el('div', { class:'err', style:'text-align:center', text:detail.historyError }),
+      el('button', { class:'cta', type:'button', text:'重试', onclick: () => loadScheduleDetail() }));
+  } else if (!detail.history || !detail.history.records.length) {
+    main.append(el('div', { class:'empty', text:'还没有投递记录' }));
+  } else {
+    main.append(el('div', { class:'groupcard' }, ...detail.history.records.map(item => scheduleHistoryRow(item, record.title))));
+    if (detail.history.nextBefore) {
+      main.append(el('button', { class:'showhidden', type:'button', disabled:!!detail.loadingMore,
+        text: detail.loadingMore ? '读取中…' : '加载更早',
+        onclick: () => loadScheduleDetail({ historyBefore: detail.history.nextBefore }) }));
+    }
+    const hint = detail.history.earlierRecordsUnavailable ? '更早的记录宿主已经读不到了。'
+      : detail.history.earlierRecordsPruned ? `更早的记录已按保留策略清理（保留 ${detail.history.retention.days || 0} 天 / ${detail.history.retention.records || 0} 条）。`
+      : '';
+    if (hint) main.append(el('div', { class:'schedhint', text:hint }));
+  }
 }
 
 // ---------------------------------------------------------------- 流程
