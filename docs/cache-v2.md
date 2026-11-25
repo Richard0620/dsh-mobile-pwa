@@ -4,7 +4,7 @@
 改动文件：`index.html`（单文件），本说明。
 不改界面、不改接口、不改 `APP_VERSION` / `sw.js` / `PWA-优化清单.md`。
 
-**一期只做「影子写 + 可开关读取」：默认关闭，关闭时行为与 v249 逐字节一致。**
+**一期只做「影子写 + 可开关读取」；2026-11-25 用户决策改为默认开启（`localStorage['dsh.cache.v2'] = '0'` 可回退，回退后与 v249 逐字节一致）。**
 打开开关后：读走 IndexedDB，写是双写（localStorage 照老规则写一份当影子/回滚保险，IndexedDB 再写一份）。
 唯一的限额差异：**IndexedDB 单会话保留 400 条、最多 30 个会话**；localStorage（legacy）仍是 120 条 / 10 个会话。
 
@@ -16,7 +16,7 @@
 | --- | --- |
 | 开关 key | `localStorage['dsh.cache.v2']` |
 | 打开 | 值为字符串 `'1'` |
-| 关闭 / 未设置 | 一切走 legacy，与改动前完全一致（默认） |
+| `'0'`（回退） | 一切走 legacy，与改动前完全一致 |
 | 生效时机 | **模块加载时读取一次**，必须完全杀掉 App 重开（或 `location.reload()`） |
 
 ```js
@@ -125,7 +125,7 @@ IndexedDB: dsh-mobile (version 1)
 - 先在**旧版**（还没打开开关）里正常用一会儿：进出几个会话（最好有一个 >120 条消息的长会话）、
   让列表攒到 10 个以上会话，保证 `dsh.cache.list` / `dsh.cache.msgs` 有内容。
 
-### 8.2 默认关闭（安全网，必须先过）
+### 8.2 回退开关（`dsh.cache.v2='0'`，安全网，先过这条）
 
 1. 冷启动 App，不设任何开关。
 2. console 跑 `await indexedDB.databases()`（不支持就跳过）：**不应出现 `dsh-mobile`**。
