@@ -1554,6 +1554,8 @@ const state = {
   gitData: null,
   gitTitle: '',
   msgLimit: 120,
+  // 从子代理只读页返回父会话时用：{ sessionId, top, atBottom }，渲染挂载后消费一次
+  sessionRestore: null,
 };
 
 const root = $('#root');
@@ -4928,7 +4930,8 @@ function paintSession({ scroll = 'auto' } = {}) {
       : (state.stream ? '实时连接断开，重连中…' : '');
   }
   syncBusyTicker();
-  if (scroll === 'bottom' || atBottom) {
+  // scroll:'none' 给「返回父会话、要恢复原位置」用：别在这里自动贴底
+  if (scroll === 'bottom' || (scroll !== 'none' && atBottom)) {
     ui.atBottom = true;
     requestAnimationFrame(() => {
       if (!ui.body || !ui.body.isConnected) return;
@@ -5496,9 +5499,34 @@ function renderSession(wrap) {
   ui = { sessionId: state.sessionId, body, listWrap, cardsWrap, ta, sendBtn, stopBtn, strip, dot, modelEl: modelRow, effortEl: effortRow,
     send, // 新会话页要借它把第一条发出去（闭合在 renderSession 里，外面拿不到）
     qDock, editBar, jump, updateJump, loadStats: loadSessionStats, keys: [], nodes: [], cardsKey: '', prevCount: undefined, atBottom: true };
-  paintSession({ scroll:'bottom' });
-  // 进会话只定位到底部，不自动聚焦输入框：多数时候是进来看内容的，弹键盘会挡住正文
-  requestAnimationFrame(() => { body.scrollTop = body.scrollHeight; });
+
+  // 首次绘制必须等 wrap 挂进 #root 之后：render() 在 renderSession 返回后才 append，
+  // 而 paintSession 对未连接的 body 会直接 return。以前返回子代理只读页时这里画不出来，
+  // 只能等 4 秒轮询 —— 现在延到下一帧补画，并按 state.sessionRestore 恢复父会话位置。
+  const finishInitialPaint = () => {
+    if (!ui || ui.sessionId !== state.sessionId || state.view !== 'session') return;
+    if (!ui.body || !ui.body.isConnected) return;
+    const restore = state.sessionRestore && state.sessionRestore.sessionId === state.sessionId
+      ? state.sessionRestore : null;
+    if (!restore) {
+      // 新会话/没缓存时没有消息可画，交给 openSession 的 loadMessages，避免闪一下空态
+      if (state.messages.length) paintSession({ scroll:'bottom' });
+      return;
+    }
+    state.sessionRestore = null;
+    if (restore.atBottom) {
+      // 原本就在底部：继续贴底（新消息/轮次结束也不会被拉走）
+      paintSession({ scroll:'bottom' });
+      return;
+    }
+    // 原本在中间：禁止 paintSession 自己贴底，画完立刻把滚动位置放回去
+    paintSession({ scroll:'none' });
+    try { ui.body.scrollTop = restore.top; } catch {}
+    ui.atBottom = false;
+    try { ui.updateJump?.(); } catch {}
+  };
+  if (body.isConnected) finishInitialPaint();
+  else requestAnimationFrame(finishInitialPaint);
 }
 
 // 把「纯工具调用」的连续消息合并成一行步骤，避免一屏都是 ⚙ chip
@@ -6405,7 +6433,16 @@ async function interruptSubagent(entry) {
 function openSubagentView(entry) {
   state.subagentSheetReturn = !!subagentSheet;
   if (subagentSheet) closeSubagentSheet();
-  try { state.subagentReturnScroll = ui && ui.body ? ui.body.scrollTop : null; } catch { state.subagentReturnScroll = null; }
+  // 记住父会话的位置（绑定会话 id）：返回时不能在 openSession 的「滚到底部」里丢掉。
+  // atBottom 用几何位置现算，不读 ui.atBottom —— 程序化滚动时 scroll 事件还没跑完。
+  const body = ui && ui.body;
+  state.sessionRestore = body && state.sessionId
+    ? {
+        sessionId: state.sessionId,
+        top: body.scrollTop,
+        atBottom: body.scrollHeight - body.scrollTop - body.clientHeight < 90,
+      }
+    : null;
   state.subagent = entry;
   state.subagentMessages = [];
   state.subagentMsgSig = '';
@@ -6425,10 +6462,9 @@ function goBackFromSubagent() {
   state.subagentMessages = [];
   state.subagentError = '';
   state.view = 'session';
-  const top = state.subagentReturnScroll;
-  state.subagentReturnScroll = null;
+  // 滚动恢复交给 renderSession 挂载后的首次绘制（见 finishInitialPaint），
+  // 这里只切页，不要另起 rAF 与首次绘制抢顺序。
   render();
-  if (top != null) requestAnimationFrame(() => { try { if (ui && ui.body) ui.body.scrollTop = top; } catch {} });
   if (wantSheet) setTimeout(openSubagentsSheet, 0);
 }
 
@@ -7603,6 +7639,7 @@ function openSession(s) {
   state.sessionTitle = s.title || '(无标题)';
   state.messages = []; state.cards = []; state.lastSeq = 0; state.busy = !!s.running; state.busySince = 0;
   state.turn = null; state.turnStartedAt = 0; state.stopSummary = null;
+  state.sessionRestore = null;
   state.model = null; state.pending = []; state.unseen = 0; state.msgLimit = 120;
   state.queue = [];
   state.permCurrent = '';
