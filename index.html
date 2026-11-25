@@ -747,6 +747,8 @@
   .send{width:34px;height:34px;border-radius:50%;background:var(--accent);color:var(--accent-fg);display:grid;
     place-items:center;font-size:16px;flex:none;margin-left:auto;box-shadow:0 2px 8px color-mix(in srgb,var(--accent) 35%,transparent)}
   .send:disabled{opacity:.4;box-shadow:none}
+  /* 空输入时发送占位但不响应（麦克风常驻在它左边） */
+  .send.off{opacity:.35;pointer-events:none;box-shadow:none}
   .mic{width:34px;height:34px;border-radius:50%;background:var(--bubble);color:var(--fg);
     display:grid;place-items:center;font-size:16px;flex:none;border:1px solid var(--line);
     user-select:none;-webkit-user-select:none;touch-action:none;-webkit-touch-callout:none;
@@ -1395,8 +1397,6 @@ const state = {
   steps: [],
   stepsTurn: null,
   phase: null,
-  phaseSource: null,   // 'live' = 来自 session/event；history 回包不能盖回更旧的 phase
-  phaseSeq: 0,         // phase 来源的 seq，用于判断历史与实时谁更新
   stepsDone: null,
   stepsDoneFade: false,
   // F2：语音输入 / 朗读。rec 是按住说话进行中的识别会话（手一松就清掉）
@@ -1837,7 +1837,7 @@ async function renderSubPage(wrap) {
     const canRecog = !!speechRecogCtor();
     const canSpeak = speechSynthOK();
     main.append(el('div', { class:'slabel', text:'语音' }), group(
-      sw('按住说话', canRecog ? '输入框为空时显示 🎙，按住说、松开发送，上滑取消'
+      sw('按住说话', canRecog ? '允许长按麦克风说话'
         : '这个浏览器没有语音识别（iOS 16.4 以下不支持）', speechHoldOn(), () => {
           if (!canRecog) { toast('这个浏览器不支持语音识别'); return; }
           setSpeechHold(!speechHoldOn()); render();
@@ -2360,7 +2360,7 @@ function renderNewSession(wrap) {
       openSession(found || { sessionId: r.sessionId, title: '新会话', running: false });
       // 等会话页渲染出输入框，再把第一条塞进去发（send 是 renderSession 里的闭包，走 ui.send）
       await new Promise(res => setTimeout(res, 80));
-      if (ui.ta && ui.send) { ui.ta.textContent = text; await ui.send(); }
+      if (ui.ta && ui.send) { ui.ta.textContent = text; ui.syncInputButtons?.(); await ui.send(); }
       else toast('已建会话，但没能自动发出第一条，请手动粘贴');
     } catch (e) {
       toast('新建失败：' + (e.message || e));
@@ -4693,7 +4693,7 @@ function refreshStepsSheet(force = false) {
 }
 
 function resetSteps() {
-  state.steps = []; state.stepsTurn = null; state.phase = null; state.phaseSource = null; state.phaseSeq = 0;
+  state.steps = []; state.stepsTurn = null; state.phase = null;
   state.stepsDone = null; state.stepsDoneFade = false;
   clearTimeout(finishSteps._fadeTimer);
   clearTimeout(finishSteps._clearTimer);
@@ -4730,15 +4730,20 @@ function findTodoPhase(obj, depth = 0) {
   }
   return hit;
 }
-function phaseFromMessages(msgs) {
-  let hit = null, seq = 0;
+function phaseFromMessages(msgs, turn = null) {
+  let hit = null;
   for (const m of msgs || []) {
+    // 指定轮次时只认这一轮的消息：别把上一轮的 todo_write 当成当前轮的进度
+    if (turn != null) {
+      const t = Number(m && m.turn);
+      if (!Number.isFinite(t) || t !== Number(turn)) continue;
+    }
     for (const b of (m.blocks || [])) {
       const p = phaseOfTodoBlock(b);
-      if (p) { hit = p; seq = Number(m.seq) || 0; }
+      if (p) hit = p;
     }
   }
-  return hit ? { phase: hit, seq } : null;
+  return hit;
 }
 const samePhase = (a, b) => !!a && !!b && a.index === b.index && a.total === b.total && a.label === b.label;
 
@@ -4812,6 +4817,27 @@ function finishSteps() {
   }, 3000);
 }
 
+// 一轮开始/结束：turn/start、turn/end 在两种帧形状下都走同一套状态
+function beginTurn() {
+  // 新一轮：上一轮的步骤和 phase 全部清掉；模型写 todo_write 之前不沿用旧 index/total
+  state.steps = []; state.stepsTurn = null;
+  state.phase = null;
+  state.stepsDone = null; state.stepsDoneFade = false;
+  state.autoReadPending = false;
+  clearTimeout(finishSteps._fadeTimer); clearTimeout(finishSteps._clearTimer);
+  markBusy(true);
+  if (ui.stopBtn) ui.stopBtn.style.display = 'grid';
+  paintProg(true);
+  syncBusyTicker();
+}
+function endTurn() {
+  if (speechAutoOn()) state.autoReadPending = true;
+  finishSteps();
+  markBusy(false);
+  if (ui.stopBtn) ui.stopBtn.style.display = 'none';
+  paintProg(true);
+}
+
 async function stopRun() {
   if (!state.sessionId) return;
   if (!confirm('中断这次运行？')) return;
@@ -4872,9 +4898,8 @@ function paintProg(force = false) {
   if (mode === 'offline') {
     strip.append(el('div', { class:'row' }, el('span', { class:'cur', text:'实时连接断开，重连中…' })));
   } else if (mode === 'run') {
-    const label = total ? `第 ${idx || 1}/${total} 步`
-      : state.steps.length ? `已跑 ${state.steps.length} 步` : '深度求索中…';
-    const summary = cur ? stepSummary(cur) : (state.steps.length ? '' : (total ? '深度求索中…' : ''));
+    const label = total ? `第 ${idx || 1}/${total} 步` : `已跑 ${state.steps.length} 步`;
+    const summary = cur ? stepSummary(cur) : (state.steps.length ? '' : '深度求索中…');
     const live = el('span', { class:'ltext', 'aria-live':'polite' },
       el('b', { text: label }),
       summary ? el('span', { class:'cur', text: summary }) : null);
@@ -4978,7 +5003,12 @@ function openStepsSheet() {
 // ---------------------------------------------------------------- F2 语音 / 朗读
 const SPEECH_HOLD_KEY = 'dsh.speech.hold';
 const SPEECH_AUTO_KEY = 'dsh.speech.auto';
-function speechHoldOn() { try { return localStorage.getItem(SPEECH_HOLD_KEY) === '1'; } catch { return false; } }
+function speechHoldOn() {
+  try {
+    const v = localStorage.getItem(SPEECH_HOLD_KEY);
+    return v == null ? true : v === '1';   // 默认开；只有明确写 '0' 才算关
+  } catch { return true; }
+}
 function setSpeechHold(v) { try { localStorage.setItem(SPEECH_HOLD_KEY, v ? '1' : '0'); } catch {} }
 function speechAutoOn() { try { return localStorage.getItem(SPEECH_AUTO_KEY) === '1'; } catch { return false; } }
 function setSpeechAuto(v) { try { localStorage.setItem(SPEECH_AUTO_KEY, v ? '1' : '0'); } catch {} }
@@ -5246,7 +5276,8 @@ function paintSession({ scroll = 'auto' } = {}) {
         el('button', { class:'qmini', text:'保存', onclick: saveQueueEdit }));
     }
   }
-  if (ui.sendBtn) ui.sendBtn.disabled = !!state.sending || (state.pending || []).some(a => a.uploading) || !!queueEditing;
+  if (ui.syncSendState) ui.syncSendState();
+  else if (ui.sendBtn) ui.sendBtn.disabled = !!state.sending || (state.pending || []).some(a => a.uploading) || !!queueEditing;
   // 运行状态只保留 dock 里这一条（F1：步数 / 进度条 / 完成提示都在 paintProg 里）
   paintProg();
   syncBusyTicker();
@@ -5492,14 +5523,12 @@ function renderSession(wrap) {
   const sendBtn = el('button', { class:'send', text:'↑', onclick: () => send() });
 
   // ---- F2 按住说话 ----
-  // 浏览器没有 SpeechRecognition（iOS 16.4 以下、部分安卓 WebView）就不渲染麦克风；
-  // 设置里「按住说话」默认关闭，开了才显示。
+  // 能力存在就常驻麦克风（不再按设置隐藏）；dsh.speech.hold 只决定「按住是否启动识别」。
   const speechCtor = speechRecogCtor();
-  const micEnabled = !!speechCtor && speechHoldOn();
   const voiceBar = el('div', { class:'voice' },
     el('div', { class:'wv' }, ...[10, 22, 34, 18, 30, 38, 24, 14, 28, 36, 20, 12].map(h => el('i', { style:`height:${h}px` }))),
     el('div', { class:'hint' }));
-  const micBtn = micEnabled
+  const micBtn = speechCtor
     ? el('button', { class:'mic', type:'button', text:'🎙', title:'按住说话', 'aria-label':'按住说话' })
     : null;
 
@@ -5512,14 +5541,26 @@ function renderSession(wrap) {
   }
   setVoiceHint(false);
 
-  // 输入框空着显示 🎙，有字时换回发送；录音过程中始终显示麦克风（设计稿 ③）
+  // 🎙 和 ↑ 常驻：空输入时 ↑ 半透明不响应，有文字/附件时 ↑ 正常；麦克风一直可见，
+  // 但输入非空或设置关掉「按住说话」时按住不启动识别（静默）。
+  let composerHasText = false;
+  function syncSendDisabled() {
+    const blocked = !!state.sending || (state.pending || []).some(a => a.uploading) || !!queueEditing;
+    sendBtn.disabled = blocked || !composerHasText;
+    sendBtn.classList.toggle('off', !composerHasText);
+  }
   function syncInputButtons() {
-    if (!micBtn) return;
-    const rec = !!(state.rec && state.rec.sid === state.sessionId);
-    // 有附件时仍然要能发送：空文字 + 附件 = 发送，不是麦克风
-    const showMic = rec || (!getText().trim() && !(state.pending || []).length);
-    micBtn.style.display = showMic ? 'grid' : 'none';
-    sendBtn.style.display = showMic ? 'none' : 'grid';
+    composerHasText = !!getText().trim() || !!(state.pending || []).length;
+    if (micBtn) {
+      const rec = !!(state.rec && state.rec.sid === state.sessionId);
+      const holdOn = speechHoldOn();
+      micBtn.title = !holdOn ? '按住说话已在设置里关闭'
+        : rec ? '松开发送，上滑取消'
+        : composerHasText ? '请先清空输入' : '按住说话';
+      micBtn.setAttribute('aria-disabled', (!holdOn || (composerHasText && !rec)) ? 'true' : 'false');
+    }
+    syncSendDisabled();
+    if (ui && ui.sessionId === state.sessionId) ui.hasText = composerHasText;
   }
 
   function applyVoiceText(rec) {
@@ -5557,6 +5598,9 @@ function renderSession(wrap) {
     micBtn.addEventListener('pointerdown', (e) => {
       if (state.rec) return;
       if (e.button != null && e.button !== 0) return;
+      // 设置关掉、或输入框已有文字/附件：静默忽略，不启动识别也不报错
+      if (!speechHoldOn()) return;
+      if (getText().trim() || (state.pending || []).length) return;
       e.preventDefault();
       try { micBtn.setPointerCapture(e.pointerId); } catch {}
       const Ctor = speechRecogCtor();
@@ -5681,8 +5725,7 @@ function renderSession(wrap) {
       }
       attach.append(chip);
     }
-    // 还有没传完（或正在发送）就不让重复点
-    sendBtn.disabled = !!state.sending || state.pending.some(a => a.uploading);
+    // 附件增减也会改变发送可用态（有附件时即使没文字也能发）
     try { syncInputButtons(); } catch {}
   }
 
@@ -5717,8 +5760,6 @@ function renderSession(wrap) {
         a.file = null;
       } catch (e) {
         a.uploading = false; state.sending = false;
-        const curSend = document.querySelector('.send');
-        if (curSend) curSend.disabled = false;
         if (sameSession()) { renderAttach(); toast('附件上传失败：' + (e.message || e)); }
         else { saveDraft(sid, text); toast('附件上传失败（原会话）：' + (e.message || e)); }
         return;   // 中止发送，内容与附件都还留在原地
@@ -5775,9 +5816,7 @@ function renderSession(wrap) {
       }
     } finally {
       state.sending = false;
-      sendBtn.disabled = false;
-      const curSend = document.querySelector('.send');
-      if (curSend) curSend.disabled = false;
+      if (sameSession()) syncInputButtons();
     }
   }
 
@@ -5959,7 +5998,7 @@ function renderSession(wrap) {
 
   ui = { sessionId: state.sessionId, body, listWrap, cardsWrap, ta, sendBtn, stopBtn, strip, dot, modelEl: modelRow, effortEl: effortRow,
     send, // 新会话页要借它把第一条发出去（闭合在 renderSession 里，外面拿不到）
-    voiceBar, micBtn, syncInputButtons,
+    voiceBar, micBtn, syncInputButtons, syncSendState: syncSendDisabled, hasText: composerHasText,
     qDock, editBar, jump, updateJump, loadStats: loadSessionStats, keys: [], nodes: [], cardsKey: '', prevCount: undefined, atBottom: true, progSig: '' };
   paintSession({ scroll:'bottom' });
   // 进会话只定位到底部，不自动聚焦输入框：多数时候是进来看内容的，弹键盘会挡住正文
@@ -6820,20 +6859,15 @@ async function loadMessages(force=false, sidOverride=null) {
     if (state.sessionId !== sid) return;
     state.messages = items;
     state.lastSeq = lastSeq;
-    // F1：历史消息里的 todo_write 也带 phase。用消息 seq 和实时 phase 的来源 seq 比新旧，
-    // 避免「实时 phase 先到、随后返回的历史回包更旧」把它盖回去。
-    const found = phaseFromMessages(items);
-    if (found) {
-      const seq = Number(found.seq) || 0;
-      const curSeq = Number(state.phaseSeq) || 0;
-      const fresh = seq > curSeq || (seq === curSeq && state.phaseSource !== 'live');
-      if (fresh) {
-        state.phaseSeq = Math.max(curSeq, seq);
-        if (!samePhase(state.phase, found.phase)) {
-          state.phase = found.phase;
-          state.phaseSource = 'history';
-          ui.progSig = '';
-        }
+    // F1：历史 phase 只在「当前轮还没有实时 phase」时回填：
+    // 运行中只认同一 turn 的 todo_write；如果连当前 turn 都还不知道（刚进一个在跑的会话），
+    // 一律不回填，避免上一轮的 index/total 被当成这一轮。
+    const allowTurn = state.busy ? state.stepsTurn : null;
+    if (!state.phase && !(state.busy && allowTurn == null)) {
+      const found = phaseFromMessages(items, allowTurn);
+      if (found) {
+        state.phase = found;
+        ui.progSig = '';
       }
     }
     if (state.view === 'session') paintSession(force ? { scroll:'bottom' } : {});
@@ -6888,6 +6922,18 @@ function onFrame(frame) {
     state.cards = state.cards.filter(c => c.id !== rid);
     if (state.cards.length !== before) syncBadge();
   }
+  else if (t === 'turn/start') {
+    beginTurn();
+    if (state.view === 'session') paint();
+    return;
+  }
+  else if (t === 'turn/end' || t === 'turn/ended') {
+    endTurn();
+    clearTimeout(onFrame._t);
+    onFrame._t = setTimeout(loadMessages, 350);
+    if (state.view === 'session') paint();
+    return;
+  }
   else if (t === 'session/live-steps') {
     // F1：full=true 整份快照 / full=false 增量；turn 变了按轮隔离
     if (frame.sessionId && frame.sessionId !== state.sessionId) return;
@@ -6898,28 +6944,10 @@ function onFrame(frame) {
   else if (t === 'session/event') {
     const ev = frame.event || {};
     const inner = (ev.data && ev.data.type) || (frame.data && frame.data.type) || ev.type || '';
-    if (inner === 'turn/start') {
-      // 新一轮开始：上一轮的步骤清空（phase 留着，新的 todo_write 会覆盖）
-      state.steps = []; state.stepsTurn = null;
-      state.stepsDone = null; state.stepsDoneFade = false;
-      state.autoReadPending = false;
-      clearTimeout(finishSteps._fadeTimer); clearTimeout(finishSteps._clearTimer);
-      markBusy(true);
-      if (ui.stopBtn) ui.stopBtn.style.display = 'grid';
-      paintProg(true);
-      syncBusyTicker();
-    }
-    if (inner === 'turn/end' || inner === 'turn/ended') {
-      if (speechAutoOn()) state.autoReadPending = true;
-      finishSteps();
-      markBusy(false);
-      if (ui.stopBtn) ui.stopBtn.style.display = 'none';
-      paintProg(true);
-    }
+    if (inner === 'turn/start') beginTurn();
+    if (inner === 'turn/end' || inner === 'turn/ended') endTurn();
     const ph = findTodoPhase(frame);
     if (ph) {
-      state.phaseSource = 'live';
-      state.phaseSeq = Math.max(Number(state.phaseSeq) || 0, Number(frame.seq) || 0);
       if (!samePhase(state.phase, ph)) {
         state.phase = ph;
         paintProg(true);
