@@ -154,3 +154,21 @@
 | R3 | 同一 `blocked` 态切到 `term` 视图展示 `#blockedBar.on`，切回 `chat` 自动隐藏 | **模拟** | **PASS** | `09c-Gemini终端态blockedBar-390-纸面.png`（139,949 B） | 切「终端」后 `#blockedBar.on` 正常显示（`gemini-1 · w1:p6` + 7 个快捷按键），终端输出区与快捷键条排版整齐；再切回「对话」后 `#blockedBar` 立刻隐藏，全程 0 console/page error、0 横向溢出 |
 
 **复验结论**：2 个 P2 缺陷全部闭环（**3/3 PASS，0 FAIL**）。
+
+---
+
+## 6. 复验（`0c896ba` · `agents-gemini2` 常驻终端 Tab）
+
+- **预览地址**：`https://dsh.easymana.online:8443/preview/agents-gemini2/`
+- **Commit**：`0c896ba`（`feature/agents-gemini`）
+- **环境**：无头 Chrome `157.0.8103.80` + CDP（390×844 纸面 + 430×932 碳黑、DPR=3、iPhone UA、安全区 47/34），未改业务文件、未使用真机凭据。
+
+| 编号 | 复验项 | 性质 | 结论 | 证据 | 实测观测 |
+|---|---|---|---|---|---|
+| S1 | 真实 HTTPS 首屏加载、SW 缓存与产物一致性 | **真实** | **PASS** | `reverify-0c896ba.json` | HTTP 200（`index.html`/`manifest`/`icon`/`sw.js`）、SW 缓存 `dsh-preview-agents-gemini2-v251`、0 console/page error、剥离 4 处预览标记后与本地 `index.html` 逐字节一致（`equalAfterStrip: true`） |
+| S2 | 无 `bridge_token` 时「终端」Tab 常驻可见 + `.termsetup` 引导卡（双尺寸双皮肤） | **模拟** | **PASS** | `13-终端Tab常驻-未配token-390-纸面.png`（137,413 B）、`14-终端Tab常驻-未配token-430-碳黑.png`（142,257 B） | Tab 栏稳定显示「全部会话 / 已归档 / 终端」；点「终端」渲染 `.termsetup`（「连接远程终端」、`type="password"` 且 `font-size: 16px`、按钮「粘贴」「保存并连接」「打开 /agents/」）；纸面与碳黑（主按钮荧光绿 `rgb(198,240,78)` 配深字 `rgb(11,12,14)`）均清晰、0 横向溢出 |
+| S3 | 提交无效 token（401）内联报错与按钮恢复 | **模拟** | **PASS** | `reverify-0c896ba.json` | 输入错误 token 点「保存并连接」返回 401 后，`.tserr` 可见且文案为「token 无效，请核对本机 token.txt」，按钮恢复可用（`disabled=false`、文案「保存并连接」），`bridge_token` 未被写入 |
+| S4 | 提交有效 token（200）保存并立即渲染终端列表 | **模拟** | **PASS** | `15-终端Tab保存token后列表-390-纸面.png`（122,562 B） | 写入 `localStorage.bridge_token`，`.termsetup` 立即消失，直接展示 `GEMINI-1 1`（PWA 运行中）与 `CLAUDE-2 1`（CRM 等你确认）列表及「已连接远程终端」toast，0 报错、0 横向溢出 |
+| S5 | 已有失效 `bridge_token` 刷新遇 401 时回退失效引导态 | **模拟** | **PASS** | `reverify-0c896ba.json` | 写入失效 token 刷新并切「终端」Tab，`loadTermAgents()` 收到 401 后自动渲染 `.termsetup` 标题「终端连接凭据已失效」及 401 说明文案 |
+
+**复验结论**：`0c896ba` 常驻终端 Tab 与内嵌连接引导卡 **5/5 PASS，0 FAIL**。
