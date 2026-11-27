@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0e1014">
 <title>Agents · DSH</title>
+<script>
+  try {
+    var _t = localStorage.getItem('dsh.theme');
+    if (_t === 'light' || _t === 'dark') document.documentElement.dataset.theme = _t;
+    var _sk = localStorage.getItem('dsh.skin');
+    if (_sk === 'carbon' || _sk === 'paper' || _sk === 'auto') document.documentElement.dataset.skin = _sk;
+  } catch (e) {}
+</script>
 <style>
   /* All styles are scoped under .agp so this page can later be inlined into the PWA
      without leaking anything into index.html. Colors reuse the PWA tokens. */
@@ -180,9 +188,33 @@
     letter-spacing:-.005em;
   }
   @media (prefers-color-scheme: dark){
-    .agp{--bg:#0E0E0B;--card:#171714;--fg:#F0EEE6;--dim:#7B786D;--line:#2A2A23;
-      --bubble:#24241E;--accent:#C6F04E;--accent-fg:#0B0C0E;--ok:#7CBF90;--warn:#D9AC57;
-      --bad:#E0837A;--term:#0A0A08;--term-fg:#F0EEE6}
+    :root:not([data-theme="light"]):not([data-skin="carbon"]):not([data-skin="auto"]) .agp{
+      --bg:#0E0E0B;--card:#171714;--fg:#F0EEE6;--dim:#7B786D;--line:#2A2A23;
+      --bubble:#24241E;--accent:#F0EEE6;--accent-fg:#171714;--ok:#7CBF90;--warn:#D9AC57;
+      --bad:#E0837A;--term:#0A0A08;--term-fg:#F0EEE6;
+    }
+  }
+  :root[data-theme="dark"]:not([data-skin="carbon"]):not([data-skin="auto"]) .agp{
+    --bg:#0E0E0B;--card:#171714;--fg:#F0EEE6;--dim:#7B786D;--line:#2A2A23;
+    --bubble:#24241E;--accent:#F0EEE6;--accent-fg:#171714;--ok:#7CBF90;--warn:#D9AC57;
+    --bad:#E0837A;--term:#0A0A08;--term-fg:#F0EEE6;
+  }
+  :root[data-theme="light"]:not([data-skin="carbon"]):not([data-skin="auto"]) .agp{
+    --bg:#F6F5F1;--card:#FFFFFF;--fg:#1A1A16;--dim:#8C8A7F;--line:#E5E2D8;
+    --bubble:#ECEAE2;--accent:#1A1A16;--accent-fg:#F6F5F1;--ok:#3F7D4E;--warn:#B58100;
+    --bad:#B3261E;--term:#0E0E0B;--term-fg:#F0EEE6;
+  }
+  :root[data-skin="carbon"] .agp{
+    --bg:#0B0C0E;--card:#121417;--fg:#EAE8DF;--dim:#6E726C;--line:#24272C;
+    --bubble:#171A1E;--accent:#C6F04E;--accent-fg:#0B0C0E;--ok:#9FE07C;--warn:#E3BA5C;
+    --bad:#F07C6C;--term:#0A0A08;--term-fg:#EAE8DF;
+  }
+  @media (prefers-color-scheme: dark){
+    :root[data-skin="auto"] .agp{
+      --bg:#0B0C0E;--card:#121417;--fg:#EAE8DF;--dim:#6E726C;--line:#24272C;
+      --bubble:#171A1E;--accent:#C6F04E;--accent-fg:#0B0C0E;--ok:#9FE07C;--warn:#E3BA5C;
+      --bad:#F07C6C;--term:#0A0A08;--term-fg:#EAE8DF;
+    }
   }
   .agp .hdr{height:56px;padding:0 12px;gap:10px;background:var(--bg);border-bottom:1px solid var(--line)}
   .agp .ht{display:flex;flex-direction:column;min-width:0;line-height:1.2}
@@ -245,6 +277,58 @@
   .agp .ver{display:none}
   .agp.pcomposer .composer{display:none}
   .agp.pcomposer .keys{display:none}
+  /* v22: launcher cards, fallback banner, error card, and new-chat bottom sheet */
+  .agp .launcher{display:flex;flex-direction:column;gap:10px;width:100%;max-width:440px;align-self:stretch;padding:18px 2px 12px;text-align:left}
+  .agp .launcher h3{margin:0;font-size:18px;font-weight:600;letter-spacing:-.02em}
+  .agp .launcher .lsub{font-size:13px;color:var(--dim);margin-top:-4px;line-height:1.5}
+  .agp .lbtn{min-height:54px;padding:9px 14px;border-radius:14px;border:1px solid var(--line);background:var(--card);
+    color:var(--fg);display:flex;align-items:center;gap:12px;text-align:left;width:100%}
+  .agp .lbtn:active{opacity:.88}
+  .agp .lbtn:disabled{opacity:.5;cursor:default}
+  .agp .lbtn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+  .agp .lbtn.starting{border-color:var(--accent);background:var(--bubble);opacity:1}
+  .agp .lbtn .lic{width:30px;height:30px;border-radius:9px;background:var(--bubble);color:var(--fg);
+    display:grid;place-items:center;font:650 13px ui-monospace,SFMono-Regular,Consolas,monospace;flex:none}
+  .agp .lbtn.primary .lic{background:color-mix(in srgb,var(--accent-fg) 16%,transparent);color:var(--accent-fg)}
+  .agp .lbtn .lt{flex:1;min-width:0}
+  .agp .lbtn .lt b{display:block;font-size:14.5px;font-weight:600;line-height:1.25}
+  .agp .lbtn .lt span{display:block;font-size:11.5px;color:var(--dim);margin-top:2px;line-height:1.35}
+  .agp .lbtn.primary .lt span{color:color-mix(in srgb,var(--accent-fg) 76%,transparent)}
+  .agp .lbtn .arr{font-size:16px;color:var(--dim);flex:none}
+  .agp .lbtn.primary .arr{color:color-mix(in srgb,var(--accent-fg) 76%,transparent)}
+  .agp .lhint{font-size:11.5px;color:var(--dim);line-height:1.55;padding:4px 2px 0}
+  .agp .banner{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:12px;
+    border:1px solid var(--line);background:var(--card);font-size:12px;color:var(--dim);width:100%}
+  .agp .banner b{color:var(--fg)}
+  .agp .banner .blink{margin-left:auto;color:var(--fg);font-weight:600;white-space:nowrap;padding:2px 4px}
+  .agp .errcard{border:1px solid color-mix(in srgb,var(--bad) 38%,var(--line));
+    background:color-mix(in srgb,var(--bad) 7%,var(--card));border-radius:16px;padding:13px 14px;width:100%}
+  .agp .errcard .et{font-size:13.5px;font-weight:650;color:var(--bad);margin-bottom:5px}
+  .agp .errcard .ed{font-size:12.5px;color:var(--fg);line-height:1.55;margin-bottom:10px;word-break:break-word}
+  .agp .errcard .acts{display:flex;gap:8px}
+  .agp .errcard .btn{flex:1;text-align:center;padding:9px;border-radius:11px;border:1px solid var(--line);
+    background:var(--card);font-size:13px;font-weight:600;color:var(--fg)}
+  .agp .errcard .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+  .agp .agsheetwrap{position:fixed;inset:0;background:rgba(14,14,11,.36);display:flex;flex-direction:column;justify-content:flex-end;z-index:25}
+  .agp .agsheetwrap[hidden]{display:none}
+  .agp .agsheet{background:var(--card);border-radius:26px 26px 0 0;padding:8px 16px calc(16px + env(safe-area-inset-bottom));
+    border-top:1px solid var(--line);max-height:calc(100dvh - 36px);overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .agp .agsheet .grab{width:36px;height:4px;border-radius:2px;background:var(--line);margin:4px auto 12px}
+  .agp .agsheet h4{margin:0 0 2px;font-size:15px;font-weight:650}
+  .agp .agsheet .sm{font:11px ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--dim);margin-bottom:10px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .agp .agsheet .sitem{display:flex;align-items:center;gap:11px;width:100%;padding:11px 4px;border-bottom:1px solid var(--line);text-align:left}
+  .agp .agsheet .sitem:last-of-type{border-bottom:0}
+  .agp .agsheet .sitem:active{background:var(--bubble);border-radius:10px}
+  .agp .agsheet .sic{width:32px;height:32px;border-radius:10px;background:var(--bubble);color:var(--fg);
+    display:grid;place-items:center;font:650 12.5px ui-monospace,SFMono-Regular,Consolas,monospace;flex:none}
+  .agp .agsheet .sic.danger{color:var(--bad)}
+  .agp .agsheet .st{flex:1;min-width:0}
+  .agp .agsheet .st b{display:block;font-size:14px;font-weight:600;color:var(--fg)}
+  .agp .agsheet .st b.danger{color:var(--bad)}
+  .agp .agsheet .st span{display:block;font-size:11.5px;color:var(--dim);margin-top:1px}
+  .agp .agsheet .scancel{width:100%;margin-top:10px;text-align:center;padding:11px;border-radius:12px;border:1px solid var(--line);
+    color:var(--dim);font-size:14px}
 </style>
 </head>
 <body>
@@ -257,10 +341,10 @@
     </div>
     <span class="grow"></span>
     <div class="seg" id="seg"><button id="vChat">对话</button><button id="vTerm">终端</button></div>
-    <button class="iconbtn" id="resetBtn" style="display:none" title="新会话">＋</button>
+    <button class="iconbtn" id="resetBtn" style="display:none" title="新建对话" aria-label="新建对话">＋</button>
     <button class="iconbtn" id="startBtn" style="display:none" title="启动 claude">C</button>
     <button class="iconbtn" id="tokenBtn" title="设置">⋯</button>
-    <span id="agpVer" class="ver">v21</span>
+    <span id="agpVer" class="ver">v22</span>
   </header>
 
   <div class="body">
@@ -303,6 +387,7 @@
     </main>
   </div>
 
+  <div class="agsheetwrap" id="newSheetWrap" hidden></div>
   <div class="gate" id="gate" hidden>
     <div class="card">
       <h2>连接 Agent 桥接</h2>
@@ -340,6 +425,11 @@
   let dshLive = null;
   let dshCtrl = null;
   let dshClock = null;
+  let startingKind = '';
+  let startingAt = 0;
+  let startClock = null;
+  let startErr = null; // { kind, msg }
+  const localSentByPane = new Map(); // pane -> [{ role:'user', text, time }]
 
   function E(tag, props = {}, text = '') {
     const n = document.createElement(tag);
@@ -400,6 +490,46 @@
   function agents() { return (snap && snap.agents) || []; }
   function panes() { return (snap && snap.panes) || []; }
   function currentAgent() { return agents().find((a) => a.pane_id === pane); }
+  function kindLabel(k) {
+    const s = String(k || '').toLowerCase();
+    if (s === 'dsh') return 'DSH';
+    if (s === 'agy' || s === 'gemini') return 'Gemini';
+    if (s === 'claude') return 'Claude';
+    return k || 'Agent';
+  }
+  function agentMeta(a = currentAgent()) {
+    if (dshActive()) return { kind: 'dsh', title: 'DSH', who: 'DSH', ph: '继续追问，Enter 发送', ready: true };
+    if (a) {
+      const k = String(a.agent || a.kind || '').toLowerCase();
+      const nm = String(a.name || '').toLowerCase();
+      if (k === 'agy' || k === 'gemini' || nm.startsWith('gemini') || nm.startsWith('agy')) {
+        return { kind: k || 'agy', title: 'Gemini', who: 'GEMINI', ph: '发消息给 Gemini，Enter 发送', ready: true };
+      }
+      if (k === 'claude' || nm.startsWith('claude')) {
+        return { kind: 'claude', title: 'Claude', who: 'CLAUDE', ph: '发消息给 Claude，Enter 发送', ready: true };
+      }
+      const label = a.name || a.agent || 'Agent';
+      return { kind: k || 'agent', title: label, who: String(a.agent || 'AGENT').toUpperCase(), ph: '发消息给 ' + label + '，Enter 发送', ready: true };
+    }
+    return {
+      kind: '',
+      title: '终端',
+      who: 'DSH',
+      ph: startingKind ? ('正在启动 ' + kindLabel(startingKind) + '…') : '先选择启动方式',
+      ready: false,
+    };
+  }
+  function syncComposerState() {
+    const isChat = viewMode === 'chat';
+    const meta = agentMeta();
+    const ph = isChat ? meta.ph : '输入命令，Enter 发送';
+    taSetPh(ph);
+    if (!dshActive()) {
+      $('#stopBtn').style.display = 'none';
+      $('#send').disabled = isChat && !meta.ready;
+    }
+    postParent({ type: 'agents-mode', mode: viewMode, title: meta.title, placeholder: ph, ready: !isChat || meta.ready });
+  }
 
   async function load() {
     const r = await api('/snapshot');
@@ -418,10 +548,9 @@
       renderView();
     }
     $('#startBtn').style.display = 'none';
-    if (viewMode === 'chat') {
-      taSetPh(dshActive() ? '继续追问，Enter 发送' : (currentAgent() ? '发消息给 agent，Enter 发送' : '先选择启动方式'));
-    }
-    $('#resetBtn').style.display = dshActive() ? '' : 'none';
+    $('#resetBtn').style.display = pane ? '' : 'none';
+    updateHead();
+    syncComposerState();
     $('#blockedWho').textContent = pane || '';
     renderBlocked(me);
   }
@@ -519,12 +648,13 @@
     const p = (n) => String(n).padStart(2, '0');
     return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
-  function renderChat(msgs) {
+  function renderChat(msgs, whoLabel) {
+    const who = whoLabel || agentMeta().who || 'DSH';
     const box = $('#chat');
     const near = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
     box.replaceChildren();
     if (!msgs.length) {
-      box.appendChild(E('div', { class: 'who', style: 'margin:6px 2px 0' }, 'DSH'));
+      box.appendChild(E('div', { class: 'who', style: 'margin:6px 2px 0' }, who));
       box.appendChild(E('div', { class: 'chatempty', style: 'padding-top:0' }, '在下面发一条消息开始'));
     }
     for (const m of msgs) {
@@ -535,7 +665,7 @@
         box.appendChild(row);
       } else if (m.role === 'assistant') {
         const row = E('div', { class: 'msg assistant' });
-        row.appendChild(E('div', { class: 'who' }, 'DSH'));
+        row.appendChild(E('div', { class: 'who' }, who));
         if (m.text) {
           const b = E('div', { class: 'md' });
           b.innerHTML = mdToHtml(m.text);
@@ -586,25 +716,65 @@
     card.appendChild(a3);
     box.appendChild(card);
   }
+  function renderPaneFallback(title, who, paneText) {
+    const box = $('#chat');
+    const near = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+    box.replaceChildren();
+    const banner = E('div', { class: 'banner' });
+    banner.appendChild(E('span', {}, '未匹配到 ' + title + ' 对话日志，已显示终端摘要'));
+    const lnk = E('button', { class: 'blink', type: 'button' }, '看终端 ›');
+    lnk.onclick = () => { viewMode = 'term'; localStorage.setItem('agents.view', 'term'); renderView(); };
+    banner.appendChild(lnk);
+    box.appendChild(banner);
+    const sent = localSentByPane.get(pane) || [];
+    for (const m of sent) {
+      const row = E('div', { class: 'msg user' });
+      row.appendChild(E('div', { class: 'bubble' }, m.text));
+      if (m.time) row.appendChild(E('div', { class: 'mtime' }, fmtClock(m.time)));
+      box.appendChild(row);
+    }
+    const cleanLines = String(paneText || '').replace(/\r/g, '').split('\n').filter((l) => l.trim()).slice(-28).join('\n');
+    const row = E('div', { class: 'msg assistant' });
+    row.appendChild(E('div', { class: 'who' }, who + ' · 终端摘要'));
+    const card = E('div', { class: 'card', style: 'margin:0' });
+    card.appendChild(E('pre', { style: 'margin:0;max-height:320px' }, cleanLines || '（终端暂无输出，发一条消息开始）'));
+    row.appendChild(card);
+    box.appendChild(row);
+    appendApprovalCard(box);
+    if (near) box.scrollTop = box.scrollHeight;
+  }
+
   async function chatTick() {
     if (!pane || viewMode !== 'chat') return;
     await loadDsh();
     const a = chatAgent();
     const box = $('#chat');
-    if (dshActive()) { renderDsh(); conn(true, '运行中 · ' + pane); return; }
+    if (dshActive()) { startErr = null; renderDsh(); conn(true, '运行中 · ' + pane); return; }
     if (!a) {
       renderLauncher();
-      chatSig = 'launcher';
-      conn(true, '已连接 · ' + pane);
+      chatSig = 'launcher:' + startingKind + ':' + (startErr ? startErr.msg : '');
+      conn(true, startingKind ? ('正在启动 ' + kindLabel(startingKind) + '…') : ('已连接 · ' + pane));
       return;
     }
+    startErr = null;
+    const meta = agentMeta(a);
+    updateHead();
+    syncComposerState();
     try {
       const r = await api('/chat?pane=' + encodeURIComponent(pane) + '&limit=200');
       const j = await r.json();
+      if (j.fallback === 'pane') {
+        const pt = j.paneText || '';
+        const sent = localSentByPane.get(pane) || [];
+        const sig = 'fb:' + meta.who + ':' + sent.length + ':' + pt.length + ':' + pt.slice(-120) + ':' + (a.agent_status || '');
+        if (sig !== chatSig) { chatSig = sig; renderPaneFallback(meta.title, meta.who, pt); }
+        conn(true, '已连接 · ' + (a.name || a.agent || pane));
+        return;
+      }
       const msgs = j.messages || [];
       const last = msgs[msgs.length - 1] || {};
-      const sig = msgs.length + ':' + (last.time || '') + ':' + String(last.text || '').length;
-      if (sig !== chatSig) { chatSig = sig; renderChat(msgs); }
+      const sig = meta.who + ':' + msgs.length + ':' + (last.time || '') + ':' + String(last.text || '').length + ':' + (a.agent_status || '');
+      if (sig !== chatSig) { chatSig = sig; renderChat(msgs, meta.who); }
       conn(true, '已连接 · ' + (a.name || a.agent || pane));
     } catch (e) {
       if (/401/.test(String(e.message))) return;
@@ -772,47 +942,98 @@
     }
   }
 
+  function stopStartClock() { if (startClock) { clearInterval(startClock); startClock = null; } }
   function renderLauncher() {
     updateHead();
-    postParent({ type: 'agents-busy', busy: false });
+    postParent({ type: 'agents-busy', busy: false, placeholder: agentMeta().ph });
+    syncComposerState();
     const box = $('#chat');
     box.replaceChildren();
-    const wrap = E('div', { class: 'chatempty' });
-    wrap.style.cssText = 'display:flex;flex-direction:column;gap:10px;width:100%;max-width:420px;align-self:stretch;padding:26px 2px;text-align:left';
-    wrap.appendChild(E('div', { style: 'font-size:18px;font-weight:600;letter-spacing:-.02em' }, '这个终端还没有启动对话'));
-    wrap.appendChild(E('div', { style: 'font-size:13px;color:var(--dim);margin-top:-4px;line-height:1.5' }, '选一个开始，之后直接用自然语言聊天'));
-    const mk = (label, primary) => {
-      const b = E('button', {}, label);
-      b.style.cssText = 'height:48px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-size:15px;font-weight:600;color:var(--fg);text-align:center';
-      if (primary) { b.style.background = 'var(--accent)'; b.style.borderColor = 'var(--accent)'; b.style.color = 'var(--accent-fg)'; }
+    const wrap = E('div', { class: 'launcher' });
+    if (startErr) {
+      const ec = E('div', { class: 'errcard' });
+      ec.appendChild(E('div', { class: 'et' }, '未能启动 ' + kindLabel(startErr.kind)));
+      ec.appendChild(E('div', { class: 'ed' }, '宿主机返回：' + startErr.msg + '。可切到终端查看详细输出，或重试启动。'));
+      const acts = E('div', { class: 'acts' });
+      const bTerm = E('button', { class: 'btn primary', type: 'button' }, '切到终端查看');
+      bTerm.onclick = () => { viewMode = 'term'; localStorage.setItem('agents.view', 'term'); renderView(); };
+      const bRetry = E('button', { class: 'btn', type: 'button' }, '重试启动');
+      bRetry.onclick = () => {
+        const k = startErr.kind;
+        startErr = null;
+        if (k === 'dsh') startDsh(); else startAgent(k);
+      };
+      acts.append(bTerm, bRetry);
+      ec.appendChild(acts);
+      wrap.appendChild(ec);
+    }
+    const elapsed = startingAt ? Math.max(0, Math.round((Date.now() - startingAt) / 1000)) : 0;
+    wrap.appendChild(E('h3', {}, startingKind ? ('正在启动 ' + kindLabel(startingKind) + '…') : '这个终端还没有启动对话'));
+    wrap.appendChild(E('div', { class: 'lsub' }, startingKind
+      ? ('herdr 正在当前终端拉起 ' + kindLabel(startingKind) + ' 并等待就绪，通常需要 3–10 秒')
+      : '选一个开始，之后直接用自然语言聊天，也可随时切「终端」看原始输出'));
+
+    const mk = (badge, title, desc, kind, primary, onclick) => {
+      const isThis = startingKind === kind;
+      const b = E('button', {
+        class: 'lbtn' + (primary && !startingKind ? ' primary' : '') + (isThis ? ' starting' : ''),
+        type: 'button',
+        disabled: !!startingKind,
+      });
+      b.appendChild(E('span', { class: 'lic' }, badge));
+      const lt = E('span', { class: 'lt' });
+      lt.appendChild(E('b', {}, isThis ? ('启动 ' + kindLabel(kind) + '…') : title));
+      lt.appendChild(E('span', {}, isThis ? ('等待命令行就绪（已耗时 ' + elapsed + 's）') : desc));
+      b.appendChild(lt);
+      if (!startingKind) b.appendChild(E('span', { class: 'arr' }, '›'));
+      b.onclick = onclick;
       return b;
     };
-    const b1 = mk('启动 DSH（自然语言）', true);
-    b1.onclick = () => startDsh();
-    const b2 = mk('启动 claude');
-    b2.onclick = () => startClaude();
-    wrap.appendChild(b1);
-    wrap.appendChild(b2);
-    wrap.appendChild(E('div', { style: 'font-size:11.5px;color:var(--dim);line-height:1.5' }, 'DSH 每轮约 10–20 秒；claude 需要已在宿主机登录'));
+
+    wrap.appendChild(mk('D', '启动 DSH（自然语言）', '独立 headless 会话，不污染主会话列表', 'dsh', true, () => startDsh()));
+    wrap.appendChild(mk('G', '启动 Gemini', '在当前终端启动 Antigravity CLI（herdr --kind agy）', 'agy', false, () => startAgent('agy')));
+    wrap.appendChild(mk('C', '启动 Claude', '在当前终端启动 Claude Code（herdr --kind claude）', 'claude', false, () => startAgent('claude')));
+
+    if (startingKind) {
+      const bn = E('div', { class: 'banner' });
+      bn.appendChild(E('span', {}, '若首次启动停在登录/信任目录提示'));
+      const lk = E('button', { class: 'blink', type: 'button' }, '切到终端 ›');
+      lk.onclick = () => { viewMode = 'term'; localStorage.setItem('agents.view', 'term'); renderView(); };
+      bn.appendChild(lk);
+      wrap.appendChild(bn);
+    } else {
+      wrap.appendChild(E('div', { class: 'lhint' }, 'DSH 每轮约 10–20 秒；Gemini / Claude 需已在宿主机登录。启动中切到「终端」可实时查看加载或授权提示。'));
+    }
     box.appendChild(wrap);
   }
 
   async function startDsh() {
-    if (!pane) return;
+    if (!pane || startingKind) return;
+    startErr = null;
+    startingKind = 'dsh';
+    startingAt = Date.now();
+    renderLauncher();
     try {
       await api('/dsh/start', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane }) });
+      startingKind = '';
+      startingAt = 0;
       toast('DSH 已就绪，直接说话');
       viewMode = 'chat';
       localStorage.setItem('agents.view', 'chat');
       await load();
       renderView();
-    } catch (e) { toast('启动失败：' + e.message); }
+    } catch (e) {
+      startingKind = '';
+      startingAt = 0;
+      startErr = { kind: 'dsh', msg: e.message || String(e) };
+      toast('启动失败：' + startErr.msg);
+      renderLauncher();
+    }
   }
 
   function updateHead() {
-    const t = dshActive() ? 'DSH' : (currentAgent() ? 'Claude' : '终端');
     const el = document.querySelector('.hdr .title');
-    if (el) el.textContent = t;
+    if (el) el.textContent = agentMeta().title;
   }
   function renderView() {
     updateHead();
@@ -822,12 +1043,7 @@
     $('.keys').style.display = isChat ? 'none' : 'flex';
     $('#vChat').classList.toggle('on', isChat);
     $('#vTerm').classList.toggle('on', !isChat);
-    if (!dshActive()) { $('#stopBtn').style.display = 'none'; $('#send').disabled = false; }
-    taSetPh(isChat ? (dshActive() ? '继续追问，Enter 发送' : (currentAgent() ? '发消息给 agent，Enter 发送' : '先选择启动方式')) : '输入命令，Enter 发送');
-    postParent({ type: 'agents-mode', mode: viewMode });
-    const ttl = dshActive() ? 'DSH' : (currentAgent() ? 'Claude' : '终端');
-    const tEl = document.querySelector('.hdr .title');
-    if (tEl) tEl.textContent = ttl;
+    syncComposerState();
     if (isChat) chatTick(); else tick();
   }
 
@@ -844,9 +1060,14 @@
         return;
       }
       const a = chatAgent();
-      if (!a) { toast('这个 pane 还没有 agent'); taSet(text); return; }
+      if (!a) { toast('请先选择启动方式'); taSet(text); return; }
       try {
         await api('/prompt', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ target: a.name || a.agent, text }) });
+        const list = localSentByPane.get(pane) || [];
+        list.push({ role: 'user', text, time: new Date().toISOString() });
+        if (list.length > 50) list.shift();
+        localSentByPane.set(pane, list);
+        chatSig = '';
         await chatTick();
       } catch (e) { toast(e.message); taSet(text); }
       return;
@@ -863,20 +1084,146 @@
     catch (e) { toast(e.message); }
   }
 
-  async function startClaude() {
-    if (!pane) return;
+  async function startAgent(kind = 'claude') {
+    if (!pane || startingKind) return;
+    startErr = null;
+    startingKind = kind;
+    startingAt = Date.now();
+    stopStartClock();
+    startClock = setInterval(() => { if (startingKind && viewMode === 'chat') renderLauncher(); }, 1000);
+    renderLauncher();
+    const label = kindLabel(kind);
     try {
-      await api('/agent/start', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane }) });
-      toast('claude 已启动');
+      await api('/agent/start', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane, kind }) });
+      toast(label + ' 已启动');
     } catch (e) {
-      if (/agent_not_ready/.test(e.message || '')) toast('claude 正在启动，等待输入');
-      else toast(e.message);
+      const msg = String((e && e.message) || e);
+      if (/agent_not_ready/.test(msg)) {
+        toast(label + ' 正在启动，若停在登录/信任提示可切终端查看');
+      } else {
+        startErr = { kind, msg };
+        toast('启动失败：' + msg);
+      }
+    } finally {
+      startingKind = '';
+      startingAt = 0;
+      stopStartClock();
     }
     await load().catch(() => {});
     await tick();
     chatSig = '';
     if (viewMode === 'chat') chatTick();
   }
+  function startClaude() { return startAgent('claude'); }
+
+  function closeNewChatSheet() {
+    const w = $('#newSheetWrap');
+    if (w) { w.hidden = true; w.replaceChildren(); }
+  }
+
+  async function createSiblingTab(startKind) {
+    closeNewChatSheet();
+    const me = panes().find((p) => p.pane_id === pane) || {};
+    const cwd = me.cwd || (dshState && dshState.cwd) || '';
+    if (!cwd) { toast('无法获取当前目录，请使用换目录新建'); return; }
+    const label = kindLabel(startKind);
+    toast('正在新开 ' + label + ' 对话…');
+    try {
+      const r = await api('/tab/create', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ cwd, startKind }),
+      });
+      const j = await r.json();
+      if (j.startErr) toast('终端已创建，但启动失败：' + j.startErr);
+      else toast('已新开 ' + label);
+      if (j.paneId) {
+        pane = j.paneId;
+        lastText = '';
+        chatSig = '';
+        startErr = null;
+        viewMode = 'chat';
+        localStorage.setItem('agents.view', 'chat');
+        postParent({ type: 'agents-pane-changed', paneId: j.paneId });
+        await load();
+        renderView();
+      }
+    } catch (e) { toast('新建失败：' + e.message); }
+  }
+
+  async function endCurrentChat() {
+    closeNewChatSheet();
+    if (!pane) return;
+    if (dshActive()) {
+      try {
+        await api('/dsh/close', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane }) });
+        dshState = null;
+        chatSig = '';
+        startErr = null;
+        await load();
+        renderView();
+        toast('已结束，请选择启动方式');
+      } catch (e) { toast(e.message); }
+      return;
+    }
+    const a = currentAgent();
+    if (a) {
+      try {
+        await api('/send', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane, text: '/exit', enter: true }) });
+        toast('已发送 /exit，退出后回到启动页');
+        setTimeout(() => { load().catch(() => {}); chatTick(); }, 1200);
+      } catch (e) { toast(e.message); }
+    }
+  }
+
+  function openNewChatSheet() {
+    const wrap = $('#newSheetWrap');
+    if (!wrap) return;
+    wrap.replaceChildren();
+    wrap.onclick = (e) => { if (e.target === wrap) closeNewChatSheet(); };
+    const sheet = E('div', { class: 'agsheet', role: 'dialog' });
+    sheet.setAttribute('aria-modal', 'true');
+    sheet.setAttribute('aria-label', '新建对话');
+    sheet.appendChild(E('div', { class: 'grab' }));
+    sheet.appendChild(E('h4', {}, '新建对话'));
+    const me = panes().find((p) => p.pane_id === pane) || {};
+    const a = currentAgent();
+    const curLabel = dshActive() ? 'DSH' : (a ? (a.name || agentMeta(a).title) : (pane || '空终端'));
+    sheet.appendChild(E('div', { class: 'sm' }, '当前：' + curLabel + (me.cwd ? (' · ' + me.cwd) : '')));
+
+    const addItem = (badge, title, sub, onClick, danger = false) => {
+      const b = E('button', { class: 'sitem', type: 'button' });
+      b.appendChild(E('span', { class: 'sic' + (danger ? ' danger' : '') }, badge));
+      const st = E('span', { class: 'st' });
+      st.appendChild(E('b', { class: danger ? 'danger' : '' }, title));
+      st.appendChild(E('span', {}, sub));
+      b.appendChild(st);
+      b.onclick = onClick;
+      sheet.appendChild(b);
+    };
+
+    addItem('D', '新开 DSH 对话（同目录）', '新建终端 tab 并启动 DSH，保留当前会话', () => createSiblingTab('dsh'));
+    addItem('G', '新开 Gemini 对话（同目录）', '新建终端 tab 并启动 Antigravity CLI（agy）', () => createSiblingTab('agy'));
+    addItem('C', '新开 Claude 对话（同目录）', '新建终端 tab 并启动 Claude Code', () => createSiblingTab('claude'));
+    if (EMBED) {
+      addItem('📁', '换目录新建终端…', '打开目录选择器重新选工作区与启动方式', () => {
+        closeNewChatSheet();
+        postParent({ type: 'pwa-new-terminal' });
+      });
+    }
+    if (dshActive() || a) {
+      addItem('↺', '结束当前对话并重选', dshActive() ? '关闭当前 DSH 会话并回到启动页' : '向当前终端发送 /exit，退出后回到启动页', () => endCurrentChat(), true);
+    }
+    const cancel = E('button', { class: 'scancel', type: 'button' }, '取消');
+    cancel.onclick = closeNewChatSheet;
+    sheet.appendChild(cancel);
+    wrap.appendChild(sheet);
+    wrap.hidden = false;
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && $('#newSheetWrap') && !$('#newSheetWrap').hidden) closeNewChatSheet();
+  });
 
   $('#send').onclick = send;
   $('#stopBtn').onclick = () => stopDsh();
@@ -893,17 +1240,7 @@
   });
   document.querySelectorAll('.keys .kbtn').forEach((b) => { b.onclick = () => key(b.dataset.key); });
   $('#startBtn').onclick = startClaude;
-  $('#resetBtn').onclick = async () => {
-    if (!pane) return;
-    try {
-      await api('/dsh/close', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pane }) });
-      dshState = null;
-      chatSig = '';
-      await load();
-      renderView();
-      toast('已结束，请选择启动方式');
-    } catch (e) { toast(e.message); }
-  };
+  $('#resetBtn').onclick = () => openNewChatSheet();
   $('#tokenBtn').onclick = () => gate(true);
   $('#gatePull').onclick = () => { requestToken(); toast('已向 PWA 请求 token'); };
   $('#saveToken').onclick = async () => {
