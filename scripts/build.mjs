@@ -164,7 +164,7 @@ export function buildHtml() {
     .filter(f => f.endsWith('.css'))
     .sort();
   const cssBundle = cssFiles
-    .map(f => readFileSync(join(stylesDir, f), 'utf8').replace(/\r\n/g, '\n').trimEnd())
+    .map(f => readFileSync(join(stylesDir, f), 'utf8').replace(/\r\n/g, '\n').replace(/\n$/, ''))
     .join('\n');
 
   // 3. 收集并打包 JS 模块
