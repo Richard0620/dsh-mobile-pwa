@@ -1,0 +1,662 @@
+<!doctype html>
+<html lang="zh-CN" data-skin="paper">
+<head>
+<meta charset="utf-8" />
+<title>DSH Mobile · T1 终端新建对话与 Gemini 入口 设计稿</title>
+<style>
+  /* ===== 取自 index.html 的真实 token（纸面皮肤） ===== */
+  :root{
+    --r-card:24px; --r-bubble:20px;
+    --bg:#F6F5F1; --card:#FFFFFF; --fg:#1A1A16; --dim:#8C8A7F; --line:#E5E2D8;
+    --bubble:#ECEAE2; --accent:#1A1A16; --accent-fg:#FFFFFF; --accent-2:#5E5D54;
+    --ok:#2E6B3F; --bad:#A33B31; --warn:#8A5A12;
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  body{margin:0;background:#fff;color:#12140F;
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro SC","PingFang SC","Segoe UI","Microsoft YaHei",sans-serif}
+  .board{width:900px;padding:36px 24px 48px}
+  .cap{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#8C8A7F;font-weight:700}
+  h1{font-size:27px;margin:6px 0 8px;letter-spacing:-.02em}
+  .sub{color:#5E5D54;font-size:13.5px;margin:0 0 18px;line-height:1.65}
+  .sub b{color:#1A1A16}
+  .gist{border:1px solid #E5E2D8;background:#FBFAF6;border-radius:14px;
+    padding:12px 14px;font-size:13px;color:#45443C;line-height:1.65;margin-bottom:26px}
+  .gist b{color:#1A1A16}
+  .gist .row2{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+  .gist .gp{font:10.5px/1 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.04em;
+    border:1px solid #DED9C9;background:#fff;border-radius:999px;padding:5px 9px;color:#5E5D54}
+  .grid{display:grid;grid-template-columns:390px 390px;gap:40px 40px}
+  .cell{width:390px}
+  .cell .lbl{display:flex;align-items:baseline;gap:8px;margin-bottom:10px}
+  .cell .lbl b{font-size:14px}
+  .cell .lbl span{font-size:11.5px;color:#8C8A7F}
+  .note{font-size:12px;color:#5E5D54;margin-top:10px;line-height:1.65}
+  .note b{color:#1A1A16}
+
+  /* ===== 手机框（390×780 ≈ 430×932 等比） ===== */
+  .phone{width:390px;height:780px;background:var(--bg);border-radius:38px;border:1px solid #DFDCD2;
+    overflow:hidden;position:relative;display:flex;flex-direction:column;
+    box-shadow:0 10px 30px rgba(26,26,22,.07)}
+  .sb{height:34px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;
+    font-size:11.5px;font-weight:600;color:var(--fg);flex:none}
+  .sb .r{display:flex;gap:4px;align-items:center;opacity:.85;font-size:10px;letter-spacing:.06em}
+
+  /* PWA 列表页顶栏与 Tabs */
+  .hero{display:flex;align-items:flex-start;justify-content:space-between;padding:8px 18px 4px;flex:none}
+  .hero h2{margin:0;font-size:26px;font-weight:650;letter-spacing:-.5px;line-height:1.15}
+  .hero .hsub{font:10px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--dim);margin-top:4px}
+  .hero .acts{display:flex;gap:6px;align-items:center}
+  .ico{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:17px;color:var(--fg)}
+  .searchbox{margin:8px 14px 4px;height:38px;border-radius:12px;background:var(--card);border:1px solid var(--line);
+    display:flex;align-items:center;padding:0 12px;font-size:13.5px;color:var(--dim)}
+  .tabs{display:flex;gap:18px;padding:8px 16px 0;font-size:14px;color:var(--dim);border-bottom:1px solid var(--line)}
+  .tabs b{font-weight:550;padding:0 0 8px;border-bottom:2px solid transparent;margin-bottom:-1px}
+  .tabs b.on{color:var(--fg);font-weight:600;border-bottom-color:var(--accent)}
+  .tbar{display:flex;align-items:center;gap:8px;padding:12px 16px 6px}
+  .tbar b{font-size:14px;font-weight:600}
+  .tbar span{font:10px ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--dim)}
+  .tbar .tbtn{margin-left:auto;font-size:12px;padding:5px 10px;border:1px solid var(--line);
+    border-radius:8px;color:var(--fg);background:var(--card);font-weight:550}
+  .fsect{display:flex;align-items:center;gap:6px;padding:10px 16px 4px;font-size:12px;color:var(--dim)}
+  .fsect b{color:var(--fg);font-weight:600}
+  .listrow{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line)}
+  .listrow .dot{width:8px;height:8px;border-radius:50%;background:var(--dim);flex:none}
+  .listrow .dot.run{background:var(--ok)}
+  .listrow .dot.pend{background:var(--warn)}
+  .listrow .rb{flex:1;min-width:0}
+  .listrow .rt{display:flex;align-items:center;gap:6px}
+  .listrow .rt b{font-size:14.5px;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .listrow .rt span{margin-left:auto;font-size:11px;color:var(--dim);flex:none}
+  .listrow .rp{font:11px/1.3 ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--dim);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+  .listrow .x{color:var(--dim);font-size:15px;padding:2px 4px}
+
+  /* 终端浮层顶栏（PWA 外层 termbar + iframe 内 hdr） */
+  .termbar{display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--card);flex:none}
+  .termbar b{font-size:14.5px;font-weight:600}
+  .agphdr{height:48px;padding:0 12px;display:flex;align-items:center;gap:8px;background:var(--bg);border-bottom:1px solid var(--line);flex:none}
+  .agphdr .sdot{width:7px;height:7px;border-radius:50%;background:var(--ok);flex:none}
+  .agphdr .sdot.err{background:var(--bad)}
+  .agphdr .ht{display:flex;flex-direction:column;min-width:0;line-height:1.18}
+  .agphdr .ht b{font-size:15.5px;font-weight:600;letter-spacing:-.015em}
+  .agphdr .ht span{font:9.5px ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--dim);margin-top:1px}
+  .agphdr .grow{flex:1}
+  .seg{display:flex;gap:3px;flex:none}
+  .seg span{height:28px;padding:0 10px;border-radius:8px;font-size:12px;color:var(--dim);display:grid;place-items:center}
+  .seg span.on{background:var(--bubble);color:var(--fg);font-weight:600}
+  .hbtn{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;font-size:16px;color:var(--fg);flex:none}
+  .hbtn.hl{background:var(--bubble);box-shadow:inset 0 0 0 1px var(--line)}
+
+  /* 启动页 launcher */
+  .chatarea{flex:1;overflow:hidden;padding:12px 16px;display:flex;flex-direction:column;gap:14px}
+  .launcher{display:flex;flex-direction:column;gap:10px;padding:18px 2px 0}
+  .launcher h3{margin:0;font-size:18px;font-weight:600;letter-spacing:-.02em}
+  .launcher .lsub{font-size:12.5px;color:var(--dim);margin-top:-4px;line-height:1.5}
+  .lbtn{height:54px;padding:0 15px;border-radius:14px;border:1px solid var(--line);background:var(--card);
+    display:flex;align-items:center;gap:12px;text-align:left}
+  .lbtn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+  .lbtn .lic{width:30px;height:30px;border-radius:9px;background:var(--bubble);color:var(--fg);
+    display:grid;place-items:center;font:650 13px ui-monospace,SFMono-Regular,Consolas,monospace;flex:none}
+  .lbtn.primary .lic{background:rgba(255,255,255,.16);color:var(--accent-fg)}
+  .lbtn .lt{flex:1;min-width:0}
+  .lbtn .lt b{display:block;font-size:14.5px;font-weight:600;line-height:1.25}
+  .lbtn .lt span{display:block;font-size:11px;color:var(--dim);margin-top:2px}
+  .lbtn.primary .lt span{color:rgba(255,255,255,.72)}
+  .lbtn .arr{font-size:15px;color:var(--dim)}
+  .lbtn.primary .arr{color:rgba(255,255,255,.72)}
+  .lhint{font-size:11.5px;color:var(--dim);line-height:1.55;padding:4px 2px 0}
+
+  /* 对话气泡与审批卡 */
+  .msg{display:flex;flex-direction:column}
+  .msg.user{align-items:flex-end}
+  .msg.user .bubble{max-width:82%;background:var(--bubble);color:var(--fg);
+    border-radius:18px 18px 5px 18px;padding:10px 13px;font-size:14.5px;line-height:1.5}
+  .who{font:9.5px ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--dim);font-weight:600;margin-bottom:4px}
+  .md{font-size:14.5px;line-height:1.6}
+  .tools{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .toolchip{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:6px 10px;
+    font:11px ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--dim)}
+  .mtime{font:9.5px ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--dim);margin-top:4px}
+  .card{border:1px solid var(--line);background:var(--card);border-radius:16px;padding:12px 13px}
+  .card .ct{font-size:12.5px;font-weight:650;color:var(--warn);margin-bottom:4px}
+  .card .cfact{font-size:13.5px;margin:2px 0 6px}
+  .card pre{margin:0;padding:8px 10px;border-radius:10px;background:var(--bg);border:1px solid var(--line);
+    font:11px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--dim);white-space:pre-wrap}
+  .card .acts{display:flex;gap:8px;margin-top:9px}
+  .card .btn{flex:1;text-align:center;padding:8px;border-radius:11px;border:1px solid var(--line);
+    background:var(--card);font-size:13px;font-weight:600}
+  .card .btn.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,var(--line))}
+  .card .btn.no{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,var(--line))}
+  .card .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+
+  /* 降级/错误提示条 */
+  .banner{display:flex;align-items:center;gap:8px;padding:8px 11px;border-radius:12px;
+    border:1px solid var(--line);background:var(--card);font-size:12px;color:var(--dim)}
+  .banner b{color:var(--fg)}
+  .banner .link{margin-left:auto;color:var(--fg);font-weight:600;white-space:nowrap}
+  .errcard{border:1px solid color-mix(in srgb,var(--bad) 35%,var(--line));
+    background:color-mix(in srgb,var(--bad) 6%,var(--card));border-radius:16px;padding:13px 14px}
+  .errcard .et{font-size:13.5px;font-weight:650;color:var(--bad);margin-bottom:5px}
+  .errcard .ed{font-size:12.5px;color:var(--fg);line-height:1.55;margin-bottom:10px}
+  .errcard code{font:11px ui-monospace,SFMono-Regular,Consolas,monospace;background:var(--bubble);
+    padding:1px 5px;border-radius:5px}
+  .errcard .acts{display:flex;gap:8px}
+  .errcard .btn{flex:1;text-align:center;padding:9px;border-radius:11px;border:1px solid var(--line);
+    background:var(--card);font-size:13px;font-weight:600;color:var(--fg)}
+  .errcard .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+
+  /* 外层 termcomposer */
+  .tcomp{display:flex;align-items:center;gap:8px;padding:8px 12px 14px;background:var(--bg);flex:none}
+  .tta{flex:1;height:42px;border-radius:21px;border:1px solid var(--line);background:var(--card);
+    display:flex;align-items:center;padding:0 14px;font-size:14.5px;color:var(--dim)}
+  .tsend{width:36px;height:36px;border-radius:50%;background:var(--accent);color:var(--accent-fg);
+    display:grid;place-items:center;font-size:16px;font-weight:600;flex:none}
+
+  /* 底部 sheet（沿用全局 26px 圆角） */
+  .sheetwrap{position:absolute;inset:0;background:rgba(26,26,22,.32);display:flex;flex-direction:column;justify-content:flex-end;z-index:10}
+  .sheet{background:var(--card);border-radius:26px 26px 0 0;padding:8px 16px 18px;border-top:1px solid var(--line)}
+  .handle{width:36px;height:4px;border-radius:2px;background:var(--line);margin:4px auto 12px}
+  .sheet h4{margin:0 0 2px;font-size:15px;font-weight:650}
+  .sheet .sm{font:11px ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--dim);margin-bottom:10px}
+  .sitem{display:flex;align-items:center;gap:11px;padding:11px 4px;border-bottom:1px solid var(--line)}
+  .sitem:last-of-type{border-bottom:0}
+  .sitem .sic{width:32px;height:32px;border-radius:10px;background:var(--bubble);color:var(--fg);
+    display:grid;place-items:center;font:650 12.5px ui-monospace,SFMono-Regular,Consolas,monospace;flex:none}
+  .sitem .sic.danger{color:var(--bad)}
+  .sitem .st{flex:1;min-width:0}
+  .sitem .st b{display:block;font-size:14px;font-weight:600}
+  .sitem .st span{display:block;font-size:11.5px;color:var(--dim);margin-top:1px}
+  .sitem .tag{font:10px ui-monospace,SFMono-Regular,Consolas,monospace;padding:3px 7px;border-radius:999px;
+    background:var(--bubble);color:var(--accent-2);flex:none}
+  .scancel{margin-top:10px;text-align:center;padding:11px;border-radius:12px;border:1px solid var(--line);
+    color:var(--dim);font-size:13.5px}
+
+  /* 双皮肤对照 */
+  .skins{display:flex;gap:24px;margin-top:14px}
+  .sk{width:390px;border-radius:18px;overflow:hidden;border:1px solid #DFDCD2;background:var(--bg);color:var(--fg)}
+  .sk .in{padding:14px 16px 16px}
+  .sk .tag{font:10.5px ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-bottom:10px}
+  .carbon{
+    --bg:#0B0C0E; --card:#121417; --fg:#EAE8DF; --dim:#6E726C; --line:#24272C;
+    --bubble:#171A1E; --accent:#C6F04E; --accent-fg:#0B0C0E; --accent-2:#9FE07C;
+    --ok:#9FE07C; --bad:#F07C6C; --warn:#E3BA5C;
+    border-color:#24272C;
+  }
+  .carbon .lbtn.primary .lic{background:rgba(11,12,14,.14);color:#0B0C0E}
+  .carbon .lbtn.primary .lt span,.carbon .lbtn.primary .arr{color:rgba(11,12,14,.72)}
+
+  table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid #E9E6DC;vertical-align:top;line-height:1.55}
+  th{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#8C8A7F;background:#FBFAF6}
+  .k{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11.5px;background:#F3F1EA;padding:1px 4px;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="board">
+
+  <div class="cap">Design review · T1 · Agents / Terminal</div>
+  <h1>终端会话：新建对话入口与 Gemini CLI 沟通</h1>
+  <p class="sub">沿用现行 <b>herdr 交互式 agent</b> 路线（<span class="k">herdr agent start --kind gemini</span>，与 Claude 同链路，对话/终端双视图互通），并把「新建对话」从仅限 DSH 扩到全模式与终端 Tab 新建流程。配色、圆角与字号全部复用 <span class="k">index.html</span> 的纸面 / 碳黑真实 token。</p>
+
+  <div class="gist">
+    <b>覆盖三处入口</b>：① 主 PWA「终端」Tab 点「新建终端」选目录后一步选择启动方式（DSH / Gemini / Claude / 纯终端）；② 终端内空会话启动页并列提供 DSH / Gemini / Claude；③ 终端顶栏 <span class="k">＋</span> 全模式常驻，支持重置/新开对话或换目录新建。
+    <div class="row2">
+      <span class="gp">herdr --kind gemini</span>
+      <span class="gp">GET /chat 多引擎解析</span>
+      <span class="gp">POST /tab/create startKind</span>
+      <span class="gp">顶栏 ＋ 全模式可用</span>
+      <span class="gp">纸面 + 碳黑双皮肤</span>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <!-- ============ ① 终端 Tab + 新建方式选择 ============ -->
+    <div class="cell">
+      <div class="lbl"><b>① 终端 Tab · 新建启动方式</b><span>主 PWA index.html</span></div>
+      <div class="phone">
+        <div class="sb"><span>9:41</span><span class="r">5G ▮▮▮ ▰</span></div>
+        <div class="hero">
+          <div>
+            <h2>会话</h2>
+            <div class="hsub">15 个会话 · 4 个工作区</div>
+          </div>
+          <div class="acts"><div class="ico">＋</div><div class="ico">☰</div></div>
+        </div>
+        <div class="searchbox">搜索标题或最近一条</div>
+        <div class="tabs"><b>全部会话</b><b>已归档</b><b class="on">终端</b></div>
+        <div class="tbar"><b>终端</b><span>3</span><div class="tbtn">新建终端</div></div>
+        <div class="fsect"><b>gemini-1</b><span>1</span></div>
+        <div class="listrow">
+          <span class="dot run"></span>
+          <div class="rb">
+            <div class="rt"><b>PWA</b><span>运行中</span></div>
+            <div class="rp">D:\Vibe\PWA\pwa</div>
+          </div>
+          <span class="x">×</span>
+        </div>
+        <div class="fsect"><b>claude-2</b><span>1</span></div>
+        <div class="listrow">
+          <span class="dot pend"></span>
+          <div class="rb">
+            <div class="rt"><b>CRM</b><span>等你确认</span></div>
+            <div class="rp">D:\Vibe\CRM</div>
+          </div>
+          <span class="x">×</span>
+        </div>
+        <!-- 选完目录后弹出的底部 sheet -->
+        <div class="sheetwrap">
+          <div class="sheet">
+            <div class="handle"></div>
+            <h4>在 PWA 中新建终端对话</h4>
+            <div class="sm">D:\Vibe\PWA\pwa</div>
+            <div class="sitem">
+              <div class="sic">D</div>
+              <div class="st"><b>DSH（自然语言）</b><span>独立 headless 会话 · 流式工具进度</span></div>
+              <span class="tag">推荐</span>
+            </div>
+            <div class="sitem">
+              <div class="sic">G</div>
+              <div class="st"><b>Gemini CLI</b><span>通过 herdr 启动 --kind gemini · 双视图互通</span></div>
+            </div>
+            <div class="sitem">
+              <div class="sic">C</div>
+              <div class="st"><b>Claude Code</b><span>通过 herdr 启动 --kind claude · 双视图互通</span></div>
+            </div>
+            <div class="sitem">
+              <div class="sic">&gt;_</div>
+              <div class="st"><b>仅打开纯终端</b><span>只建 shell，进入后再选择启动方式</span></div>
+            </div>
+            <div class="scancel">取消</div>
+          </div>
+        </div>
+      </div>
+      <p class="note">点「新建终端」选完目录后弹出 <span class="k">openSheet</span>（复用现有 26px 圆角底部弹层）：选 DSH / Gemini / Claude 后一步调用 <span class="k">POST /agents/tab/create</span>（新增 <span class="k">startKind</span> 字段）并直接打开浮层；列表按 agent 名自动分出 <span class="k">gemini-*</span> / <span class="k">claude-*</span>。</p>
+    </div>
+
+    <!-- ============ ② 空终端启动页 ============ -->
+    <div class="cell">
+      <div class="lbl"><b>② 终端内空会话启动页</b><span>agents/ui.html · renderLauncher</span></div>
+      <div class="phone">
+        <div class="sb"><span>9:41</span><span class="r">5G ▮▮▮ ▰</span></div>
+        <div class="termbar">
+          <div class="ico">‹</div><b>终端</b><div class="ico">☰</div><div class="ico">📁</div>
+          <span style="flex:1"></span><div class="ico">✕</div>
+        </div>
+        <div class="agphdr">
+          <span class="sdot"></span>
+          <div class="ht"><b>终端</b><span>已连接 · w1:p6</span></div>
+          <span class="grow"></span>
+          <div class="seg"><span class="on">对话</span><span>终端</span></div>
+          <div class="hbtn hl">＋</div>
+          <div class="hbtn">⋯</div>
+        </div>
+        <div class="chatarea">
+          <div class="launcher">
+            <h3>这个终端还没有启动对话</h3>
+            <div class="lsub">选一个开始，之后直接用自然语言聊天，也可随时切「终端」看原始输出</div>
+            <div class="lbtn primary">
+              <div class="lic">D</div>
+              <div class="lt"><b>启动 DSH（自然语言）</b><span>独立 headless 会话，不污染主会话列表</span></div>
+              <span class="arr">›</span>
+            </div>
+            <div class="lbtn">
+              <div class="lic">G</div>
+              <div class="lt"><b>启动 Gemini</b><span>在当前终端启动 Gemini CLI（herdr）</span></div>
+              <span class="arr">›</span>
+            </div>
+            <div class="lbtn">
+              <div class="lic">C</div>
+              <div class="lt"><b>启动 Claude</b><span>在当前终端启动 Claude Code（herdr）</span></div>
+              <span class="arr">›</span>
+            </div>
+            <div class="lhint">DSH 每轮约 10–20 秒；Gemini / Claude 需已在宿主机安装并登录。启动中切到「终端」可实时查看加载或授权提示。</div>
+          </div>
+        </div>
+        <div class="tcomp">
+          <div class="tta">先选择启动方式</div>
+          <div class="tsend" style="opacity:.45">↑</div>
+        </div>
+      </div>
+      <p class="note">打开空终端（或通过顶栏 <span class="k">＋</span> 回到启动页）时展示三选一卡片；输入框在未启动对话时保持占位「先选择启动方式」、发送键半透明，避免误发后只弹报错 toast。</p>
+    </div>
+
+    <!-- ============ ③ Gemini 对话中 & 审批态 ============ -->
+    <div class="cell">
+      <div class="lbl"><b>③ Gemini 对话中 · 审批确认</b><span>agents/ui.html · 动态标题</span></div>
+      <div class="phone">
+        <div class="sb"><span>9:41</span><span class="r">5G ▮▮▮ ▰</span></div>
+        <div class="termbar">
+          <div class="ico">‹</div><b>终端</b><div class="ico">☰</div><div class="ico">📁</div>
+          <span style="flex:1"></span><div class="ico">✕</div>
+        </div>
+        <div class="agphdr">
+          <span class="sdot"></span>
+          <div class="ht"><b>Gemini</b><span>已连接 · gemini-1</span></div>
+          <span class="grow"></span>
+          <div class="seg"><span class="on">对话</span><span>终端</span></div>
+          <div class="hbtn hl">＋</div>
+          <div class="hbtn">⋯</div>
+        </div>
+        <div class="chatarea">
+          <div class="msg user">
+            <div class="bubble">看一下 agents/bridge.mjs 里的 /chat 接口怎么兼容 Gemini 会话</div>
+            <div class="mtime">11/27 14:52</div>
+          </div>
+          <div class="msg">
+            <div class="who">GEMINI</div>
+            <div class="md">我先读取 <span class="k">agents/bridge.mjs</span> 并检查本机 <span class="k">~/.gemini/tmp</span> 下的会话格式，确认字段映射后再给出补丁。</div>
+            <div class="tools">
+              <span class="toolchip">› read_file · agents/bridge.mjs</span>
+              <span class="toolchip">› run_shell_command</span>
+            </div>
+            <div class="mtime">11/27 14:52</div>
+          </div>
+          <div class="card">
+            <div class="ct">工具请求确认</div>
+            <div class="cfact">gemini-1 在等你的输入</div>
+            <pre>Allow execution of: "git status -s"?
+  1. Allow once
+  2. Allow always
+  3. Cancel</pre>
+            <div class="acts"><div class="btn">1</div><div class="btn">2</div><div class="btn">3</div></div>
+            <div class="acts"><div class="btn ok">允许 (y)</div><div class="btn no">拒绝 (n)</div></div>
+            <div class="acts"><div class="btn primary">Enter</div><div class="btn">Esc</div></div>
+          </div>
+        </div>
+        <div class="tcomp">
+          <div class="tta">发消息给 Gemini，Enter 发送</div>
+          <div class="tsend">↑</div>
+        </div>
+      </div>
+      <p class="note">顶栏标题与气泡标签按 <span class="k">currentAgent().agent</span> 动态显示 <b>Gemini</b> / <b>Claude</b> / <b>DSH</b>（不再写死 Claude）；外层 <span class="k">termcomposer</span> 通过 <span class="k">agents-mode</span> 消息同步占位文案。遇到确认提示时复用现有审批卡发送按键。</p>
+    </div>
+
+    <!-- ============ ④ 顶栏「＋ 新建对话」全模式弹层 ============ -->
+    <div class="cell">
+      <div class="lbl"><b>④ 顶栏「＋」新建对话菜单</b><span>全模式可用（DSH/Gemini/Claude）</span></div>
+      <div class="phone">
+        <div class="sb"><span>9:41</span><span class="r">5G ▮▮▮ ▰</span></div>
+        <div class="termbar">
+          <div class="ico">‹</div><b>终端</b><div class="ico">☰</div><div class="ico">📁</div>
+          <span style="flex:1"></span><div class="ico">✕</div>
+        </div>
+        <div class="agphdr">
+          <span class="sdot"></span>
+          <div class="ht"><b>Gemini</b><span>已连接 · gemini-1</span></div>
+          <span class="grow"></span>
+          <div class="seg"><span class="on">对话</span><span>终端</span></div>
+          <div class="hbtn hl">＋</div>
+          <div class="hbtn">⋯</div>
+        </div>
+        <div class="chatarea">
+          <div class="msg user"><div class="bubble">看一下 /chat 怎么兼容 Gemini</div></div>
+          <div class="msg">
+            <div class="who">GEMINI</div>
+            <div class="md">已经整理好解析方案，可以直接开始实现。</div>
+          </div>
+        </div>
+        <!-- 顶栏 ＋ 触发的底部 sheet -->
+        <div class="sheetwrap">
+          <div class="sheet">
+            <div class="handle"></div>
+            <h4>新建对话</h4>
+            <div class="sm">当前：gemini-1 · D:\Vibe\PWA\pwa</div>
+            <div class="sitem">
+              <div class="sic">D</div>
+              <div class="st"><b>新开 DSH 对话（同目录）</b><span>新建终端 tab 并启动 DSH，保留当前 Gemini</span></div>
+            </div>
+            <div class="sitem">
+              <div class="sic">G</div>
+              <div class="st"><b>新开 Gemini 对话（同目录）</b><span>新建终端 tab 并启动 Gemini CLI</span></div>
+            </div>
+            <div class="sitem">
+              <div class="sic">C</div>
+              <div class="st"><b>新开 Claude 对话（同目录）</b><span>新建终端 tab 并启动 Claude Code</span></div>
+            </div>
+            <div class="sitem">
+              <div class="sic">📁</div>
+              <div class="st"><b>换目录新建终端…</b><span>打开目录选择器重新选工作区</span></div>
+            </div>
+            <div class="sitem">
+              <div class="sic danger">↺</div>
+              <div class="st"><b style="color:var(--bad)">结束当前对话并重选</b><span>DSH 关闭会话；Gemini/Claude 需先在终端退出进程</span></div>
+            </div>
+            <div class="scancel">取消</div>
+          </div>
+        </div>
+      </div>
+      <p class="note">以前 <span class="k">#resetBtn</span> 只在 DSH 激活时显示且点了直接删会话。现在改为<b>全模式常驻</b>：在 Gemini / Claude 运行中点 <span class="k">＋</span>，默认走「同目录新开 tab 并切换」，不误杀正在干活的旧进程；也支持换目录（通知外层 PWA 呼出目录抽屉）或显式结束当前对话。</p>
+    </div>
+
+    <!-- ============ ⑤ 失败 & 降级态 ============ -->
+    <div class="cell">
+      <div class="lbl"><b>⑤ 失败与降级态</b><span>未安装 / 启动超时 / 日志未命中</span></div>
+      <div class="phone">
+        <div class="sb"><span>9:41</span><span class="r">5G ▮▮▮ ▰</span></div>
+        <div class="termbar">
+          <div class="ico">‹</div><b>终端</b><div class="ico">☰</div><div class="ico">📁</div>
+          <span style="flex:1"></span><div class="ico">✕</div>
+        </div>
+        <div class="agphdr">
+          <span class="sdot err"></span>
+          <div class="ht"><b>Gemini</b><span>已连接 · w1:p6</span></div>
+          <span class="grow"></span>
+          <div class="seg"><span class="on">对话</span><span>终端</span></div>
+          <div class="hbtn">＋</div>
+          <div class="hbtn">⋯</div>
+        </div>
+        <div class="chatarea">
+          <!-- 情况 A：启动失败 -->
+          <div class="errcard">
+            <div class="et">未能启动 Gemini CLI</div>
+            <div class="ed">宿主机返回：<code>command not found: gemini</code>（或等待就绪超时 30s）。请确认本机已安装并登录 Gemini CLI，或切到终端手动检查输出。</div>
+            <div class="acts">
+              <div class="btn primary">切到终端查看</div>
+              <div class="btn">重试启动</div>
+            </div>
+          </div>
+          <!-- 情况 B：会话文件未命中时的降级提示 -->
+          <div class="banner">
+            <span>ℹ️ 未匹配到 Gemini 对话日志，已显示<b>终端摘要</b></span>
+            <span class="link">看终端 ›</span>
+          </div>
+          <div class="msg user">
+            <div class="bubble">列出当前仓库最近 5 条提交</div>
+          </div>
+          <div class="msg">
+            <div class="who">GEMINI · 终端摘要</div>
+            <div class="card" style="padding:10px 12px">
+              <pre>0ab5a0d docs: v251 已上线记录
+6ede4e7 docs: v251 已上线记录（进度快照、已知边界）
+9461ac6 Merge release/v251（v251）
+7f7c33c test(verify): 合并产物两轮冒烟报告与截图
+d9a66b2 fix(merge): 子代理面板打开/返回不再丢失父会话阅读位置</pre>
+            </div>
+          </div>
+        </div>
+        <div class="tcomp">
+          <div class="tta">发消息给 Gemini，Enter 发送</div>
+          <div class="tsend">↑</div>
+        </div>
+      </div>
+      <p class="note"><b>两条兜底</b>：① 启动失败不吞错，给出可读原因 + 一键切终端排查；② 若 <span class="k">GET /chat</span> 暂时找不到 Gemini 会话 JSON 文件（如刚启动未落盘、版本路径变更），不报红字空白，自动降级展示「本轮已发消息 + 终端最近输出摘要」，且消息仍可正常通过 <span class="k">/prompt</span> 发送。</p>
+    </div>
+
+    <!-- ============ ⑥ 启动中态 ============ -->
+    <div class="cell">
+      <div class="lbl"><b>⑥ 启动中 · 等待就绪</b><span>防止重复点击</span></div>
+      <div class="phone">
+        <div class="sb"><span>9:41</span><span class="r">5G ▮▮▮ ▰</span></div>
+        <div class="termbar">
+          <div class="ico">‹</div><b>终端</b><div class="ico">☰</div><div class="ico">📁</div>
+          <span style="flex:1"></span><div class="ico">✕</div>
+        </div>
+        <div class="agphdr">
+          <span class="sdot" style="background:var(--warn)"></span>
+          <div class="ht"><b>终端</b><span>正在启动 Gemini…</span></div>
+          <span class="grow"></span>
+          <div class="seg"><span class="on">对话</span><span>终端</span></div>
+          <div class="hbtn">＋</div>
+          <div class="hbtn">⋯</div>
+        </div>
+        <div class="chatarea">
+          <div class="launcher">
+            <h3>正在启动 Gemini…</h3>
+            <div class="lsub">herdr 正在当前终端拉起 Gemini CLI 并等待输入就绪，通常需要 3–10 秒</div>
+            <div class="lbtn" style="opacity:.5">
+              <div class="lic">D</div>
+              <div class="lt"><b>启动 DSH（自然语言）</b><span>独立 headless 会话</span></div>
+            </div>
+            <div class="lbtn" style="border-color:var(--accent);background:var(--bubble)">
+              <div class="lic">G</div>
+              <div class="lt"><b>启动 Gemini…</b><span>等待命令行就绪（已耗时 4s）</span></div>
+            </div>
+            <div class="lbtn" style="opacity:.5">
+              <div class="lic">C</div>
+              <div class="lt"><b>启动 Claude</b><span>在当前终端启动 Claude Code</span></div>
+            </div>
+            <div class="banner" style="margin-top:4px">
+              <span>若首次启动停在登录/信任目录提示</span>
+              <span class="link">切到终端 ›</span>
+            </div>
+          </div>
+        </div>
+        <div class="tcomp">
+          <div class="tta">正在启动 Gemini…</div>
+          <div class="tsend" style="opacity:.45">↑</div>
+        </div>
+      </div>
+      <p class="note">启动请求期间锁定三颗按钮防连点，高亮当前启动项并提示「首次启动停在登录/信任目录时可切终端操作」，避免卡在对话页不知情。</p>
+    </div>
+
+  </div>
+
+  <!-- ============ 双皮肤对照 ============ -->
+  <h1 style="font-size:19px;margin:44px 0 4px">两套皮肤下的同一组件</h1>
+  <p class="sub" style="margin-bottom:14px">只换 token，不换结构：同步让 <span class="k">agents/ui.html</span> 读取 <span class="k">localStorage['dsh.skin'] / ['dsh.theme']</span>，与主 PWA 纸面 / 碳黑外观一致。</p>
+  <div class="skins">
+    <div class="sk">
+      <div class="in">
+        <div class="tag">Paper（默认浅色）</div>
+        <div class="agphdr" style="border-radius:12px;border:1px solid var(--line);margin-bottom:12px">
+          <span class="sdot"></span>
+          <div class="ht"><b>Gemini</b><span>已连接 · gemini-1</span></div>
+          <span class="grow"></span>
+          <div class="seg"><span class="on">对话</span><span>终端</span></div>
+          <div class="hbtn hl">＋</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div class="lbtn primary" style="height:46px">
+            <div class="lic" style="width:26px;height:26px;font-size:12px">D</div>
+            <div class="lt"><b style="font-size:13.5px">启动 DSH（自然语言）</b></div>
+          </div>
+          <div class="lbtn" style="height:46px">
+            <div class="lic" style="width:26px;height:26px;font-size:12px">G</div>
+            <div class="lt"><b style="font-size:13.5px">启动 Gemini</b></div>
+          </div>
+          <div class="lbtn" style="height:46px">
+            <div class="lic" style="width:26px;height:26px;font-size:12px">C</div>
+            <div class="lt"><b style="font-size:13.5px">启动 Claude</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="sk carbon">
+      <div class="in">
+        <div class="tag">Carbon（恒深色 · 荧光绿强调）</div>
+        <div class="agphdr" style="border-radius:12px;border:1px solid var(--line);margin-bottom:12px">
+          <span class="sdot"></span>
+          <div class="ht"><b>Gemini</b><span>已连接 · gemini-1</span></div>
+          <span class="grow"></span>
+          <div class="seg"><span class="on">对话</span><span>终端</span></div>
+          <div class="hbtn hl">＋</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div class="lbtn primary" style="height:46px">
+            <div class="lic" style="width:26px;height:26px;font-size:12px">D</div>
+            <div class="lt"><b style="font-size:13.5px">启动 DSH（自然语言）</b></div>
+          </div>
+          <div class="lbtn" style="height:46px">
+            <div class="lic" style="width:26px;height:26px;font-size:12px">G</div>
+            <div class="lt"><b style="font-size:13.5px">启动 Gemini</b></div>
+          </div>
+          <div class="lbtn" style="height:46px">
+            <div class="lic" style="width:26px;height:26px;font-size:12px">C</div>
+            <div class="lt"><b style="font-size:13.5px">启动 Claude</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 状态与边界表 ============ -->
+  <h1 style="font-size:19px;margin:44px 0 8px">状态与边界（供你确认）</h1>
+  <table>
+    <tr><th style="width:175px">情况</th><th>界面表现</th><th style="width:230px">为什么这么定</th></tr>
+    <tr>
+      <td><b>终端 Tab 新建</b></td>
+      <td>选目录后弹 sheet 选「DSH / Gemini / Claude / 纯终端」，创建 tab 后自动启动对应后端并进入浮层</td>
+      <td>保留原有「先选目录」肌肉记忆，少点一步；想进空 shell 仍可选最后一项</td>
+    </tr>
+    <tr>
+      <td><b>Gemini 历史解析</b></td>
+      <td><span class="k">GET /chat</span> 根据 agent kind 分发：Claude 读 <span class="k">~/.claude/projects/*.jsonl</span>；Gemini 优先读 <span class="k">~/.gemini/tmp/*/chats/session-*.json</span>，找不到时返回 <span class="k">fallback: 'pane'</span>，前端显示「终端摘要」提示条</td>
+      <td>Gemini CLI 各版本会话目录/命名可能变化，或新会话未落盘；有降级保底就不会出现对话页白屏或报错</td>
+    </tr>
+    <tr>
+      <td><b>启动返回 agent_not_ready</b></td>
+      <td>提示「Gemini 正在启动，若停在登录或信任提示可切到终端查看」，同时保留切终端入口</td>
+      <td>首次在新目录启动 Gemini CLI 可能弹 Trust Folder / OAuth 提示，herdr 判未就绪，切终端即可完成交互</td>
+    </tr>
+    <tr>
+      <td><b>点顶栏 ＋（运行中）</b></td>
+      <td>弹「新建对话」sheet：默认提供同目录新开 DSH / Gemini / Claude（建新 tab 切过去），底部红字项才是「结束当前对话」</td>
+      <td>防止在 Gemini / Claude 跑任务中途误删原会话；DSH 模式下「结束当前对话」等价于原 <span class="k">/dsh/close</span></td>
+    </tr>
+    <tr>
+      <td><b>宿主机未装 gemini</b></td>
+      <td>启动页显示错误卡片（带 stderr 原文）+「切到终端查看 / 重试」，不关闭浮层、不回退清空状态</td>
+      <td>此前实测本机默认 PATH 里未检测到 <span class="k">gemini</span> 可执行文件，必须把前置缺失明确告诉用户（开发前也需在宿主机确认 PATH 中可用）</td>
+    </tr>
+    <tr>
+      <td><b>动态标题与气泡名</b></td>
+      <td>顶栏标题、气泡 <span class="k">.who</span>、外层输入框占位均按后端动态展示 <span class="k">DSH</span> / <span class="k">Gemini</span> / <span class="k">Claude</span></td>
+      <td>修掉当前 <span class="k">ui.html</span> 把非 DSH 的 agent 一律显示为「Claude」/「DSH」的硬编码</td>
+    </tr>
+  </table>
+
+  <!-- ============ 开发面表 ============ -->
+  <h1 style="font-size:19px;margin:36px 0 8px">开发面（确认后动这些位置）</h1>
+  <table>
+    <tr><th style="width:185px">文件 / 位置</th><th>改动内容</th><th style="width:85px">预计量</th></tr>
+    <tr>
+      <td><span class="k">agents/bridge.mjs</span><br><span class="k">/tab/create</span> · <span class="k">/agent/start</span> · <span class="k">/chat</span></td>
+      <td>① <span class="k">/tab/create</span> 支持 <span class="k">startKind: 'dsh'|'gemini'|'claude'|''</span>（兼容旧 <span class="k">startAgent: true</span>）；② <span class="k">/agent/start</span> 白名单校验 <span class="k">kind</span>（支持 <span class="k">claude</span>/<span class="k">gemini</span>）；③ <span class="k">/chat</span> 新增 Gemini 会话 JSON 读取器 + 找不到文件时返回 pane 摘要降级字段</td>
+      <td>~110 行</td>
+    </tr>
+    <tr>
+      <td><span class="k">agents/ui.html</span><br>启动页 / 顶栏 / 弹层 / 降级卡</td>
+      <td>① <span class="k">renderLauncher</span> 改为 DSH / Gemini / Claude 三卡片 + 启动中锁定态 + 启动错误卡；② 抽取通用 <span class="k">startAgent(kind)</span>；③ 顶栏 <span class="k">＋</span> 全模式常驻，接「新建对话」底部 sheet（含同目录新开 tab 与通知外层换目录）；④ 动态标题与气泡标签、Gemini 降级提示条、同步读取 PWA 皮肤 token</td>
+      <td>~180 行</td>
+    </tr>
+    <tr>
+      <td><span class="k">index.html</span><br><span class="k">newTerminal</span> / <span class="k">openTerminal</span> / <span class="k">message</span></td>
+      <td>① <span class="k">newTerminal()</span> 选完目录后弹 <span class="k">openSheet</span> 选启动方式，传 <span class="k">startKind</span> 给 <span class="k">/agents/tab/create</span>；② 监听 <span class="k">pwa-new-terminal</span> 消息唤起换目录新建；③ 监听 <span class="k">agents-mode</span> 同步外层输入框占位文案与发送键可用态</td>
+      <td>~65 行</td>
+    </tr>
+    <tr>
+      <td><span class="k">agents/smoke.ps1</span></td>
+      <td>补充校验 UI 含 Gemini 启动入口、新建对话 sheet 与 <span class="k">/agent/start</span> 逻辑</td>
+      <td>~10 行</td>
+    </tr>
+  </table>
+
+  <p class="note" style="margin-top:20px;border-left:3px solid #E5E2D8;padding-left:12px">
+    <b>前置提醒</b>：刚刚在宿主机检测默认 PATH 时，看到了 <span class="k">claude</span>、<span class="k">dsh</span>、<span class="k">herdr</span> 和 <span class="k">~/.gemini/</span> 配置目录，但未找到 <span class="k">gemini</span> 命令（<span class="k">where.exe gemini</span> 无结果）。如果你是在特定目录/nvm 环境下装的 Gemini CLI，或者需要顺手全局安装 <span class="k">@google/gemini-cli</span>，确认设计稿时顺便告诉我即可。
+  </p>
+
+</div>
+</body>
+</html>
