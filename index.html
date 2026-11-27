@@ -1008,6 +1008,22 @@
   .termcomposer .tsend:disabled{opacity:.45}
   .termcomposer .tstop{width:38px;height:38px;min-width:38px;border-radius:50%;background:var(--bad);color:#fff;
     display:none;place-items:center;font-size:13px;flex:none}
+  .termsetup{margin:14px 2px;padding:16px;border-radius:16px;background:var(--card);border:1px solid var(--line);
+    display:flex;flex-direction:column;gap:10px}
+  .termsetup h3{margin:0;font-size:16px;font-weight:650;letter-spacing:-.01em}
+  .termsetup p{margin:0;font-size:13px;color:var(--dim);line-height:1.55}
+  .termsetup .tsrow{display:flex;gap:8px;align-items:center}
+  .termsetup input{flex:1;min-width:0;height:42px;padding:0 12px;border-radius:11px;border:1px solid var(--line);
+    background:var(--bg);color:var(--fg);font-size:16px;user-select:text;-webkit-user-select:text}
+  .termsetup input:focus{border-color:var(--accent)}
+  .termsetup .tspaste{height:42px;padding:0 12px;border-radius:11px;border:1px solid var(--line);
+    background:var(--bubble);color:var(--fg);font-size:13px;font-weight:600;flex:none}
+  .termsetup .tsacts{display:flex;gap:8px;margin-top:2px}
+  .termsetup .tsbtn{flex:1;height:42px;border-radius:12px;border:1px solid var(--line);background:var(--card);
+    color:var(--fg);font-size:14px;font-weight:600;display:grid;place-items:center}
+  .termsetup .tsbtn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+  .termsetup .tsbtn:disabled{opacity:.5}
+  .termsetup .tserr{font-size:12.5px;color:var(--bad);line-height:1.45}
   html.kb-open .termoverlay{height:var(--vvh);bottom:auto}
 </style>
 </head>
@@ -4260,38 +4276,49 @@ async function loadArchived() {
 }
 
 // terminal group (herdr bridge)
-let termAgents = { items: [], at: 0, loading: false };
+let termAgents = { items: [], at: 0, loading: false, authErr: false };
 function termToken() { return localStorage.getItem('bridge_token') || ''; }
+function parseTermSnapshot(j) {
+  const snap = j && j.result && j.result.snapshot;
+  if (!snap) throw new Error('bad snapshot');
+  const panes = snap.panes || [];
+  const tabs = snap.tabs || [];
+  const agents = snap.agents || [];
+  return tabs.map((t) => {
+    const p = panes.find((x) => x.tab_id === t.tab_id) || {};
+    const a = agents.find((x) => x.pane_id === p.pane_id);
+    return {
+      tabId: t.tab_id,
+      label: t.label || (p.cwd ? String(p.cwd).split(/[\\/]/).pop() : 'tab'),
+      paneId: p.pane_id || '',
+      cwd: p.cwd || '',
+      status: (a && a.agent_status) || p.agent_status || 'unknown',
+      agent: a ? (a.name || a.agent || '') : '',
+    };
+  });
+}
 function loadTermAgents() {
   const tk = termToken();
   if (!tk || termAgents.loading) return;
   termAgents.loading = true;
   fetch('/agents/snapshot', { headers: { Authorization: 'Bearer ' + tk } })
-    .then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
+    .then((r) => {
+      if (r.status === 401) { const e = new Error('HTTP 401'); e.status = 401; throw e; }
+      return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status));
+    })
     .then((j) => {
-      const snap = j && j.result && j.result.snapshot;
-      if (!snap) throw new Error('bad snapshot');
-      const panes = snap.panes || [];
-      const tabs = snap.tabs || [];
-      const agents = snap.agents || [];
-      const items = tabs.map((t) => {
-        const p = panes.find((x) => x.tab_id === t.tab_id) || {};
-        const a = agents.find((x) => x.pane_id === p.pane_id);
-        return {
-          tabId: t.tab_id,
-          label: t.label || (p.cwd ? String(p.cwd).split(/[\\/]/).pop() : 'tab'),
-          paneId: p.pane_id || '',
-          cwd: p.cwd || '',
-          status: (a && a.agent_status) || p.agent_status || 'unknown',
-          agent: a ? (a.name || a.agent || '') : '',
-        };
-      });
-      termAgents.items = items;
+      termAgents.items = parseTermSnapshot(j);
+      termAgents.authErr = false;
       termAgents.loading = false;
       termAgents.at = Date.now();
       if (state.view === 'list') render();
     })
-    .catch(() => { termAgents.loading = false; termAgents.at = Date.now(); });
+    .catch((e) => {
+      if (e && e.status === 401) { termAgents.authErr = true; termAgents.items = []; }
+      termAgents.loading = false;
+      termAgents.at = Date.now();
+      if (e && e.status === 401 && state.view === 'list' && state.tab === 'terminal') render();
+    });
 }
 async function createTerminalTab(cwd, startKind = '') {
   try {
@@ -4360,7 +4387,63 @@ function appendTermGroup(main) {
   }
   main.append(box);
 }
+function renderTerminalSetupCard(main, isAuthErr) {
+  const card = el('div', { class:'termsetup' });
+  card.append(
+    el('h3', { text: isAuthErr ? '终端连接凭据已失效' : '连接远程终端' }),
+    el('p', { text: isAuthErr
+      ? '当前保存的 Bearer token 未通过校验（401），请粘贴最新的本机 bridge token 重新连接。'
+      : '首次在当前浏览器或预览环境使用终端，需粘贴一次本机 bridge 的 Bearer token（存在本机，后续不再重复输入）。' }),
+  );
+  const inp = el('input', { type:'password', placeholder:'粘贴 Bearer token', autocomplete:'off', 'aria-label':'Bearer token' });
+  const errEl = el('div', { class:'tserr' });
+  errEl.style.display = 'none';
+  const showErr = (m) => { errEl.textContent = m || ''; errEl.style.display = m ? '' : 'none'; };
+  const pasteBtn = el('button', { class:'tspaste', type:'button', text:'粘贴', onclick: async () => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        const txt = (await navigator.clipboard.readText()).trim();
+        if (txt) { inp.value = txt; showErr(''); toast('已粘贴'); return; }
+      }
+      toast('请长按输入框粘贴');
+    } catch { toast('请长按输入框粘贴'); }
+  } });
+  card.append(el('div', { class:'tsrow' }, inp, pasteBtn), errEl);
+  const goBtn = el('button', { class:'tsbtn primary', type:'button', text:'保存并连接' });
+  const doConnect = async () => {
+    const val = inp.value.trim();
+    if (!val) { showErr('请先粘贴 Bearer token'); return; }
+    showErr('');
+    goBtn.disabled = true;
+    goBtn.textContent = '验证中…';
+    try {
+      const r = await fetch('/agents/snapshot', { headers: { Authorization: 'Bearer ' + val } });
+      if (r.status === 401) throw new Error('token 无效，请核对本机 token.txt');
+      if (!r.ok) throw new Error('连接失败（HTTP ' + r.status + '）');
+      const j = await r.json();
+      localStorage.setItem('bridge_token', val);
+      termAgents.items = parseTermSnapshot(j);
+      termAgents.authErr = false;
+      termAgents.at = Date.now();
+      toast('已连接远程终端');
+      render();
+    } catch (e) {
+      showErr(e.message || String(e));
+      goBtn.disabled = false;
+      goBtn.textContent = '保存并连接';
+    }
+  };
+  goBtn.onclick = doConnect;
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doConnect(); } });
+  const openRaw = el('button', { class:'tsbtn', type:'button', text:'打开 /agents/', onclick: () => { location.href = '/agents/'; } });
+  card.append(el('div', { class:'tsacts' }, goBtn, openRaw));
+  main.append(card);
+}
 function renderTerminalTab(main) {
+  if (!termToken() || termAgents.authErr) {
+    renderTerminalSetupCard(main, !!termAgents.authErr);
+    return;
+  }
   const items = termAgents.items || [];
   main.append(el('div', { class:'tbar' },
     el('b', { text:'终端' }),
@@ -4631,9 +4714,9 @@ function renderList(wrap, opts = {}) {
     el('b', { class: state.tab === 'archived' ? 'on' : '', text:'已归档', onclick: () => {
       state.tab = 'archived'; state.archived = null; state.searchItems = null; render(); loadArchived();
     } }),
-    termToken() ? el('b', { class: state.tab === 'terminal' ? 'on' : '', text:'终端', onclick: () => {
+    el('b', { class: state.tab === 'terminal' ? 'on' : '', text:'终端', onclick: () => {
       state.tab = 'terminal'; state.searchItems = null; render(); loadTermAgents();
-    } }) : null,
+    } }),
   );
 
   // 搜索：服务端内容检索在这个部署里是关闭的（openAt "never"），
