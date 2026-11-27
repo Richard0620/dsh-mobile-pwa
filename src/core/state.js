@@ -12,7 +12,7 @@ if (typeof location !== 'undefined' && typeof localStorage !== 'undefined') (() 
 })();
 
 
-const _lsGet = (k) => { try { return typeof localStorage !== 'undefined' ? _lsGet(k) : null; } catch { return null; } };
+const _lsGet = (k) => { try { return typeof localStorage !== 'undefined' ? localStorage.getItem(k) : null; } catch { return null; } };
 const state = {
   token: _lsGet(LS.token) || '',
   instanceId: _lsGet(LS.inst) || '',
