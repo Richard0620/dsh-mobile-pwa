@@ -1,0 +1,48 @@
+  :root{
+    --r-card:24px; --r-bubble:20px;
+    --safe-t: env(safe-area-inset-top, 0px); --safe-b: env(safe-area-inset-bottom, 0px);
+    /* 皮肤：纸面（默认）。暖灰纸面 + 墨黑强调，层级靠字重与 1px 细线 */
+    --bg:#F6F5F1; --card:#FFFFFF; --fg:#1A1A16; --dim:#8C8A7F; --line:#E5E2D8;
+    --bubble:#ECEAE2; --accent:#1A1A16; --accent-fg:#FFFFFF; --accent-2:#5E5D54;
+    --ok:#2E6B3F; --bad:#A33B31; --warn:#8A5A12;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]):not([data-skin="carbon"]):not([data-skin="auto"]){
+      --bg:#0E0E0B; --card:#171714; --fg:#F0EEE6; --dim:#7B786D; --line:#2A2A23;
+      --bubble:#24241E; --accent:#F0EEE6; --accent-fg:#171714; --accent-2:#ACA99D;
+      --ok:#7CBF90; --bad:#E0837A; --warn:#D9AC57;
+    }
+  }
+  /* 手动主题：覆盖系统配色；auto 时不设 data-theme，仍走上面的媒体查询 */
+  :root[data-theme="dark"]:not([data-skin="carbon"]):not([data-skin="auto"]){
+    --bg:#0E0E0B; --card:#171714; --fg:#F0EEE6; --dim:#7B786D; --line:#2A2A23;
+    --bubble:#24241E; --accent:#F0EEE6; --accent-fg:#171714; --accent-2:#ACA99D;
+    --ok:#7CBF90; --bad:#E0837A; --warn:#D9AC57;
+  }
+  :root[data-theme="light"]:not([data-skin="carbon"]):not([data-skin="auto"]){
+    --bg:#F6F5F1; --card:#FFFFFF; --fg:#1A1A16; --dim:#8C8A7F; --line:#E5E2D8;
+    --bubble:#ECEAE2; --accent:#1A1A16; --accent-fg:#FFFFFF; --accent-2:#5E5D54;
+    --ok:#2E6B3F; --bad:#A33B31; --warn:#8A5A12;
+  }
+  /* 皮肤：碳黑。近黑底 + 荧光绿强调，恒为深色，不跟系统配色走 */
+  :root[data-skin="carbon"]{
+    --bg:#0B0C0E; --card:#121417; --fg:#EAE8DF; --dim:#6E726C; --line:#24272C;
+    --bubble:#171A1E; --accent:#C6F04E; --accent-fg:#0B0C0E; --accent-2:#9FE07C;
+    --ok:#9FE07C; --bad:#F07C6C; --warn:#E3BA5C;
+  }
+  /* 皮肤：跟随系统。浅色=纸面，深色=碳黑 */
+  @media (prefers-color-scheme: dark){
+    :root[data-skin="auto"]{
+      --bg:#0B0C0E; --card:#121417; --surface-2:#191C20; --surface-3:#22262B;
+      --fg:#EAE8DF; --dim:#6E726C; --line:#24272C; --line-2:#34383E;
+      --bubble:#171A1E; --accent:#C6F04E; --accent-fg:#0B0C0E; --accent-2:#9FE07C;
+      --ok:#9FE07C; --bad:#F07C6C; --warn:#E3BA5C;
+    }
+  }  /* 大屏手机（16 Pro Max 这类 430pt+）：正文字号与内边距略微放大，行宽不至于太松 */
+  @media (min-width: 430px){
+    main{padding-left:16px;padding-right:16px}
+    .md{font-size:15.5px;line-height:1.65}
+    .msg.user .bubble{font-size:15.5px}
+    .dock{padding-left:14px;padding-right:14px}
+    header{padding-left:12px;padding-right:12px}
+  }
