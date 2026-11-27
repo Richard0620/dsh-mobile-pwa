@@ -1,5 +1,6 @@
   /* F1：过程进度（替代原来的 .streamline 单行；保留 .streamline class 让键盘规则继续生效） */
-  .prog{padding:0 2px 7px}
+  .prog{padding:8px 13px 7px;margin-bottom:6px;background:var(--card);border:1px solid var(--line);
+    border-radius:16px;box-shadow:var(--shadow-card);transition:opacity .35s ease, transform .22s var(--ease-spring)}
   .prog:empty{display:none}
   .prog .row{display:flex;align-items:center;gap:7px;font-size:11.5px;line-height:1.4;color:var(--dim)}
   .prog .row b{font-size:12px;font-weight:650;color:var(--fg);letter-spacing:-.1px;flex:none}
@@ -8,11 +9,16 @@
   .prog .row .t{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;color:var(--dim);flex:none}
   .prog .row .cv{flex:none;font-size:10px;color:var(--dim);opacity:.9}
   .prog .pdot{width:6px;height:6px;border-radius:50%;background:var(--ok);flex:none;
-    box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 13%,transparent)}
-  .prog .pbar{height:2px;border-radius:2px;background:var(--line);margin-top:6px;overflow:hidden}
-  .prog .pbar i{display:block;height:100%;background:var(--ok);border-radius:2px}
+    box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 15%,transparent);animation:dotpulse 2.2s ease-in-out infinite}
+  .prog .pbar{height:2.5px;border-radius:2px;background:var(--line);margin-top:6px;overflow:hidden}
+  .prog .pbar i{display:block;height:100%;background:var(--ok);border-radius:2px;position:relative;overflow:hidden;
+    transition:width 280ms var(--ease-spring)}
+  .prog .pbar:not(.indet) i::after{content:'';position:absolute;inset:0;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.45),transparent);
+    animation:pshimmer 1.8s linear infinite}
+  @keyframes pshimmer{0%{transform:translateX(-100%)}100%{transform:translateX(200%)}}
   .prog .pbar.indet i{width:32%;animation:pscan 1.3s cubic-bezier(.4,0,.2,1) infinite}
-  .prog.donefade{opacity:0;transition:opacity .5s ease}
+  .prog.donefade{opacity:0;transform:translateY(4px);transition:opacity .5s ease, transform .5s ease}
   @keyframes pscan{0%{transform:translateX(-110%)}55%{transform:translateX(170%)}100%{transform:translateX(360%)}}
   /* F2：朗读条（与进度条同位置，二选一；运行中优先进度条） */
   .prog .speak{display:flex;align-items:center;gap:8px;padding:0;font-size:11.5px;color:var(--dim)}
@@ -99,8 +105,9 @@
   .chips::-webkit-scrollbar{display:none}
   .chip{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--dim);
     border:1px solid var(--line);border-radius:999px;padding:4px 10px;white-space:nowrap;background:var(--card)}
-  .composer{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);
-    padding:11px 12px 9px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+  .composer{background:var(--card);border:1px solid var(--line-2,var(--line));border-radius:24px;
+    padding:11px 13px 10px;box-shadow:var(--shadow-dock);transition:border-color 160ms ease, box-shadow 160ms ease}
+  .composer:focus-within{border-color:color-mix(in srgb,var(--accent) 28%,var(--line-2,var(--line)))}
   .composer textarea{resize:none;max-height:132px;min-height:24px;line-height:1.5;font-size:16px;display:block}
   /* 用 contenteditable 代替 textarea：iOS 不会挂那条 ^∨✓ 的输入辅助栏 */
   .composer .ta{min-height:24px;max-height:132px;overflow-y:auto;line-height:1.5;font-size:16px;
@@ -109,10 +116,10 @@
   .composer textarea::placeholder{color:var(--dim)}
   .crow{display:flex;align-items:center;gap:8px;margin-top:8px}
   .chips{display:flex;align-items:center;gap:6px;flex:1;min-width:0;overflow:hidden;flex-wrap:wrap;row-gap:6px;align-content:center;padding:0}
-  .chip2{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 9px;border-radius:8px;flex:0 0 auto;min-width:0;
-    background:var(--bubble);color:var(--dim);font-size:11.5px;letter-spacing:-.1px;white-space:nowrap;
-    flex:none;max-width:60%}
-  .chip2:active{opacity:.7}
+  .chip2{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 10px;border-radius:999px;flex:0 0 auto;min-width:0;
+    background:var(--surface-2,var(--bubble));color:var(--dim);font-size:11.5px;letter-spacing:-.01em;white-space:nowrap;
+    flex:none;max-width:60%;transition:transform 120ms var(--ease-press), background-color 140ms ease}
+  .chip2:active{transform:scale(.95);opacity:.85}
   /* 新会话页：大输入框 + 工作区/模式 chips；和 composer 用同一套 chip 观感 */
   .newpage{display:flex;flex-direction:column;flex:1;min-height:0}
   .newbox{flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px;
@@ -148,23 +155,29 @@
   .pill{font-size:11px;color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent);
     border-radius:6px;padding:1px 6px;flex:none}
   .send{width:34px;height:34px;border-radius:50%;background:var(--accent);color:var(--accent-fg);display:grid;
-    place-items:center;font-size:16px;flex:none;margin-left:auto;box-shadow:0 2px 8px color-mix(in srgb,var(--accent) 35%,transparent)}
+    place-items:center;font-size:16px;flex:none;margin-left:auto;box-shadow:0 2px 10px color-mix(in srgb,var(--accent) 32%,transparent);
+    transition:transform 140ms var(--ease-spring), opacity 160ms ease, box-shadow 160ms ease}
+  .send:active{transform:scale(.90)}
   .send:disabled{opacity:.4;box-shadow:none}
   /* 空输入时发送占位但不响应（麦克风常驻在它左边） */
   .send.off{opacity:.35;pointer-events:none;box-shadow:none}
-  .mic{width:34px;height:34px;border-radius:50%;background:var(--bubble);color:var(--fg);
+  .mic{width:34px;height:34px;border-radius:50%;background:var(--surface-2,var(--bubble));color:var(--fg);
     display:grid;place-items:center;font-size:16px;flex:none;border:1px solid var(--line);
+    transition:transform 120ms var(--ease-press), background-color 140ms ease;
     user-select:none;-webkit-user-select:none;touch-action:none;-webkit-touch-callout:none;
     -webkit-user-drag:none}
-  .mic.on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+  .mic:active{transform:scale(.92)}
+  .mic.on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);transform:scale(1.06)}
   /* 线性图标（与 app 其它 icon 同一套 stroke 语言），不用 emoji */
   .mic svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.8;
     stroke-linecap:round;stroke-linejoin:round;display:block}
   .mic.on svg{stroke-width:2}
-  .mact button .ic svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.7;
+  .mact button .ic svg{width:13.5px;height:13.5px;stroke:currentColor;fill:none;stroke-width:1.75;
     stroke-linecap:round;stroke-linejoin:round;display:block}
-  .stop{width:34px;height:34px;border-radius:50%;background:var(--bubble);color:var(--bad);
-    display:none;place-items:center;font-size:13px;flex:none;border:1px solid var(--line)}
+  .stop{width:34px;height:34px;border-radius:50%;background:color-mix(in srgb,var(--bad) 12%,var(--card));color:var(--bad);
+    display:none;place-items:center;font-size:13px;flex:none;border:1px solid color-mix(in srgb,var(--bad) 26%,transparent);
+    transition:transform 120ms var(--ease-press), background-color 140ms ease}
+  .stop:active{transform:scale(.90)}
   /* 回到底部：悬浮在输入框外部的右上角 */
   .jump{position:absolute;right:14px;bottom:calc(var(--dock-h, 92px) + 10px);z-index:20;
     display:none;align-items:center;gap:4px;font-size:12px;color:var(--fg);
@@ -182,15 +195,18 @@
   .ptr.on{opacity:1}
 
   /* ---------- sheet ---------- */
-  .mask{position:fixed;inset:0;background:rgba(16,14,8,.34);backdrop-filter:blur(2px);
-    display:flex;align-items:flex-end;justify-content:center;z-index:2000;animation:fade .16s ease}
+  .mask{position:fixed;inset:0;background:rgba(10,11,13,.38);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    display:flex;align-items:flex-end;justify-content:center;z-index:2000;animation:fade 180ms ease;
+    transition:opacity 180ms ease}
+  .mask.closing{opacity:0;pointer-events:none}
   @keyframes fade{from{opacity:0}to{opacity:1}}
-  .sheet{width:100%;max-width:560px;background:var(--card);border-radius:26px 26px 0 0;
-    padding:8px 16px calc(12px + var(--safe-b));border-top:1px solid var(--line);
-    box-shadow:0 -20px 50px -20px rgba(30,24,10,.45);
+  .sheet{width:100%;max-width:560px;background:var(--card);border-radius:28px 28px 0 0;
+    padding:8px 18px calc(14px + var(--safe-b));border-top:1px solid var(--line-2,var(--line));
+    box-shadow:0 -18px 46px -14px rgba(10,11,13,.42);
     max-height:calc(100vh - 20px);max-height:calc(100dvh - 20px);
     overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
-    animation:up .22s cubic-bezier(.22,1,.36,1)}
+    animation:up 280ms var(--ease-spring);transition:transform 200ms cubic-bezier(.4,0,1,1)}
+  .mask.closing .sheet{transform:translateY(100%)}
   /* 矮屏（SE / 横屏 / 键盘弹起）压缩行高，尽量少滚 */
   @media (max-height:700px){
     .sheet .item{padding:9px 4px;font-size:14.5px}
@@ -199,7 +215,7 @@
     .sheet .shead{font-size:16.5px;padding:0 4px 6px}
     .sheet .cancel{margin-top:6px;padding:10px}
   }
-  @keyframes up{from{transform:translateY(26px)}to{transform:translateY(0)}}
+  @keyframes up{from{transform:translateY(100%)}to{transform:translateY(0)}}
   .sheet .grab{width:36px;height:4px;border-radius:2px;background:var(--line-2,var(--line));
     margin:2px auto 14px;position:sticky;top:0;z-index:2;flex:none}
   .sheet .shead{font-size:18px;font-weight:650;letter-spacing:-.02em;padding:0 4px 10px;

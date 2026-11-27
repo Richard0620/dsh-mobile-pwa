@@ -76,13 +76,19 @@ function decorateCodeCopies(mdNode) {
     const wrap = el('div', { class:'codewrap' });
     pre.replaceWith(wrap);
     wrap.append(pre);
-    wrap.append(el('button', { class:'codecopy', text:'⧉ 复制', onclick: async (e) => {
+    const btn = el('button', { class:'codecopy', text:'复制', onclick: async (e) => {
       e.stopPropagation();
       const code = pre.querySelector('code');
       const txt = (code ? code.textContent : pre.textContent) || '';
-      if (await copyText(txt)) toast('已复制代码');
-      else toast('复制失败');
-    }}));
+      if (await copyText(txt)) {
+        btn.textContent = '✓ 已复制';
+        btn.classList.add('copied');
+        clearTimeout(btn._t);
+        btn._t = setTimeout(() => { btn.textContent = '复制'; btn.classList.remove('copied'); }, 1200);
+        toast('已复制代码');
+      } else toast('复制失败');
+    }});
+    wrap.append(btn);
   }
 }
 

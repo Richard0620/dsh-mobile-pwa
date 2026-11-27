@@ -27,9 +27,11 @@ async function renderSubPage(wrap) {
   wrap.append(main);
 
   const group = (...rows) => el('div', { class:'groupcard' }, ...rows);
+  const chevSvg = '<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>';
   const row = (title, desc, value, run) => el(run ? 'button' : 'div', run ? { class:'srow', onclick: run } : { class:'srow' },
     el('div', { class:'st' }, el('b', { text: title }), desc ? el('span', { text: desc }) : null),
-    value ? el('span', { class:'sv', text: value }) : null);
+    value ? el('span', { class:'sv', text: value }) : null,
+    run ? el('span', { class:'schev', 'aria-hidden':'true', html: chevSvg }) : null);
   const sw = (title, desc, on, run) => el('div', { class:'srow', onclick: run },
     el('div', { class:'st' }, el('b', { text: title }), desc ? el('span', { text: desc }) : null),
     el('span', { class:'tgl' + (on ? ' on' : '') }));
@@ -266,9 +268,11 @@ function renderSettings(wrap) {
   const facts = settingsFacts || { push:'', devices:null };
   const skin = (() => { try { const v = localStorage.getItem('dsh.skin'); return v === 'carbon' ? '碳黑' : v === 'auto' ? '跟随系统' : '纸面'; } catch { return '纸面'; } })();
   const theme = (() => { try { const t = localStorage.getItem('dsh.theme'); return t === 'light' ? '浅色' : t === 'dark' ? '深色' : '跟随系统'; } catch { return '跟随系统'; } })();
+  const chevSvg = '<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>';
   const row = (title, desc, value, run) => el(run ? 'button' : 'div', run ? { class:'srow', onclick: run } : { class:'srow' },
     el('div', { class:'st' }, el('b', { text: title }), desc ? el('span', { text: desc }) : null),
-    value ? el('span', { class:'sv', text: value }) : null);
+    value ? el('span', { class:'sv', text: value }) : null,
+    run ? el('span', { class:'schev', 'aria-hidden':'true', html: chevSvg }) : null);
   const sw = (title, desc, on, run) => el('div', { class:'srow', onclick: run },
     el('div', { class:'st' }, el('b', { text: title }), desc ? el('span', { text: desc }) : null),
     el('span', { class:'tgl' + (on ? ' on' : '') }));

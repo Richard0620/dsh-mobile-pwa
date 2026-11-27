@@ -75,7 +75,15 @@ function goBackToList() {
 // 从左缘 40px 内起手、水平位移 > 70px、纵向位移 < 70px，才算返回，避免和竖向滚动打架。
 
 function installSwipeBack() {
-  let sx = 0, sy = 0, mode = '';
+  let sx = 0, sy = 0, mode = '', appEl = null;
+  const resetShift = () => {
+    if (!appEl) return;
+    appEl.style.transition = 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1)';
+    appEl.style.transform = '';
+    const elRef = appEl;
+    appEl = null;
+    setTimeout(() => { elRef.style.transition = ''; }, 240);
+  };
   document.addEventListener('touchstart', (e) => {
     if (state.view !== 'session' || e.touches.length !== 1) return;
     if (document.querySelector('.drawer-mask') || document.querySelector('.rpanel-mask')) { mode = ''; return; }
@@ -84,13 +92,24 @@ function installSwipeBack() {
     // 左缘右滑 → 会话抽屉；右缘左滑 → 文件面板
     mode = t.clientX <= 40 ? 'left' : (t.clientX >= w - 44 ? 'right' : '');
     sx = t.clientX; sy = t.clientY;
+    appEl = mode ? document.querySelector('.app') : null;
   }, { passive: true });
-  document.addEventListener('touchcancel', () => { mode = ''; }, { passive: true });
+  document.addEventListener('touchmove', (e) => {
+    if (!mode || !appEl || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const dx = t.clientX - sx, dy = t.clientY - sy;
+    if (Math.abs(dy) > 48 && Math.abs(dy) > Math.abs(dx)) { mode = ''; resetShift(); return; }
+    const pull = mode === 'left' ? Math.max(0, Math.min(28, dx * 0.28)) : Math.min(0, Math.max(-28, dx * 0.28));
+    appEl.style.transition = 'none';
+    appEl.style.transform = pull ? `translateX(${pull.toFixed(1)}px)` : '';
+  }, { passive: true });
+  document.addEventListener('touchcancel', () => { mode = ''; resetShift(); }, { passive: true });
   document.addEventListener('touchend', (e) => {
     if (!mode) return;
     const t = e.changedTouches[0];
     const dx = t.clientX - sx, dy = t.clientY - sy;
     const m = mode; mode = '';
+    resetShift();
     if (Math.abs(dy) >= 70) return;
     if (m === 'left' && dx > 70) openDrawer();
     if (m === 'right' && dx < -70) openFileDrawer(state.sessionCwd || '');
