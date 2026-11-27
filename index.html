@@ -4333,6 +4333,7 @@ async function createTerminalTab(cwd, startKind = '') {
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
     if (j.startErr) toast('\u7EC8\u7AEF\u5DF2\u521B\u5EFA\uFF0C\u4F46\u542F\u52A8\u5931\u8D25\uFF1A' + j.startErr);
+    else if (startKind && j.started !== true) toast('\u7EC8\u7AEF\u5DF2\u521B\u5EFA\uFF0C\u4F46 bridge \u672A\u81EA\u52A8\u542F\u52A8\uFF08\u8BF7\u91CD\u542F bridge \u6216\u624B\u52A8\u542F\u52A8\uFF09');
     else toast(startKind ? ('\u5DF2\u542F\u52A8 ' + (labelMap[startKind] || startKind)) : '\u5DF2\u521B\u5EFA\u7EC8\u7AEF');
     termAgents.at = 0;
     loadTermAgents();
