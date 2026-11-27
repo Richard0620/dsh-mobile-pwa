@@ -608,7 +608,7 @@
   function renderBlocked(me) {
     const a = currentAgent();
     const bar = $('#blockedBar');
-    const blocked = a && a.agent_status === 'blocked';
+    const blocked = viewMode !== 'chat' && a && a.agent_status === 'blocked';
     bar.classList.toggle('on', !!blocked);
     if (!blocked) return;
     $('#blockedWho').textContent = (a.name || a.agent) + ' · ' + pane;
@@ -1044,6 +1044,7 @@
     $('#vChat').classList.toggle('on', isChat);
     $('#vTerm').classList.toggle('on', !isChat);
     syncComposerState();
+    renderBlocked();
     if (isChat) chatTick(); else tick();
   }
 
@@ -1266,8 +1267,10 @@
     started = true;
     gate(false);
     renderView();
-    load().catch((e) => conn(false, e.message));
-    tick();
+    load().then(() => {
+      tick();
+      if (viewMode === 'chat') chatTick();
+    }).catch((e) => conn(false, e.message));
     setInterval(tick, 1500);
     setInterval(() => { if (viewMode === 'chat') chatTick(); }, 2000);
     setInterval(() => { if (viewMode === 'chat' && dshActive()) chatTick(); }, 1500);
