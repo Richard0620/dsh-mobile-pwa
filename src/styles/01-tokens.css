@@ -1,0 +1,78 @@
+  :root{
+    --r-card:22px; --r-bubble:20px;
+    --safe-t: env(safe-area-inset-top, 0px); --safe-b: env(safe-area-inset-bottom, 0px);
+    --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-press: cubic-bezier(0.2, 0.8, 0.2, 1);
+    /* 皮肤：纸面（默认）。暖灰纸面 + 柔和环境投影 + 清晰锚定黑 */
+    --bg:#F5F4EF; --card:#FFFFFF; --surface-2:#ECEAE2; --surface-3:#E3E0D6;
+    --surface-glass:rgba(245,244,239,.84); --tab-glass:rgba(255,255,255,.88);
+    --fg:#161613; --dim:#838176; --line:rgba(26,26,22,.09); --line-2:rgba(26,26,22,.15);
+    --shadow-card:0 1px 2px rgba(26,26,22,.04), 0 4px 12px rgba(26,26,22,.03);
+    --shadow-dock:0 6px 24px rgba(26,26,22,.08), 0 1px 3px rgba(26,26,22,.05);
+    --bubble:#ECEAE2; --accent:#161613; --accent-fg:#FFFFFF; --accent-2:#5E5D54;
+    --ok:#27673B; --bad:#B33A30; --warn:#9A6310;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]):not([data-skin="carbon"]):not([data-skin="auto"]){
+      --bg:#0E0E0B; --card:#171714; --surface-2:#22221D; --surface-3:#2B2B24;
+      --surface-glass:rgba(14,14,11,.80); --tab-glass:rgba(23,23,20,.88);
+      --fg:#F2F0E8; --dim:#7B786D; --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
+      --shadow-card:inset 0 1px 0 rgba(255,255,255,.04), 0 2px 10px rgba(0,0,0,.32);
+      --shadow-dock:inset 0 1px 0 rgba(255,255,255,.06), 0 10px 28px rgba(0,0,0,.48);
+      --bubble:#24241E; --accent:#F2F0E8; --accent-fg:#171714; --accent-2:#ACA99D;
+      --ok:#7CBF90; --bad:#E0837A; --warn:#D9AC57;
+    }
+  }
+  /* 手动主题：覆盖系统配色；auto 时不设 data-theme，仍走上面的媒体查询 */
+  :root[data-theme="dark"]:not([data-skin="carbon"]):not([data-skin="auto"]){
+    --bg:#0E0E0B; --card:#171714; --surface-2:#22221D; --surface-3:#2B2B24;
+    --surface-glass:rgba(14,14,11,.80); --tab-glass:rgba(23,23,20,.88);
+    --fg:#F2F0E8; --dim:#7B786D; --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
+    --shadow-card:inset 0 1px 0 rgba(255,255,255,.04), 0 2px 10px rgba(0,0,0,.32);
+    --shadow-dock:inset 0 1px 0 rgba(255,255,255,.06), 0 10px 28px rgba(0,0,0,.48);
+    --bubble:#24241E; --accent:#F2F0E8; --accent-fg:#171714; --accent-2:#ACA99D;
+    --ok:#7CBF90; --bad:#E0837A; --warn:#D9AC57;
+  }
+  :root[data-theme="light"]:not([data-skin="carbon"]):not([data-skin="auto"]){
+    --bg:#F5F4EF; --card:#FFFFFF; --surface-2:#ECEAE2; --surface-3:#E3E0D6;
+    --surface-glass:rgba(245,244,239,.84); --tab-glass:rgba(255,255,255,.88);
+    --fg:#161613; --dim:#838176; --line:rgba(26,26,22,.09); --line-2:rgba(26,26,22,.15);
+    --shadow-card:0 1px 2px rgba(26,26,22,.04), 0 4px 12px rgba(26,26,22,.03);
+    --shadow-dock:0 6px 24px rgba(26,26,22,.08), 0 1px 3px rgba(26,26,22,.05);
+    --bubble:#ECEAE2; --accent:#161613; --accent-fg:#FFFFFF; --accent-2:#5E5D54;
+    --ok:#27673B; --bad:#B33A30; --warn:#9A6310;
+  }
+  /* 皮肤：碳黑。近黑底 + 半透明高光描边 + 克制荧光绿，恒为深色 */
+  :root[data-skin="carbon"]{
+    --bg:#0A0B0D; --card:#131518; --surface-2:#1C1F24; --surface-3:#24282E;
+    --surface-glass:rgba(10,11,13,.80); --tab-glass:rgba(19,21,24,.88);
+    --fg:#F2F0E8; --dim:#767972; --line:rgba(255,255,255,.075); --line-2:rgba(255,255,255,.13);
+    --shadow-card:inset 0 1px 0 rgba(255,255,255,.045), 0 2px 10px rgba(0,0,0,.35);
+    --shadow-dock:inset 0 1px 0 rgba(255,255,255,.06), 0 10px 30px rgba(0,0,0,.55);
+    --bubble:#1B1E23; --accent:#C6F04E; --accent-fg:#0A0B0D; --accent-2:#9FE07C;
+    --ok:#8EE073; --bad:#F07C6C; --warn:#E6BC5C;
+  }
+  /* 皮肤：跟随系统。浅色=纸面，深色=碳黑 */
+  @media (prefers-color-scheme: dark){
+    :root[data-skin="auto"]{
+      --bg:#0A0B0D; --card:#131518; --surface-2:#1C1F24; --surface-3:#24282E;
+      --surface-glass:rgba(10,11,13,.80); --tab-glass:rgba(19,21,24,.88);
+      --fg:#F2F0E8; --dim:#767972; --line:rgba(255,255,255,.075); --line-2:rgba(255,255,255,.13);
+      --shadow-card:inset 0 1px 0 rgba(255,255,255,.045), 0 2px 10px rgba(0,0,0,.35);
+      --shadow-dock:inset 0 1px 0 rgba(255,255,255,.06), 0 10px 30px rgba(0,0,0,.55);
+      --bubble:#1B1E23; --accent:#C6F04E; --accent-fg:#0A0B0D; --accent-2:#9FE07C;
+      --ok:#8EE073; --bad:#F07C6C; --warn:#E6BC5C;
+    }
+  }
+  /* 尊重系统「减弱动态效果」设置 */
+  @media (prefers-reduced-motion: reduce){
+    *, *::before, *::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+  }
+  /* 大屏手机（16 Pro Max 这类 430pt+）：正文字号与内边距略微放大，行宽不至于太松 */
+  @media (min-width: 430px){
+    main{padding-left:16px;padding-right:16px}
+    .md{font-size:15.5px;line-height:1.65}
+    .msg.user .bubble{font-size:15.5px}
+    .dock{padding-left:14px;padding-right:14px}
+    header{padding-left:12px;padding-right:12px}
+  }

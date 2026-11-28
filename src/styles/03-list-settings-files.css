@@ -1,0 +1,89 @@
+  /* 会话行：标题下面补一行预览 */
+  .row .p{font-size:12.5px;line-height:1.4;color:var(--dim);margin-top:2px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* ---------- 设置页 ---------- */
+  /* ---------- 文件页 ---------- */
+  .rootrow{display:flex;gap:6px;padding:8px 16px 0;overflow-x:auto;white-space:nowrap}
+  .rootchip{flex:none;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;
+    padding:5px 9px;border-radius:8px;border:1px solid var(--line);color:var(--dim);background:var(--card)}
+  .rootchip.on{color:var(--fg);border-color:var(--accent);background:var(--bubble)}  .crumbrow{display:flex;align-items:center;gap:2px;padding:8px 16px 2px;overflow-x:auto;white-space:nowrap}
+  .crumbchip{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;color:var(--dim);
+    padding:4px 7px;border-radius:7px;flex:none}
+  .crumbchip.on{color:var(--fg);background:var(--bubble)}
+  .crumbsep{color:var(--line);font-size:10px;flex:none}
+  .fbody2{flex:1;overflow-y:auto;padding:2px 16px calc(80px + var(--safe-b))}
+  .fsect{display:flex;align-items:baseline;gap:8px;padding:16px 4px 6px}
+  .fsect b{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:9.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--dim);font-weight:600}
+  .fsect span{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:9.5px;color:var(--dim)}
+  .flrow{display:flex;align-items:center;gap:12px;padding:9px 4px;border-bottom:1px solid var(--line)}
+  .flrow:active{background:var(--bubble)}
+  .ftile{width:38px;height:38px;border-radius:10px;background:var(--card);border:1px solid var(--line);
+    display:grid;place-items:center;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+    font-size:8.5px;letter-spacing:.02em;color:var(--dim);flex:none}
+  .ftile.dir{background:var(--bubble);border-color:transparent}
+  .fname2{flex:1;min-width:0}
+  .fname2 b{display:block;font-size:14.5px;font-weight:550;letter-spacing:-.1px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fname2 span{display:block;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+    font-size:9.5px;color:var(--dim);margin-top:3px}
+  .flrow .chev{color:var(--dim);font-size:16px;flex:none}
+  /* 文件行右侧的「存到手机」：只读下载，和三点菜单同一个观感 */
+  .flrow .fdl{flex:none;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;
+    border:0;background:none;color:var(--dim);opacity:.75;cursor:pointer;-webkit-appearance:none;appearance:none}
+  .flrow .fdl svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.9;
+    stroke-linecap:round;stroke-linejoin:round}
+  .flrow .fdl:active{background:var(--bubble);opacity:1}
+  .fselbox{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--dim);flex:none;
+    display:grid;place-items:center;color:transparent;font-size:11px;background:var(--card);opacity:.7}
+  .flrow.sel .fselbox{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);opacity:1}
+  .fselbar{flex:none;display:flex;align-items:center;gap:10px;margin:8px 14px 0;padding:10px 12px;
+    border-radius:14px;background:var(--accent);color:var(--accent-fg)}
+  .fselbar .t{flex:1;font-size:12.5px;font-weight:600}
+  .fselbar button{font-size:12px;font-weight:600;padding:6px 10px;border-radius:9px;
+    background:color-mix(in srgb,var(--accent-fg) 16%,transparent);color:var(--accent-fg)}  .showhidden{display:block;width:100%;margin:18px 0 6px;padding:11px;border-radius:12px;
+    border:1px solid var(--line);background:var(--card);font-size:12.5px;color:var(--dim)}  .settings{flex:1;overflow-y:auto;padding:2px 16px calc(84px + var(--safe-b))}
+  .slabel{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);font-weight:650;
+    font-family:ui-monospace,SFMono-Regular,Consolas,monospace;padding:16px 6px 6px}
+  .groupcard{background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:var(--shadow-card)}
+  .tgl{width:44px;height:26px;border-radius:13px;background:var(--surface-2,var(--line));position:relative;flex:none;
+    transition:background 200ms var(--ease-spring);cursor:pointer}
+  .tgl::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;
+    background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.2);transition:transform 220ms var(--ease-spring)}
+  .tgl.on{background:var(--ok)}
+  .tgl.on::after{transform:translateX(18px)}
+  .srow{display:flex;align-items:center;gap:12px;padding:12.5px 14px;border-bottom:1px solid var(--line);
+    width:100%;text-align:left;transition:background-color 140ms ease, transform 120ms var(--ease-press)}
+  .srow:last-child{border-bottom:0}
+  .srow:active{background:var(--bubble)}
+  .srow .st{flex:1;min-width:0}
+  .srow b{display:block;font-size:14.5px;font-weight:580;letter-spacing:-.01em;color:var(--fg)}
+  .srow span{display:block;font-size:12px;color:var(--dim);margin-top:2px}
+  .srow .sv{flex:none;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+    font-size:12px;color:var(--dim);display:inline-flex;align-items:center;gap:4px}
+  .srow .schev{flex:none;color:var(--dim);opacity:.55;display:grid;place-items:center;margin-left:-4px}
+  .srow .schev svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .row{display:flex;gap:10px;align-items:center;padding:11px 12px;margin-bottom:7px;border-radius:16px;
+    background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow-card);
+    transition:transform 120ms var(--ease-press), background-color 140ms ease}
+  .row:active{transform:scale(.988);background:var(--bubble)}
+  .row .body{flex:1;min-width:0}
+  .row .t{display:flex;align-items:center;gap:7px}
+  .row .tmain{flex:1;min-width:0;display:flex;align-items:center;gap:7px}
+  .row .title{font-size:14.5px;font-weight:600;letter-spacing:-.01em;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+  .row .tmain .title{flex:0 1 auto;min-width:0}
+  .row .time{font-size:11px;color:var(--dim);flex:none;
+    font-family:ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.01em}
+  .row .dot{margin-top:0}
+  /* 文件夹里没有可显示的会话时（都被置顶/归档）给一句说明，别让分组像丢了 */
+  .ghint{font-size:12px;color:var(--dim);padding:2px 10px 10px}
+  .dot{width:7.5px;height:7.5px;border-radius:50%;background:var(--dim);opacity:.45;flex:none;margin-top:7px}
+  /* 状态灯：绿=处理中，黄=待你审批/回答，红=失败未读，蓝=完成未读，灰=空闲 */
+  .dot.run{background:var(--ok);opacity:1;box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 18%,transparent);
+    animation:dotpulse 2.2s ease-in-out infinite}
+  @keyframes dotpulse{0%,100%{box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 18%,transparent)}50%{box-shadow:0 0 0 6px transparent}}
+  .dot.pending{background:var(--warn);opacity:1;box-shadow:0 0 0 3px color-mix(in srgb,var(--warn) 20%,transparent)}
+  .dot.failed{background:var(--bad);opacity:1;box-shadow:0 0 0 3px color-mix(in srgb,var(--bad) 18%,transparent)}
+  .dot.done{background:var(--accent);opacity:1;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
+

@@ -3,7 +3,7 @@
  * 部署前静态预检：语法、版本号/CACHE 一致性、冲突标记、补丁语法。
  * 目标是把「只有 node --check」升级成一条可重复执行的检查，deploy.ps1 会先跑它。
  */
-import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -75,6 +75,30 @@ for (const f of ['deploy.ps1', 'patches/reapply-push-patch.ps1']) {
 
 for (const f of ['manifest.webmanifest', 'icon-192.png', 'sw.js']) {
   if (!existsSync(join(root, f))) fail(`缺少 ${f}`); else ok(`存在 ${f}`);
+}
+
+// 6. 模块化源码检查（存在 src/main.js 时启用：语法检查 + 构建防漂移）
+if (existsSync(join(root, 'src', 'main.js'))) {
+  const walkJs = (dir) => {
+    const out = [];
+    for (const ent of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, ent.name);
+      if (ent.isDirectory()) out.push(...walkJs(p));
+      else if (ent.name.endsWith('.js') || ent.name.endsWith('.mjs')) out.push(p);
+    }
+    return out;
+  };
+  const srcFiles = walkJs(join(root, 'src'));
+  let srcFail = 0;
+  for (const f of srcFiles) {
+    const r = spawnSync(process.execPath, ['--check', f], { stdio: 'ignore' });
+    if (r.status !== 0) { fail(`源码语法错误: ${f.slice(root.length + 1)}`); srcFail++; }
+  }
+  if (!srcFail) ok(`src/ 全部 ${srcFiles.length} 个模块语法通过`);
+
+  const br = spawnSync(process.execPath, [join(root, 'scripts', 'build.mjs'), '--check'], { encoding: 'utf8' });
+  if (br.status !== 0) fail(`构建防漂移检查失败：${(br.stderr || br.stdout || '').trim()}`);
+  else ok('index.html 与 src/ 构建产物一致');
 }
 
 console.log('');

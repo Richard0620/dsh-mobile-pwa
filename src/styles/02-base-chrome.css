@@ -1,0 +1,115 @@
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html{height:100%;overflow:hidden}
+  html,body{height:100%;-webkit-text-size-adjust:100%}
+  /* iOS 键盘弹起会把整页往上顶；把 body 钉死在视口里，就没有可平移的余地 */
+  body{position:fixed;inset:0;overflow:hidden}
+  /* iOS 在输入框字号 <16px 时会把整页放大，所以表单控件一律 ≥16px */
+  input,textarea,select{font-size:16px}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:16px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro SC","PingFang SC","Segoe UI","Microsoft YaHei",sans-serif;
+    font-variant-numeric:tabular-nums;
+    overscroll-behavior-y:none;overscroll-behavior-x:none;overflow-x:hidden;
+    -webkit-font-smoothing:antialiased}
+  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;padding:0}
+  input,textarea{font:inherit;color:inherit;background:transparent;border:none;outline:none;width:100%}
+  .app{max-width:560px;margin:0 auto;display:flex;flex-direction:column;height:var(--vvh, 100dvh);background:var(--bg);position:relative;
+    animation:viewIn 180ms var(--ease-spring)}
+  @keyframes viewIn{from{opacity:.86;transform:translateY(4px)}to{opacity:1;transform:none}}
+  /* 只做手机形态：桌面浏览器也走这一版单栏，不再维护宽屏两栏 */
+
+  /* ---------- 顶栏（毛玻璃吸顶） ---------- */
+  header{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;gap:4px;
+    padding:calc(6px + var(--safe-t)) 10px 7px;min-height:48px;
+    background:var(--surface-glass);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+    border-bottom:1px solid var(--line);position:relative;z-index:10}
+  header h1{font-size:16px;font-weight:650;margin:0;text-align:center;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap;letter-spacing:-.01em;color:var(--fg)}
+  .ico{width:36px;height:36px;display:grid;place-items:center;border-radius:11px;color:var(--fg);font-size:17px;line-height:1;
+    transition:transform 120ms var(--ease-press), background-color 140ms ease}
+  .ico:active{transform:scale(.90);background:var(--bubble)}
+
+  main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 14px calc(8px + var(--safe-b))}
+
+  /* ---------- 首页（新会话） ---------- */
+  .home{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:18px;padding-bottom:60px}
+  .logo{display:flex;align-items:center;gap:10px;font-size:28px;font-weight:700;letter-spacing:-.5px}
+  .logo .mark{width:44px;height:44px;border-radius:12px;background:var(--fg);color:var(--bg);
+    display:grid;place-items:center;font-size:22px}
+  .beta{font-size:11px;color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);
+    padding:2px 6px;border-radius:6px;font-weight:600;transform:translateY(-10px)}
+
+  /* ---------- 会话列表 ---------- */
+  .tbar{display:flex;align-items:center;gap:8px;padding:12px 2px 6px}
+  .tbar b{font-size:14px;font-weight:600}
+  .tbar span{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:10px;color:var(--dim)}
+  .tbar button{margin-left:auto;font-size:12px;padding:5px 10px;border:1px solid var(--line);
+    border-radius:8px;color:var(--dim);background:var(--card)}  .tabs{display:flex;gap:18px;padding:6px 2px 0;color:var(--dim);font-size:14px;border-bottom:1px solid var(--line);margin-bottom:8px}
+  .tabs b{color:var(--dim);font-weight:550;position:relative;padding:0 0 8px;cursor:pointer;
+    border-bottom:2px solid transparent;margin-bottom:-1px}
+  .tabs b.on{color:var(--fg);font-weight:600;border-bottom-color:var(--accent)}
+  .group{margin:6px 0 14px}
+  .ghead{display:flex;align-items:center;gap:8px;padding:8px 2px;font-size:13px;color:var(--dim)}
+  .ghead .gname{font-weight:600;color:var(--fg);font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ghead .chev{font-size:10px;transition:transform .18s;color:var(--dim)}
+  .ghead .fico{display:grid;place-items:center;color:var(--dim)}
+  .ghead .fico svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;
+    stroke-linecap:round;stroke-linejoin:round}
+  .ghead.closed .chev{transform:rotate(-90deg)}
+  .ubadge{flex:none;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--accent);
+    color:var(--accent-fg);font-size:9.5px;font-weight:700;display:grid;place-items:center;
+    font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+  .ubdot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex:none;
+    box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 14%,transparent)}
+  .wsmark{flex:none;max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:9px;color:var(--dim);
+    border:1px solid var(--line);border-radius:5px;padding:1px 4px;margin-right:2px}  .branch{font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:1px 7px;flex:none}
+  .count{font-size:11px;color:var(--dim);flex:none}
+
+  /* ---------- 底部 Tab 栏 ---------- */
+  .tabbar{flex:none;display:flex;gap:2px;padding:7px 12px calc(7px + var(--safe-b));
+    border-top:1px solid var(--line);background:var(--tab-glass);
+    backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px)}
+  .tabbar button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+    padding:5px 0 4px;border-radius:12px;color:var(--dim);font-size:10.5px;letter-spacing:.01em;
+    transition:transform 120ms var(--ease-press), color 150ms ease}
+  .tabbar button:active{transform:scale(.92)}
+  .tabbar button.on{color:var(--fg);font-weight:650}
+  .tabbar svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.65;
+    stroke-linecap:round;stroke-linejoin:round;transition:stroke-width 150ms ease}
+  .tabbar button.on svg{stroke-width:2}
+
+  /* ---------- 大标题头（会话 / 文件 / 设置） ---------- */
+  .hero{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+    padding:calc(12px + var(--safe-t)) 18px 4px}
+  .hero h1{margin:0;font-size:30px;line-height:36px;font-weight:700;letter-spacing:-.03em;color:var(--fg)}
+  .hero .sub{margin-top:4px;font-size:11px;letter-spacing:.02em;text-transform:none;
+    color:var(--dim);font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+  .hero .acts{display:flex;gap:5px;padding-top:0;align-items:center;margin-top:0}
+  .hero .acts .ico{place-items:center;padding:0}
+  .hero > div:first-child{flex:1;min-width:0}
+  .hero .hero-stack{flex:1;min-width:0}
+  .hero .hrow{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:36px;height:auto;padding:0;border-bottom:0;color:var(--fg);font-size:inherit}
+  .hero .hrow h1{margin:0;position:static}
+  .hero .subrow{display:flex;align-items:center;gap:8px;margin-top:4px;min-height:22px}
+  .hero .subrow .sub{margin-top:0}
+  .connpill{display:inline-flex;align-items:center;gap:6px;height:27px;padding:0 10px;border:1px solid var(--line);
+    border-radius:999px;background:var(--card);box-shadow:var(--shadow-card);
+    font:11px/1 ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--dim);white-space:nowrap;flex:none;
+    transition:transform 120ms var(--ease-press), opacity 140ms ease}
+  .connpill:active{transform:scale(.96);opacity:.8}
+  .connpill b{font-weight:650;color:var(--fg);display:inline-block;line-height:1;align-self:center}
+  .connpill .dot{width:6px;height:6px;border-radius:50%;background:var(--dim);flex:none;display:block;align-self:center;margin-top:0;opacity:1}
+  .connpill.direct .dot{background:var(--ok)}
+  .connpill.direct b{color:var(--ok)}
+  .connpill.relay .dot{background:var(--warn)}
+  .connpill.relay b{color:var(--warn)}
+  .connpill .ms{color:var(--dim);display:inline-block;line-height:1;align-self:center}
+  .connpill.static{cursor:default}
+  .hero.hero-back{align-items:flex-start;justify-content:flex-start;gap:8px}
+  .hero.hero-back .hero-main{flex:1;min-width:0}
+  .hero.hero-back .hero-main h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hero.hero-back .acts{margin-left:auto;margin-top:0;padding-top:0;min-height:36px;display:flex;align-items:center}
+  .hero.hero-back .sub{margin-top:4px;min-height:22px;display:flex;align-items:center}
+  .hero.hero-back .ico{flex:none;color:var(--dim);margin-left:-8px}
+  .hero.hero-back .ico svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8}
+
