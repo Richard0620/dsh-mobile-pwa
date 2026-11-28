@@ -117,7 +117,7 @@
     .agp .nav{display:none}
     .agp .mobar{display:flex}
     .agp .termwrap{padding:8px 10px 2px}
-    .agp .term{font-size:11px;padding:10px 11px}
+    .agp .term{font-size:11px;padding:10px 11px;white-space:pre-wrap;overflow-wrap:anywhere}
     .agp .blockedbar{margin:0 10px}
     .agp .keys{padding:8px 10px 0}
     .agp .composer{padding:8px 10px calc(10px + env(safe-area-inset-bottom))}
@@ -693,6 +693,13 @@
       }
     }
     appendApprovalCard(box);
+    const curA = chatAgent();
+    if (!dshActive() && curA && curA.agent_status === 'working') {
+      const rl = E('div', { class: 'runline', style: 'margin:2px 2px 6px' });
+      rl.appendChild(E('span', { class: 'pd' }));
+      rl.appendChild(E('span', {}, agentMeta(curA).title + ' 正在思考…'));
+      box.appendChild(rl);
+    }
     if (near) box.scrollTop = box.scrollHeight;
   }
 

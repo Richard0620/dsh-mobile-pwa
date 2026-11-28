@@ -208,6 +208,54 @@ function findAgyTranscript(sid) {
   return "";
 }
 
+const agyPaneSession = new Map(); // pane -> sid
+const lastPromptByTarget = new Map(); // target -> { text, at }
+
+// shortcut: heuristic match when herdr omits agent_session; upgrade if herdr exposes native agy session_id
+function findAgyTranscriptFallback(pane, agentName, cwd) {
+  if (pane && agyPaneSession.has(pane)) {
+    const cached = findAgyTranscript(agyPaneSession.get(pane));
+    if (cached) return { sid: agyPaneSession.get(pane), file: cached };
+    agyPaneSession.delete(pane);
+  }
+  const root = AGY_BRAIN_ROOTS[0];
+  let dirs = [];
+  try {
+    for (const d of readdirSync(root)) {
+      const p = join(root, d, ".system_generated", "logs", "transcript.jsonl");
+      try {
+        const st = statSync(p);
+        if (st.isFile()) dirs.push({ sid: d, file: p, mtime: st.mtimeMs });
+      } catch {}
+    }
+  } catch { return null; }
+  dirs.sort((a, b) => b.mtime - a.mtime);
+  const used = new Set();
+  for (const [k, v] of agyPaneSession.entries()) if (k !== pane) used.add(v);
+  const prompt = lastPromptByTarget.get(agentName) || lastPromptByTarget.get(pane);
+  const normCwd = String(cwd || "").replace(/[\\/]+$/, "").toLowerCase();
+  for (const item of dirs.slice(0, 12)) {
+    if (used.has(item.sid)) continue;
+    let head = "";
+    try { head = readFileSync(item.file, "utf8").slice(0, 16384); } catch { continue; }
+    if (prompt && prompt.text) {
+      const escaped = JSON.stringify(prompt.text).slice(1, -1);
+      if (head.includes(prompt.text) || head.includes(escaped)) {
+        if (pane) agyPaneSession.set(pane, item.sid);
+        return item;
+      }
+    }
+    if (normCwd && Date.now() - item.mtime < 30 * 60 * 1000) {
+      const normHead = head.replace(/\\\\/g, "\\").toLowerCase();
+      if (normHead.includes("workspace: " + normCwd)) {
+        if (pane) agyPaneSession.set(pane, item.sid);
+        return item;
+      }
+    }
+  }
+  return null;
+}
+
 function findGeminiSessionFile(sid) {
   if (!sid) return "";
   const prefix = sid.slice(0, 8);
@@ -429,6 +477,7 @@ const server = http.createServer(async (req, res) => {
       const args = ["agent", "prompt", body.target, body.text];
       if (body.wait) args.push("--wait");
       await run(args);
+      lastPromptByTarget.set(String(body.target), { text: body.text.trim(), at: Date.now() });
       return send(res, 200, JSON.stringify({ ok: true }));
     }
     if (req.method === "POST" && url.pathname === "/agent/start") {
@@ -510,6 +559,10 @@ const server = http.createServer(async (req, res) => {
       let messages = [];
       if (agentKind === "agy" || agentKind === "gemini") {
         file = agentKind === "agy" ? (findAgyTranscript(sid) || findGeminiSessionFile(sid)) : (findGeminiSessionFile(sid) || findAgyTranscript(sid));
+        if (!file && agentKind === "agy") {
+          const fb = findAgyTranscriptFallback(pane, agentName, cwd);
+          if (fb) { sid = fb.sid; file = fb.file; }
+        }
         if (file) {
           const raw = readFileSync(file, "utf8");
           messages = file.endsWith(".json") ? normalizeGeminiJson(raw, limit) : normalizeAgyTranscript(raw.split(/\r?\n/), limit);
