@@ -182,14 +182,14 @@
   /* ---------- 大标题头（会话 / 文件 / 设置） ---------- */
   .hero{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
     padding:calc(12px + var(--safe-t)) 18px 4px}
-  .hero h1{margin:0;font-size:30px;line-height:1.1;font-weight:700;letter-spacing:-.03em;color:var(--fg)}
-  .hero .sub{margin-top:5px;font-size:11px;letter-spacing:.02em;text-transform:none;
+  .hero h1{margin:0;font-size:30px;line-height:36px;font-weight:700;letter-spacing:-.03em;color:var(--fg)}
+  .hero .sub{margin-top:4px;font-size:11px;letter-spacing:.02em;text-transform:none;
     color:var(--dim);font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
   .hero .acts{display:flex;gap:5px;padding-top:0;align-items:center;margin-top:0}
   .hero .acts .ico{place-items:center;padding:0}
   .hero > div:first-child{flex:1;min-width:0}
   .hero .hero-stack{flex:1;min-width:0}
-  .hero .hrow{display:flex;align-items:center;justify-content:space-between;gap:12px;height:36px}
+  .hero .hrow{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:36px;height:auto;padding:0;border-bottom:0;color:var(--fg);font-size:inherit}
   .hero .hrow h1{margin:0;position:static}
   .hero .subrow{display:flex;align-items:center;gap:8px;margin-top:4px;min-height:22px}
   .hero .subrow .sub{margin-top:0}
@@ -206,10 +206,11 @@
   .connpill.relay b{color:var(--warn)}
   .connpill .ms{color:var(--dim);display:inline-block;line-height:1;align-self:center}
   .connpill.static{cursor:default}
-  .hero.hero-back{align-items:center;justify-content:flex-start;gap:8px}
+  .hero.hero-back{align-items:flex-start;justify-content:flex-start;gap:8px}
   .hero.hero-back .hero-main{flex:1;min-width:0}
   .hero.hero-back .hero-main h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .hero.hero-back .acts{margin-left:auto;margin-top:0;padding-top:0}
+  .hero.hero-back .acts{margin-left:auto;margin-top:0;padding-top:0;min-height:36px;display:flex;align-items:center}
+  .hero.hero-back .sub{margin-top:4px;min-height:22px;display:flex;align-items:center}
   .hero.hero-back .ico{flex:none;color:var(--dim);margin-left:-8px}
   .hero.hero-back .ico svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8}
 
@@ -1092,7 +1093,7 @@
   </div>
 </div>
 <script type="module">
-const APP_VERSION = 'v255';   // 每次发版改 src/core/version.js，菜单底部会显示
+const APP_VERSION = 'v257';   // 每次发版改 src/core/version.js，菜单底部会显示
 
 // === src/core/bus.js ===
 const __m0 = (() => {
