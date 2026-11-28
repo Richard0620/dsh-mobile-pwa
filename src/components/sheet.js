@@ -113,9 +113,13 @@ function openSheet(items, footerText) {
   function onKey(e) {
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
   }
+  let closed = false;
   function close() {
+    if (closed) return;
+    closed = true;
     document.removeEventListener('keydown', onKey, true);
-    mask.remove();
+    mask.classList.add('closing');
+    setTimeout(() => mask.remove(), 180);
   }
   document.addEventListener('keydown', onKey, true);
   mask.append(sheet);

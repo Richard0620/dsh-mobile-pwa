@@ -1,0 +1,752 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DSH Mobile · U1 视觉基座与原生手感 设计稿</title>
+<style>
+  /* ===== 画板基础 ===== */
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  body{
+    margin:0;background:#F9F8F5;color:#1A1A16;
+    font:14px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro SC","PingFang SC","Segoe UI","Microsoft YaHei",sans-serif;
+  }
+  .board{max-width:920px;margin:0 auto;padding:36px 24px 64px}
+  .cap{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#8C8A7F;font-weight:700}
+  h1.title{font-size:28px;margin:6px 0 8px;letter-spacing:-.025em;font-weight:700}
+  .lead{color:#5E5D54;font-size:14px;margin:0 0 28px;line-height:1.65;max-width:760px}
+  .sec{margin-top:42px}
+  .sec-h{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid #E5E2D8}
+  .sec-h h2{margin:0;font-size:17px;font-weight:700;letter-spacing:-.01em}
+  .sec-h span{font-size:12px;color:#8C8A7F}
+  .grid{display:grid;grid-template-columns:390px 390px;gap:36px 40px;justify-content:center}
+  .cell{width:390px}
+  .cell .lbl{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px;padding:0 4px}
+  .cell .lbl b{font-size:13.5px;color:#1A1A16}
+  .cell .lbl span{font-size:11.5px;color:#8C8A7F}
+  .note{font-size:12px;color:#5E5D54;margin-top:10px;line-height:1.6;padding:0 4px}
+  .note b{color:#1A1A16}
+
+  /* ===== 升级后的真实双皮肤 Token（纸面 & 碳黑） ===== */
+  .phone{
+    --r-card:22px; --r-row:16px; --r-pill:999px;
+    --ease-spring:cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-press:cubic-bezier(0.2, 0.8, 0.2, 1);
+
+    /* 纸面（Paper）：暖灰纸面 + 柔和环境投影 + 清晰锚定黑 */
+    --bg:#F5F4EF;
+    --card:#FFFFFF;
+    --surface-2:#ECEAE2;
+    --surface-glass:rgba(245, 244, 239, 0.82);
+    --tab-glass:rgba(255, 255, 255, 0.86);
+    --fg:#161613;
+    --fg-2:#4B4A43;
+    --dim:#838176;
+    --line:rgba(26, 26, 22, 0.085);
+    --line-strong:rgba(26, 26, 22, 0.14);
+    --shadow-card:0 1px 2px rgba(26,26,22,.04), 0 4px 12px rgba(26,26,22,.03);
+    --shadow-dock:0 6px 24px rgba(26,26,22,.07), 0 1px 3px rgba(26,26,22,.05);
+    --bubble:#ECEAE2;
+    --accent:#161613;
+    --accent-fg:#FFFFFF;
+    --ok:#27673B;
+    --ok-soft:rgba(39,103,59,.14);
+    --warn:#9A6310;
+    --warn-soft:rgba(154,99,16,.14);
+    --bad:#B33A30;
+
+    width:390px;height:780px;background:var(--bg);color:var(--fg);
+    border-radius:40px;border:1px solid #DFDCD2;
+    overflow:hidden;position:relative;display:flex;flex-direction:column;
+    box-shadow:0 18px 46px rgba(26,26,22,.10), 0 2px 6px rgba(26,26,22,.05);
+    font-variant-numeric:tabular-nums;
+  }
+
+  .phone[data-skin="carbon"]{
+    /* 碳黑（Carbon）：深黑底 + 半透明高光描边 + 克制荧光绿 */
+    --bg:#0A0B0D;
+    --card:#131518;
+    --surface-2:#1C1F24;
+    --surface-glass:rgba(10, 11, 13, 0.78);
+    --tab-glass:rgba(19, 21, 24, 0.86);
+    --fg:#F2F0E8;
+    --fg-2:#B8B5AA;
+    --dim:#767972;
+    --line:rgba(255, 255, 255, 0.075);
+    --line-strong:rgba(255, 255, 255, 0.13);
+    --shadow-card:inset 0 1px 0 rgba(255,255,255,.045), 0 2px 10px rgba(0,0,0,.35);
+    --shadow-dock:inset 0 1px 0 rgba(255,255,255,.06), 0 10px 30px rgba(0,0,0,.55);
+    --bubble:#1B1E23;
+    --accent:#C6F04E;
+    --accent-fg:#0A0B0D;
+    --ok:#8EE073;
+    --ok-soft:rgba(142,224,115,.16);
+    --warn:#E6BC5C;
+    --warn-soft:rgba(230,188,92,.16);
+    --bad:#F07C6C;
+    border-color:#262930;
+    box-shadow:0 20px 50px rgba(0,0,0,.35);
+  }
+
+  /* 通用触控按压微反馈 */
+  .tap{transition:transform 120ms var(--ease-press), background-color 140ms ease, opacity 140ms ease;cursor:pointer;user-select:none}
+  .tap:active{transform:scale(0.985);opacity:.92}
+  .tap-ico{transition:transform 120ms var(--ease-press), background-color 140ms ease;cursor:pointer;user-select:none}
+  .tap-ico:active{transform:scale(0.90);background:var(--surface-2)}
+
+  /* 状态栏 */
+  .sb{height:38px;display:flex;align-items:center;justify-content:space-between;padding:6px 24px 0;
+    font-size:12px;font-weight:600;color:var(--fg);flex:none}
+  .sb .r{display:flex;gap:5px;align-items:center;opacity:.88;font-size:11px}
+
+  /* 大标题头（修复灰色倒挂：主标题纯 var(--fg)，高字重紧字距） */
+  .hero{padding:8px 18px 10px;flex:none}
+  .hero-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .hero h1{margin:0;font-size:30px;line-height:1.1;font-weight:750;letter-spacing:-.03em;color:var(--fg)}
+  .hero-acts{display:flex;align-items:center;gap:6px}
+  .hero-sub{margin-top:5px;font-size:11.5px;color:var(--dim);letter-spacing:.01em;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+
+  .connpill{
+    display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;
+    border-radius:999px;background:var(--card);border:1px solid var(--line);
+    box-shadow:var(--shadow-card);font-size:11px;font-weight:600;color:var(--fg-2);
+  }
+  .connpill .dot{width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
+  .ico-btn{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;color:var(--fg);position:relative}
+  .ico-btn svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+  .badge-dot{
+    position:absolute;top:2px;right:1px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;
+    background:var(--warn);color:#fff;font-size:9.5px;font-weight:700;display:grid;place-items:center;
+    box-shadow:0 0 0 2px var(--bg);
+  }
+
+  /* 搜索框（内置放大镜 + 柔和聚焦） */
+  .search-wrap{padding:2px 16px 10px;flex:none}
+  .search-box{
+    display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;
+    border-radius:13px;background:var(--card);border:1px solid var(--line);
+    box-shadow:var(--shadow-card);color:var(--dim);font-size:14px;
+    transition:border-color 160ms ease, box-shadow 160ms ease;
+  }
+  .search-box svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;flex:none;opacity:.85}
+
+  /* 分段 Tab */
+  .seg-tabs{display:flex;gap:18px;padding:0 18px;border-bottom:1px solid var(--line);flex:none}
+  .seg-tabs b{
+    font-size:14px;font-weight:500;color:var(--dim);padding:6px 0 9px;position:relative;cursor:pointer;
+  }
+  .seg-tabs b.on{color:var(--fg);font-weight:650}
+  .seg-tabs b.on::after{
+    content:'';position:absolute;left:0;right:0;bottom:-1px;height:2px;border-radius:2px;background:var(--accent);
+  }
+
+  /* 列表内容 */
+  .scroll{flex:1;overflow:hidden;padding:10px 14px 12px}
+  .ghead{display:flex;align-items:center;gap:6px;padding:4px 4px 8px;font-size:12px;font-weight:650;color:var(--dim)}
+  .ghead .cnt{margin-left:auto;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;
+    background:var(--surface-2);padding:1px 7px;border-radius:999px;color:var(--fg-2)}
+  .list-stack{display:flex;flex-direction:column;gap:8px}
+  .sitem{
+    display:flex;align-items:flex-start;gap:10px;padding:12px 13px;
+    background:var(--card);border:1px solid var(--line);border-radius:var(--r-row);
+    box-shadow:var(--shadow-card);
+  }
+  .sdot{width:8px;height:8px;border-radius:50%;margin-top:6px;flex:none}
+  .sdot.run{background:var(--ok);box-shadow:0 0 0 3.5px var(--ok-soft);animation:pulse 2s infinite}
+  .sdot.wait{background:var(--warn);box-shadow:0 0 0 3.5px var(--warn-soft)}
+  .sdot.idle{background:var(--dim);opacity:.45}
+  .smain{flex:1;min-width:0}
+  .stop{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+  .stitle{font-size:14.5px;font-weight:620;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:-.01em}
+  .stime{font-size:11px;color:var(--dim);flex:none}
+  .sprev{font-size:12.5px;color:var(--dim);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.45}
+  .smeta{display:flex;align-items:center;gap:6px;margin-top:6px}
+  .wstag{font-size:10.5px;color:var(--fg-2);background:var(--surface-2);padding:1.5px 7px;border-radius:6px;font-weight:500}
+
+  /* 底部 Tab 栏（毛玻璃 + 精致线性图标） */
+  .tabbar{
+    flex:none;display:flex;padding:7px 14px 18px;
+    background:var(--tab-glass);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);
+    border-top:1px solid var(--line);
+  }
+  .tabbar .tb{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 0;color:var(--dim);font-size:10.5px;font-weight:500}
+  .tabbar .tb.on{color:var(--fg);font-weight:650}
+  .tabbar .tb svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}
+  .tabbar .tb.on svg{stroke-width:2}
+
+  /* ===== 会话页：毛玻璃顶栏 + 精修气泡/代码 + 一体化悬浮 Dock ===== */
+  .sess-hd{
+    display:grid;grid-template-columns:40px 1fr 40px;align-items:center;
+    padding:4px 10px 8px;flex:none;
+    background:var(--surface-glass);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+    border-bottom:1px solid var(--line);
+  }
+  .sess-t{display:flex;align-items:center;justify-content:center;gap:7px;min-width:0}
+  .sess-t .sdot{margin-top:0;width:7px;height:7px}
+  .sess-t h2{margin:0;font-size:15.5px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:-.01em}
+
+  .chat-body{flex:1;overflow:hidden;padding:14px 16px;display:flex;flex-direction:column;gap:14px}
+  .u-msg{align-self:flex-end;background:var(--bubble);color:var(--fg);padding:9px 14px;border-radius:18px 18px 5px 18px;
+    font-size:14.5px;max-width:80%;line-height:1.5}
+  .a-msg{display:flex;flex-direction:column;gap:9px;font-size:14.5px;line-height:1.65;color:var(--fg)}
+  .a-msg h3{margin:0;font-size:16px;font-weight:700;letter-spacing:-.01em}
+  .a-msg p{margin:0;color:var(--fg)}
+  .code-card{
+    background:#171A21;color:#E6E8EE;border-radius:14px;overflow:hidden;
+    border:1px solid rgba(255,255,255,.08);font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;
+  }
+  .code-hd{
+    display:flex;align-items:center;justify-content:space-between;padding:7px 12px;
+    background:rgba(255,255,255,.04);border-bottom:1px solid rgba(255,255,255,.06);
+    font-size:11px;color:#9AA0AE;
+  }
+  .copy-btn{
+    display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:7px;
+    background:rgba(255,255,255,.08);color:#E6E8EE;font-size:11px;border:none;cursor:pointer;
+    transition:all 150ms ease;
+  }
+  .copy-btn.copied{background:rgba(142,224,115,.22);color:#9FE07C}
+  .code-card pre{margin:0;padding:11px 12px;line-height:1.55;overflow:hidden}
+  .kw{color:#C792EA}.fn{color:#82AAFF}.str{color:#C3E88D}.num{color:#F78C6C}
+
+  /* 统一线性 SVG 的消息操作栏 */
+  .macts{display:flex;align-items:center;gap:14px;color:var(--dim);font-size:12px;padding-top:2px}
+  .macts span{display:inline-flex;align-items:center;gap:4px;cursor:pointer;padding:3px 0}
+  .macts svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+  /* 子代理条（精致胶囊化） */
+  .subbar{
+    display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:13px;
+    background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow-card);font-size:12.5px;
+  }
+  .subbar svg{width:14px;height:14px;stroke:var(--dim);fill:none;stroke-width:1.7;flex:none}
+  .subbar b{font-weight:620;color:var(--fg)}
+  .subbar .st{color:var(--ok);font-weight:550;display:inline-flex;align-items:center;gap:5px}
+  .subbar .chev{margin-left:auto;color:var(--dim)}
+
+  /* 一体化悬浮 Dock（F1 进度条无缝融入 Composer 顶部帽檐） */
+  .dock-wrap{padding:6px 12px 16px;flex:none}
+  .dock-shell{
+    background:var(--card);border:1px solid var(--line-strong);border-radius:24px;
+    box-shadow:var(--shadow-dock);overflow:hidden;
+  }
+  .dock-prog{
+    padding:9px 14px 8px;background:var(--surface-2);border-bottom:1px solid var(--line);
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .dock-prog-row{display:flex;align-items:center;gap:7px;font-size:12px}
+  .dock-prog-row b{font-weight:650;color:var(--fg)}
+  .dock-prog-row .cur{color:var(--dim);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dock-prog-row .t{font-size:11px;color:var(--dim);font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+  .pbar{height:2.5px;border-radius:2px;background:var(--line-strong);overflow:hidden;position:relative}
+  .pbar i{
+    display:block;height:100%;width:58%;border-radius:2px;background:var(--ok);position:relative;overflow:hidden;
+  }
+  .pbar i::after{
+    content:'';position:absolute;inset:0;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.45),transparent);
+    animation:shimmer 1.8s infinite;
+  }
+  .comp-body{padding:11px 13px 10px}
+  .comp-ph{font-size:15px;color:var(--dim);min-height:24px}
+  .comp-row{display:flex;align-items:center;gap:6px;margin-top:10px}
+  .c-circle{
+    width:32px;height:32px;border-radius:50%;background:var(--surface-2);color:var(--fg-2);
+    display:grid;place-items:center;flex:none;
+  }
+  .c-circle svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .c-pill{
+    height:30px;padding:0 10px;border-radius:999px;background:var(--surface-2);
+    color:var(--fg-2);font-size:12px;font-weight:550;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;
+  }
+  .c-pill svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.7}
+  .c-right{margin-left:auto;display:flex;align-items:center;gap:6px}
+  .c-stop{width:32px;height:32px;border-radius:50%;background:rgba(179,58,48,.12);color:var(--bad);display:grid;place-items:center}
+  .c-stop i{width:10px;height:10px;border-radius:2.5px;background:currentColor;display:block}
+  .c-send{width:32px;height:32px;border-radius:50%;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center}
+  .c-send svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round}
+  .usage-line{text-align:center;font-size:11px;color:var(--dim);margin-top:7px;letter-spacing:.01em}
+
+  /* ===== 设置页 + 弹簧底部 Sheet ===== */
+  .set-sec{font-size:11.5px;font-weight:650;color:var(--dim);padding:12px 6px 6px;letter-spacing:.03em}
+  .gcard{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow-card);overflow:hidden}
+  .grow{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line)}
+  .grow:last-child{border-bottom:0}
+  .grow .gt{flex:1;min-width:0}
+  .grow .gt b{display:block;font-size:14.5px;font-weight:580;color:var(--fg)}
+  .grow .gt span{display:block;font-size:12px;color:var(--dim);margin-top:1px}
+  .grow .gv{font-size:13px;color:var(--dim);display:inline-flex;align-items:center;gap:4px}
+  .grow .gv svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;opacity:.7}
+  .tgl{width:44px;height:26px;border-radius:999px;background:var(--surface-2);position:relative;flex:none;transition:background 200ms var(--ease-spring)}
+  .tgl::after{
+    content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;
+    background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.18);transition:transform 220ms var(--ease-spring);
+  }
+  .tgl.on{background:var(--ok)}
+  .tgl.on::after{transform:translateX(18px)}
+
+  /* 交互式弹簧 Sheet */
+  .sheet-mask{
+    position:absolute;inset:0;background:rgba(10,11,13,.38);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    display:flex;flex-direction:column;justify-content:flex-end;
+    opacity:1;transition:opacity 220ms ease;
+  }
+  .sheet-mask.closed{opacity:0;pointer-events:none}
+  .sheet-panel{
+    background:var(--card);border-radius:28px 28px 0 0;border-top:1px solid var(--line-strong);
+    padding:8px 18px 24px;box-shadow:0 -12px 40px rgba(0,0,0,.18);
+    transform:translateY(0);transition:transform 280ms var(--ease-spring);
+  }
+  .sheet-mask.closed .sheet-panel{transform:translateY(100%)}
+  .grab{width:38px;height:4px;border-radius:99px;background:var(--line-strong);margin:2px auto 14px}
+  .sh-title{font-size:16px;font-weight:700;margin:0 0 2px}
+  .sh-sub{font-size:12px;color:var(--dim);margin:0 0 14px}
+  .sh-row{display:flex;align-items:center;gap:12px;padding:12px 10px;border-radius:13px;font-size:14.5px;font-weight:550}
+  .sh-row.on{background:var(--surface-2)}
+  .sh-row .chk{margin-left:auto;color:var(--accent);font-weight:700}
+  .demo-btn{
+    display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:6px 12px;border-radius:999px;
+    background:#161613;color:#fff;font-size:12px;font-weight:600;border:none;cursor:pointer;
+  }
+
+  /* 表格 */
+  table{width:100%;border-collapse:collapse;background:#fff;border-radius:14px;overflow:hidden;
+    border:1px solid #E5E2D8;font-size:12.5px;margin-top:10px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid #ECEAE2;vertical-align:top}
+  th{background:#F5F4EF;font-weight:650;color:#4B4A43}
+  tr:last-child td{border-bottom:0}
+  code{background:#ECEAE2;padding:1px 5px;border-radius:5px;font-size:11.5px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+
+  @keyframes pulse{
+    0%,100%{box-shadow:0 0 0 3px var(--ok-soft)}
+    50%{box-shadow:0 0 0 6px transparent}
+  }
+  @keyframes shimmer{
+    0%{transform:translateX(-100%)}
+    100%{transform:translateX(200%)}
+  }
+</style>
+</head>
+<body>
+<div class="board">
+  <div class="cap">DSH MOBILE PWA · DESIGN SPEC U1</div>
+  <h1 class="title">视觉基座升级与原生 App 动效手感</h1>
+  <p class="lead">
+    保留现有页面信息结构与纸面 / 碳黑双皮肤辨识度，聚焦「视觉精度」与「物理动效手感」：修正大标题对比度倒挂、升级表面高光描边与柔和微投影、统一全站线性 SVG 图标、将 F1 进度条无缝融入悬浮 Composer Dock，并补齐弹簧弹层、触控缩放、左滑跟手与原地复制反馈。
+  </p>
+
+  <!-- ===== 1. 会话列表（纸面 & 碳黑） ===== -->
+  <div class="sec">
+    <div class="sec-h">
+      <h2>1. 会话列表：主次层次与双皮肤质感</h2>
+      <span>390 × 780 · Paper / Carbon</span>
+    </div>
+    <div class="grid">
+      <!-- Paper List -->
+      <div class="cell">
+        <div class="lbl"><b>纸面皮肤（Paper）</b><span>柔和环境投影 + 清晰锚定黑标题</span></div>
+        <div class="phone" data-skin="paper">
+          <div class="sb"><span>9:41</span><span class="r">5G · 100%</span></div>
+          <div class="hero">
+            <div class="hero-top">
+              <h1>会话</h1>
+              <div class="hero-acts">
+                <span class="connpill tap"><i class="dot"></i>中转 · 42ms</span>
+                <span class="ico-btn tap-ico"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+                <span class="ico-btn tap-ico"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span class="badge-dot">1</span></span>
+              </div>
+            </div>
+            <div class="hero-sub">8 个会话 · 2 个工作区</div>
+          </div>
+          <div class="search-wrap">
+            <div class="search-box">
+              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <span>搜索标题或最近一条</span>
+            </div>
+          </div>
+          <div class="seg-tabs"><b class="on">全部会话</b><b>已归档</b></div>
+          <div class="scroll">
+            <div class="ghead"><span>▾ 未读</span><span class="cnt">3</span></div>
+            <div class="list-stack">
+              <div class="sitem tap">
+                <span class="sdot run"></span>
+                <div class="smain">
+                  <div class="stop"><span class="stitle">重构模块化前端验收</span><span class="stime">刚刚</span></div>
+                  <div class="sprev">正在跑构建和回归测试，稍后同步结果。</div>
+                  <div class="smeta"><span class="wstag">DSH Mobile PWA</span></div>
+                </div>
+              </div>
+              <div class="sitem tap">
+                <span class="sdot wait"></span>
+                <div class="smain">
+                  <div class="stop"><span class="stitle">审批部署脚本改动</span><span class="stime">2 分钟前</span></div>
+                  <div class="sprev">等待你批准执行 deploy-preview.ps1</div>
+                  <div class="smeta"><span class="wstag">DSH Mobile PWA</span></div>
+                </div>
+              </div>
+              <div class="sitem tap">
+                <span class="sdot idle"></span>
+                <div class="smain">
+                  <div class="stop"><span class="stitle">修复语音自动朗读延迟</span><span class="stime">14 分钟前</span></div>
+                  <div class="sprev">已经把自动朗读延后到完成行消失之后。</div>
+                  <div class="smeta"><span class="wstag">Nalì Spa CRM</span></div>
+                </div>
+              </div>
+              <div class="sitem tap">
+                <span class="sdot idle"></span>
+                <div class="smain">
+                  <div class="stop"><span class="stitle">核心架构与缓存策略</span><span class="stime">1 小时前</span></div>
+                  <div class="sprev">IndexedDB 缓存层 v2 迁移方案确认。</div>
+                  <div class="smeta"><span class="wstag">DSH Mobile PWA</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tb on tap-ico"><svg viewBox="0 0 24 24"><path d="M21 12a8.5 8.5 0 0 1-12.5 7.5L4 20l1-4.3A8.5 8.5 0 1 1 21 12Z"/></svg><span>会话</span></div>
+            <div class="tb tap-ico"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/></svg><span>文件</span></div>
+            <div class="tb tap-ico"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2.2"/><circle cx="15" cy="17" r="2.2"/></svg><span>设置</span></div>
+          </div>
+        </div>
+        <div class="note"><b>改进点</b>：主标题回到纯黑 <code>var(--fg)</code>；搜索框内置线性放大镜；工作区标签下沉至轻灰次级行，不再截断挤占标题；运行中状态灯带柔和呼吸光晕。</div>
+      </div>
+
+      <!-- Carbon List -->
+      <div class="cell">
+        <div class="lbl"><b>碳黑皮肤（Carbon）</b><span>半透明高光描边 + 克制荧光绿强调</span></div>
+        <div class="phone" data-skin="carbon">
+          <div class="sb"><span>9:41</span><span class="r">5G · 100%</span></div>
+          <div class="hero">
+            <div class="hero-top">
+              <h1>会话</h1>
+              <div class="hero-acts">
+                <span class="connpill tap"><i class="dot"></i>中转 · 42ms</span>
+                <span class="ico-btn tap-ico"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+                <span class="ico-btn tap-ico"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span class="badge-dot">1</span></span>
+              </div>
+            </div>
+            <div class="hero-sub">8 个会话 · 2 个工作区</div>
+          </div>
+          <div class="search-wrap">
+            <div class="search-box">
+              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <span>搜索标题或最近一条</span>
+            </div>
+          </div>
+          <div class="seg-tabs"><b class="on">全部会话</b><b>已归档</b></div>
+          <div class="scroll">
+            <div class="ghead"><span>▾ 未读</span><span class="cnt">3</span></div>
+            <div class="list-stack">
+              <div class="sitem tap">
+                <span class="sdot run"></span>
+                <div class="smain">
+                  <div class="stop"><span class="stitle">重构模块化前端验收</span><span class="stime">刚刚</span></div>
+                  <div class="sprev">正在跑构建和回归测试，稍后同步结果。</div>
+                  <div class="smeta"><span class="wstag">DSH Mobile PWA</span></div>
+                </div>
+              </div>
+              <div class="sitem tap">
+                <span class="sdot wait"></span>
+                <div class="smain">
+                  <div class="stop"><span class="stitle">审批部署脚本改动</span><span class="stime">2 分钟前</span></div>
+                  <div class="sprev">等待你批准执行 deploy-preview.ps1</div>
+                  <div class="smeta"><span class="wstag">DSH Mobile PWA</span></div>
+                </div>
+              </div>
+              <div class="sitem tap">
+                <span class="sdot idle"></span>
+                <div class="smain">
+                  <div class="stop"><span class="stitle">修复语音自动朗读延迟</span><span class="stime">14 分钟前</span></div>
+                  <div class="sprev">已经把自动朗读延后到完成行消失之后。</div>
+                  <div class="smeta"><span class="wstag">Nalì Spa CRM</span></div>
+                </div>
+              </div>
+              <div class="sitem tap">
+                <span class="sdot idle"></span>
+                <div class="smain">
+                  <div class="stop"><span class="stitle">核心架构与缓存策略</span><span class="stime">1 小时前</span></div>
+                  <div class="sprev">IndexedDB 缓存层 v2 迁移方案确认。</div>
+                  <div class="smeta"><span class="wstag">DSH Mobile PWA</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tb on tap-ico"><svg viewBox="0 0 24 24"><path d="M21 12a8.5 8.5 0 0 1-12.5 7.5L4 20l1-4.3A8.5 8.5 0 1 1 21 12Z"/></svg><span>会话</span></div>
+            <div class="tb tap-ico"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/></svg><span>文件</span></div>
+            <div class="tb tap-ico"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2.2"/><circle cx="15" cy="17" r="2.2"/></svg><span>设置</span></div>
+          </div>
+        </div>
+        <div class="note"><b>改进点</b>：用 <code>rgba(255,255,255,0.075)</code> 替代生硬实线边框，卡片顶缘加 1px 内高光，层次通透不发灰。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 2. 会话页与一体化悬浮 Dock ===== -->
+  <div class="sec">
+    <div class="sec-h">
+      <h2>2. 会话页：毛玻璃顶栏 + 统一图标 + 一体化悬浮 Dock</h2>
+      <span>可点击代码块「复制」体验原地 ✓ 反馈</span>
+    </div>
+    <div class="grid">
+      <!-- Paper Session -->
+      <div class="cell">
+        <div class="lbl"><b>纸面皮肤 · 运行中态</b><span>F1 进度帽檐无缝融入 Composer</span></div>
+        <div class="phone" data-skin="paper">
+          <div class="sb"><span>9:41</span><span class="r">5G · 100%</span></div>
+          <div class="sess-hd">
+            <span class="ico-btn tap-ico"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></span>
+            <div class="sess-t"><span class="sdot run"></span><h2>重构模块化前端验收</h2></div>
+            <span class="ico-btn tap-ico"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg></span>
+          </div>
+          <div class="chat-body">
+            <div class="u-msg">帮我看下构建脚本有没有漏掉校验？</div>
+            <div class="a-msg">
+              <h3>验收摘要</h3>
+              <p>已完成模块化拆分与双皮肤对齐，构建后会自动校验内联脚本语法与防漂移。</p>
+              <div class="code-card">
+                <div class="code-hd">
+                  <span>javascript</span>
+                  <button class="copy-btn" onclick="demoCopy(this)">复制</button>
+                </div>
+                <pre><span class="kw">export function</span> <span class="fn">verifyBuild</span>(ver) {
+  <span class="kw">return</span> { ok: <span class="num">true</span>, ver };
+}</pre>
+              </div>
+              <div class="macts">
+                <span class="tap"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制</span>
+                <span class="tap"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h14"/></svg>分段</span>
+                <span class="tap"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>朗读</span>
+              </div>
+              <div class="subbar tap">
+                <svg viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+                <b>2 个子代理</b>
+                <span class="st">· 1 跑中</span>
+                <span class="chev">›</span>
+              </div>
+            </div>
+          </div>
+          <div class="dock-wrap">
+            <div class="dock-shell">
+              <div class="dock-prog tap">
+                <div class="dock-prog-row">
+                  <span class="sdot run" style="margin:0;width:6px;height:6px"></span>
+                  <b>第 2 / 4 步</b>
+                  <span class="cur">运行 node --test</span>
+                  <span class="t">0:18</span>
+                </div>
+                <div class="pbar"><i></i></div>
+              </div>
+              <div class="comp-body">
+                <div class="comp-ph">发消息或创建任务，/ 指令，@ 文件</div>
+                <div class="comp-row">
+                  <span class="c-circle tap-ico"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+                  <span class="c-pill tap"><svg viewBox="0 0 24 24"><path d="M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2Z"/></svg>V3.2 · high</span>
+                  <span class="c-pill tap"><svg viewBox="0 0 24 24"><path d="M12 3 5 6v6c0 5 3.5 8.5 7 9 3.5-.5 7-4 7-9V6Z"/></svg>权限</span>
+                  <div class="c-right">
+                    <span class="c-stop tap-ico"><i></i></span>
+                    <span class="c-circle tap-ico"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span>
+                    <span class="c-send tap-ico"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="usage-line">80 tok/s · 首字 1.2s · 15 轮 · 42 步</div>
+          </div>
+        </div>
+        <div class="note"><b>改进点</b>：F1 进度条作为 Composer 卡片顶部的柔和帽檐 + 流光进度条；模型与推理强度合为一颗清爽胶囊 <code>V3.2 · high</code>，底部操作区更舒展；全站统一线性 SVG 图标。</div>
+      </div>
+
+      <!-- Carbon Session -->
+      <div class="cell">
+        <div class="lbl"><b>碳黑皮肤 · 运行中态</b><span>暗色毛玻璃 + 荧光绿发送主按钮</span></div>
+        <div class="phone" data-skin="carbon">
+          <div class="sb"><span>9:41</span><span class="r">5G · 100%</span></div>
+          <div class="sess-hd">
+            <span class="ico-btn tap-ico"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></span>
+            <div class="sess-t"><span class="sdot run"></span><h2>重构模块化前端验收</h2></div>
+            <span class="ico-btn tap-ico"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg></span>
+          </div>
+          <div class="chat-body">
+            <div class="u-msg">帮我看下构建脚本有没有漏掉校验？</div>
+            <div class="a-msg">
+              <h3>验收摘要</h3>
+              <p>已完成模块化拆分与双皮肤对齐，构建后会自动校验内联脚本语法与防漂移。</p>
+              <div class="code-card">
+                <div class="code-hd">
+                  <span>javascript</span>
+                  <button class="copy-btn" onclick="demoCopy(this)">复制</button>
+                </div>
+                <pre><span class="kw">export function</span> <span class="fn">verifyBuild</span>(ver) {
+  <span class="kw">return</span> { ok: <span class="num">true</span>, ver };
+}</pre>
+              </div>
+              <div class="macts">
+                <span class="tap"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制</span>
+                <span class="tap"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h14"/></svg>分段</span>
+                <span class="tap"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>朗读</span>
+              </div>
+              <div class="subbar tap">
+                <svg viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+                <b>2 个子代理</b>
+                <span class="st">· 1 跑中</span>
+                <span class="chev">›</span>
+              </div>
+            </div>
+          </div>
+          <div class="dock-wrap">
+            <div class="dock-shell">
+              <div class="dock-prog tap">
+                <div class="dock-prog-row">
+                  <span class="sdot run" style="margin:0;width:6px;height:6px"></span>
+                  <b>第 2 / 4 步</b>
+                  <span class="cur">运行 node --test</span>
+                  <span class="t">0:18</span>
+                </div>
+                <div class="pbar"><i></i></div>
+              </div>
+              <div class="comp-body">
+                <div class="comp-ph">发消息或创建任务，/ 指令，@ 文件</div>
+                <div class="comp-row">
+                  <span class="c-circle tap-ico"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+                  <span class="c-pill tap"><svg viewBox="0 0 24 24"><path d="M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2Z"/></svg>V3.2 · high</span>
+                  <span class="c-pill tap"><svg viewBox="0 0 24 24"><path d="M12 3 5 6v6c0 5 3.5 8.5 7 9 3.5-.5 7-4 7-9V6Z"/></svg>权限</span>
+                  <div class="c-right">
+                    <span class="c-stop tap-ico"><i></i></span>
+                    <span class="c-circle tap-ico"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span>
+                    <span class="c-send tap-ico"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="usage-line">80 tok/s · 首字 1.2s · 15 轮 · 42 步</div>
+          </div>
+        </div>
+        <div class="note"><b>改进点</b>：代码块独立顶部语言栏 + 原地复制反馈；停止按钮用柔和语义红底替代冷冰冰的空心框。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 3. 设置页与交互式弹簧底部 Sheet ===== -->
+  <div class="sec">
+    <div class="sec-h">
+      <h2>3. 设置页与原生弹簧底部 Sheet</h2>
+      <span>可点击右侧「开关」与「演示弹簧弹层」</span>
+    </div>
+    <div class="grid">
+      <!-- Paper Settings -->
+      <div class="cell">
+        <div class="lbl"><b>设置页（Paper）</b><span>右侧轻箭头 › 区分可点击项</span></div>
+        <div class="phone" data-skin="paper">
+          <div class="sb"><span>9:41</span><span class="r">5G · 100%</span></div>
+          <div class="hero">
+            <div class="hero-top">
+              <h1>设置</h1>
+              <span class="connpill tap"><i class="dot"></i>中转 · 42ms</span>
+            </div>
+            <div class="hero-sub">DSH MOBILE · v253</div>
+          </div>
+          <div class="scroll">
+            <div class="set-sec">外观</div>
+            <div class="gcard">
+              <div class="grow tap"><div class="gt"><b>皮肤</b><span>纸面 / 碳黑 / 跟随系统</span></div><span class="gv">纸面<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span></div>
+              <div class="grow tap"><div class="gt"><b>主题</b><span>跟随系统 / 浅色 / 深色</span></div><span class="gv">跟随系统<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span></div>
+            </div>
+            <div class="set-sec">通知</div>
+            <div class="gcard">
+              <div class="grow tap" onclick="this.querySelector('.tgl').classList.toggle('on')"><div class="gt"><b>通知提醒</b><span>已开启，这台设备会收到推送</span></div><span class="tgl on"></span></div>
+              <div class="grow tap" onclick="this.querySelector('.tgl').classList.toggle('on')"><div class="gt"><b>完成时总是推送</b><span>后台跑完也推一条</span></div><span class="tgl"></span></div>
+              <div class="grow tap"><div class="gt"><b>推送诊断</b><span>订阅端点、最近投递</span></div><span class="gv"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span></div>
+            </div>
+            <div class="set-sec">应用</div>
+            <div class="gcard">
+              <div class="grow"><div class="gt"><b>已配对设备</b><span>在电脑端可移除</span></div><span class="gv">2 台</span></div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tb tap-ico"><svg viewBox="0 0 24 24"><path d="M21 12a8.5 8.5 0 0 1-12.5 7.5L4 20l1-4.3A8.5 8.5 0 1 1 21 12Z"/></svg><span>会话</span></div>
+            <div class="tb tap-ico"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/></svg><span>文件</span></div>
+            <div class="tb on tap-ico"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2.2"/><circle cx="15" cy="17" r="2.2"/></svg><span>设置</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Carbon Spring Sheet -->
+      <div class="cell">
+        <div class="lbl"><b>弹簧底部 Sheet（Carbon）</b><span>280ms 弹簧滑入 + 背景毛玻璃</span></div>
+        <div class="phone" data-skin="carbon" id="demo-sheet-phone">
+          <div class="sb"><span>9:41</span><span class="r">5G · 100%</span></div>
+          <div class="hero">
+            <div class="hero-top">
+              <h1>设置</h1>
+              <span class="connpill"><i class="dot"></i>中转 · 42ms</span>
+            </div>
+            <div class="hero-sub">DSH MOBILE · v253</div>
+          </div>
+          <div class="scroll">
+            <div class="set-sec">外观</div>
+            <div class="gcard">
+              <div class="grow tap" onclick="toggleDemoSheet()"><div class="gt"><b>皮肤</b><span>点击演示弹簧弹出/关闭</span></div><span class="gv">碳黑<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span></div>
+            </div>
+          </div>
+          <div class="sheet-mask" id="demo-sheet" onclick="if(event.target===this)toggleDemoSheet()">
+            <div class="sheet-panel">
+              <div class="grab"></div>
+              <div class="sh-title">选择皮肤</div>
+              <div class="sh-sub">即刻切换整站配色与表面层级</div>
+              <div class="sh-row tap"><span>纸面</span><span style="font-size:12px;color:var(--dim)">浅色暖纸面</span></div>
+              <div class="sh-row on tap"><span>碳黑</span><span style="font-size:12px;color:var(--dim)">深色高光描边</span><span class="chk">✓</span></div>
+              <div class="sh-row tap"><span>自动</span><span style="font-size:12px;color:var(--dim)">浅色纸面 · 深色碳黑</span></div>
+            </div>
+          </div>
+        </div>
+        <button class="demo-btn" onclick="toggleDemoSheet()">演示弹簧 Sheet 开关</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 4. 状态与边界表 ===== -->
+  <div class="sec">
+    <div class="sec-h"><h2>状态与边界</h2><span>覆盖降级、无障碍与 iOS 兼容</span></div>
+    <table>
+      <thead><tr><th style="width:170px">场景 / 状态</th><th>视觉与动效表现</th><th style="width:220px">边界与降级策略</th></tr></thead>
+      <tbody>
+        <tr><td><b>降低动态效果</b></td><td>遵循 <code>@media (prefers-reduced-motion: reduce)</code></td><td>关闭位移/呼吸/流光动画，仅保留极快透明度过渡（≤80ms）</td></tr>
+        <tr><td><b>键盘弹起态</b> (<code>html.kb-open</code>)</td><td>Dock 紧贴 <code>--vvh</code> 底部，隐藏 <code>usage-line</code> 节省垂直空间</td><td>保持 iOS <code>body { position: fixed }</code> 钉死机制不变</td></tr>
+        <tr><td><b>矮屏 / iPhone SE</b></td><td>Sheet 自动启用 <code>max-height: calc(100dvh - 20px)</code> 内部滚动</td><td>保持 Esc 关闭与 <code>:focus-visible</code> 策略，不出现 iOS 首行黑框</td></tr>
+        <tr><td><b>空态 / 离线 / 失败</b></td><td>离线横幅从顶栏下方平滑滑出；空态卡片使用统一柔和表面 token</td><td>所有 65 端点、11 视图、5 设置子页功能 100% 保留</td></tr>
+        <tr><td><b>左滑返回手势</b></td><td>从左缘 40px 内右滑时页面跟手位移 + 左侧微阴影，越过 70px 释放回弹返回</td><td>纵向滚动优先，避免和消息流竖向滑动冲突</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ===== 5. 开发面表 ===== -->
+  <div class="sec">
+    <div class="sec-h"><h2>开发面评估</h2><span>得益于 Phase 1 模块化，改动高度收敛</span></div>
+    <table>
+      <thead><tr><th style="width:230px">涉及模块</th><th>改动内容</th><th style="width:110px">预估行数</th></tr></thead>
+      <tbody>
+        <tr><td><code>src/styles/01-tokens.css</code></td><td>新增 <code>--line-strong</code>、<code>--shadow-card</code>、<code>--shadow-dock</code>、<code>--surface-glass</code>、<code>--ease-spring</code> 等双皮肤精修变量</td><td>~50 行</td></tr>
+        <tr><td><code>src/styles/02-base-chrome.css</code><br><code>src/styles/03-list-settings-files.css</code></td><td>修正 <code>.hero h1</code> 色值、搜索框图标布局、列表卡片阴影与工作区标签位置、设置页右侧 chevron、毛玻璃 TabBar 与触控缩放</td><td>~160 行</td></tr>
+        <tr><td><code>src/styles/05-session-media-overlays.css</code><br><code>src/styles/06-dock-composer-sheets.css</code></td><td>会话毛玻璃顶栏、一体化悬浮 Dock（F1 帽檐 + 流光进度条）、Sheet/抽屉弹簧进出场动画与关闭退场类</td><td>~180 行</td></tr>
+        <tr><td><code>src/components/sheet.js</code><br><code>src/components/drawer.js</code></td><td>关闭时增加 220ms 退场过渡再 <code>remove()</code>；支持弹簧进场帧触发</td><td>~40 行</td></tr>
+        <tr><td><code>src/core/gestures.js</code></td><td>左滑返回增加跟手 <code>translateX</code> 位移与松手回弹</td><td>~35 行</td></tr>
+        <tr><td><code>src/views/list.js</code> / <code>session.js</code> / <code>settings.js</code></td><td>替换 <code>¶</code>/<code>↳</code>/<code>✦</code> 为线性 SVG 图标；设置页可点行加轻箭头；复制按钮原地变 <code>✓ 已复制</code></td><td>~90 行</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+function demoCopy(btn){
+  btn.textContent='✓ 已复制';
+  btn.classList.add('copied');
+  clearTimeout(btn._t);
+  btn._t=setTimeout(()=>{ btn.textContent='复制'; btn.classList.remove('copied'); }, 1200);
+}
+function toggleDemoSheet(){
+  document.getElementById('demo-sheet').classList.toggle('closed');
+}
+</script>
+</body>
+</html>

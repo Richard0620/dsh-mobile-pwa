@@ -69,7 +69,9 @@ function renderList(wrap, opts = {}) {
   });
   // 归档页不显示搜索框：本地搜索的数据源是 state.sessions（不含归档），
   // 摆在那里输入也搜不到东西（以前就是个死控件）
-  main.append(el('div', { class:'searchrow' }, searchInput));
+  const searchIco = el('span', { class:'sico', 'aria-hidden':'true',
+    html:'<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>' });
+  main.append(el('div', { class:'searchrow' }, searchIco, searchInput));
   main.append(tabs);
 
   if (state.tab === 'terminal') {

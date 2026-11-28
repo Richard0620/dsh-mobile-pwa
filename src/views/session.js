@@ -1070,16 +1070,29 @@ function toggleBlockCopy(btn) {
 function msgActions(m, alignRight) {
   const text = (m && m.text) || '';
   const row = el('div', { class: 'mact' + (alignRight ? ' right' : '') });
+  const icCopy = '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  const icDone = '<svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>';
+  const icBlock = '<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h14"/></svg>';
+  const icFork = '<svg viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>';
   if (text) {
-    row.append(el('button', { onclick: async (e) => {
+    const copyBtn = el('button', { html: icCopy + '<span>复制</span>', onclick: async (e) => {
       e.stopPropagation();
-      if (await copyText(text)) toast('已复制这条消息');
-      else toast('复制失败');
-    }}, '⧉ 复制'));
-    if (!alignRight) row.append(el('button', { onclick: (e) => {
+      if (await copyText(text)) {
+        copyBtn.innerHTML = icDone + '<span>已复制</span>';
+        copyBtn.classList.add('copied');
+        clearTimeout(copyBtn._t);
+        copyBtn._t = setTimeout(() => {
+          copyBtn.innerHTML = icCopy + '<span>复制</span>';
+          copyBtn.classList.remove('copied');
+        }, 1200);
+        toast('已复制这条消息');
+      } else toast('复制失败');
+    }});
+    row.append(copyBtn);
+    if (!alignRight) row.append(el('button', { html: icBlock + '<span>分段</span>', onclick: (e) => {
       e.stopPropagation();
       toggleBlockCopy(e.currentTarget);
-    }}, '¶ 分段'));
+    }}));
   }
   const seq = Number.isSafeInteger(m && m.seq) ? m.seq : null;
   if (!alignRight && text) {
@@ -1096,7 +1109,7 @@ function msgActions(m, alignRight) {
     }));
   }
   if (seq !== null && seq > 0) {
-    row.append(el('button', { onclick: (e) => { e.stopPropagation(); forkSessionAt(m, seq); } }, '⑂ 分支'));
+    row.append(el('button', { html: icFork + '<span>分支</span>', onclick: (e) => { e.stopPropagation(); forkSessionAt(m, seq); } }));
   }
   return row;
 }
