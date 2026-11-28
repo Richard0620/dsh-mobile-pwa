@@ -24,6 +24,7 @@ function renderList(wrap, opts = {}) {
     { label:'连接信息', icon:'⏱', run: openConnInfo },
     { label:'统计', icon:'📊', run: openStats },
     { label:'终端', icon:'⌘', run: () => { location.href = '/agents/'; } },
+    { label:'Antigravity Remote', icon:'✨', run: () => { window.open('https://antigravity.google.com', '_blank', 'noopener'); } },
     { label:'关于', icon:'ⓘ', run: openAbout },
     { label:'通知提醒', icon:'🔔', run: openPushSettings },
     { label:'推送诊断', icon:'🩺', run: openPushDiag },
