@@ -50,9 +50,9 @@ function renderList(wrap, opts = {}) {
     el('b', { class: state.tab === 'archived' ? 'on' : '', text:'已归档', onclick: () => {
       state.tab = 'archived'; state.archived = null; state.searchItems = null; render(); loadArchived();
     } }),
-    termToken() ? el('b', { class: state.tab === 'terminal' ? 'on' : '', text:'终端', onclick: () => {
+    el('b', { class: state.tab === 'terminal' ? 'on' : '', text:'终端', onclick: () => {
       state.tab = 'terminal'; state.searchItems = null; render(); loadTermAgents();
-    } }) : null,
+    } }),
   );
 
   // 搜索：服务端内容检索在这个部署里是关闭的（openAt "never"），

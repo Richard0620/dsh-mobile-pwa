@@ -264,4 +264,20 @@
   .termcomposer .tsend:disabled{opacity:.45}
   .termcomposer .tstop{width:38px;height:38px;min-width:38px;border-radius:50%;background:var(--bad);color:#fff;
     display:none;place-items:center;font-size:13px;flex:none}
+  .termsetup{margin:14px 2px;padding:16px;border-radius:16px;background:var(--card);border:1px solid var(--line);
+    display:flex;flex-direction:column;gap:10px}
+  .termsetup h3{margin:0;font-size:16px;font-weight:650;letter-spacing:-.01em}
+  .termsetup p{margin:0;font-size:13px;color:var(--dim);line-height:1.55}
+  .termsetup .tsrow{display:flex;gap:8px;align-items:center}
+  .termsetup input{flex:1;min-width:0;height:42px;padding:0 12px;border-radius:11px;border:1px solid var(--line);
+    background:var(--bg);color:var(--fg);font-size:16px;user-select:text;-webkit-user-select:text}
+  .termsetup input:focus{border-color:var(--accent)}
+  .termsetup .tspaste{height:42px;padding:0 12px;border-radius:11px;border:1px solid var(--line);
+    background:var(--bubble);color:var(--fg);font-size:13px;font-weight:600;flex:none}
+  .termsetup .tsacts{display:flex;gap:8px;margin-top:2px}
+  .termsetup .tsbtn{flex:1;height:42px;border-radius:12px;border:1px solid var(--line);background:var(--card);
+    color:var(--fg);font-size:14px;font-weight:600;display:grid;place-items:center}
+  .termsetup .tsbtn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+  .termsetup .tsbtn:disabled{opacity:.5}
+  .termsetup .tserr{font-size:12.5px;color:var(--bad);line-height:1.45}
   html.kb-open .termoverlay{height:var(--vvh);bottom:auto}

@@ -55,3 +55,4 @@
 | v199 | 2026-11-24 | master | 发送中切换会话串台：send() 捕获 sid，消息/草稿/loadMessages 绑定原会话 | 手机 PWA 会话发送 | 代码走查不再用全局 sessionId 发送；切走后只 toast 原会话 |
 | v221 | 2026-11-24 | master | 配对页粘贴按钮：配对码/恢复链接都支持从剪贴板一键粘贴 | 配对登录 | 无头浏览器可见粘贴按钮；布局不溢出 |
 | v223 | 2026-11-24 | master | 配对页可滚动：`.pair` 使用 --vvh + overflow-y:auto + 安全区 padding，键盘不再遮挡 | 配对登录 | clientHeight=564 scrollHeight=622 overflow=auto |
+| v259 | 2026-11-28 | main | 终端新建对话与 Gemini (agy) 支持：终端 Tab 常驻显示与未配/401 引导卡、新建终端 4 选 1 启动方式、启动页三卡片、顶栏 ＋ 全模式新建对话、agy transcript 直读 Markdown 气泡 + 思考态 + 终端折行 | 手机 PWA 终端 Tab + /agents 页 + agents/bridge.mjs | 独立子代理全 PASS（REPORT.md）；公网 /agents 真跑 herdr --kind agy + live transcript 直读通过；用户真机确认可合并 |

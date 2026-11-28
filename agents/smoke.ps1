@@ -30,6 +30,8 @@ try {
   if ($html -match 'ver">v(\d+)') { Write-Host ("ui version: v" + $Matches[1]) } else { Write-Host 'FAIL ui version'; $ok = $false }
   if ($html -notmatch 'dsh/start') { Write-Host 'FAIL ui missing dsh/start'; $ok = $false }
   if ($html -notmatch 'renderLauncher') { Write-Host 'FAIL ui missing launcher'; $ok = $false }
+  if ($html -notmatch "startAgent\('agy'\)") { Write-Host 'FAIL ui missing Gemini (agy) launcher'; $ok = $false }
+  if ($html -notmatch 'openNewChatSheet') { Write-Host 'FAIL ui missing new chat sheet'; $ok = $false }
 } catch {
   Write-Host ("FAIL ui: " + $_.Exception.Message); $ok = $false
 }

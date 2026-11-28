@@ -12,7 +12,7 @@ import { openDrawer, paintOpenDrawer } from './components/drawer.js';
 import { openFileDrawer } from './components/file-drawer.js';
 import { consumePendingOpen, consumePendingOpenSoon, consumePendingOpenWatch, pushHeartbeat, pushHeartbeatLoop } from './features/push.js';
 import { downloadHostFile, openHostPath } from './features/media.js';
-import { termToken } from './features/terminal.js';
+import { loadTermAgents, newTerminal, termAgents, termToken } from './features/terminal.js';
 import { cancelVoiceInput, primeSpeech, stopSpeak } from './features/voice.js';
 import { paintProg } from './features/steps.js';
 import { loadStopSummary } from './features/stop-summary.js';
@@ -123,6 +123,27 @@ if (!window._agentsTokenListener) {
     const d = ev.data || {};
     if (d.type === 'pwa-open-drawer') { openDrawer(); return; }
     if (d.type === 'pwa-open-files') { openFileDrawer(state.sessionCwd || ''); return; }
+    if (d.type === 'pwa-new-terminal') {
+      document.querySelectorAll('.termoverlay').forEach((n) => n.remove());
+      newTerminal();
+      return;
+    }
+    if (d.type === 'agents-pane-changed') {
+      termAgents.at = 0;
+      loadTermAgents();
+      return;
+    }
+    if (d.type === 'agents-mode') {
+      const ov = document.querySelector('.termoverlay');
+      if (!ov) return;
+      const ta = ov.querySelector('.tta');
+      const sd = ov.querySelector('.tsend');
+      const st = ov.querySelector('.tstop');
+      const busyNow = !!(st && st.style.display === 'grid');
+      if (ta && d.placeholder && !busyNow) ta.setAttribute('data-ph', String(d.placeholder));
+      if (sd && !busyNow) sd.disabled = (d.mode === 'chat' && d.ready === false);
+      return;
+    }
     if (d.type === 'agents-busy') {
       const ov = document.querySelector('.termoverlay');
       if (!ov) return;
@@ -130,8 +151,11 @@ if (!window._agentsTokenListener) {
       const sd = ov.querySelector('.tsend');
       const ta = ov.querySelector('.tta');
       if (st) st.style.display = d.busy ? 'grid' : 'none';
-      if (sd) sd.style.display = d.busy ? 'none' : 'grid';
-      if (ta) ta.setAttribute('data-ph', d.busy ? 'DSH 正在回答…' : '继续追问，Enter 发送');
+      if (sd) {
+        sd.style.display = d.busy ? 'none' : 'grid';
+        if (!d.busy) sd.disabled = false;
+      }
+      if (ta) ta.setAttribute('data-ph', d.busy ? 'DSH 正在回答…' : (d.placeholder || '继续追问，Enter 发送'));
       return;
     }
     if (d.type !== 'agents-token-request') return;

@@ -7,60 +7,91 @@ import { openSheet } from '../components/sheet.js';
 import { openDrawer } from '../components/drawer.js';
 import { openFileDrawer } from '../components/file-drawer.js';
 
-const termAgents = { items: [], at: 0, loading: false };
+const termAgents = { items: [], at: 0, loading: false, authErr: false };
 
 function termToken() { return localStorage.getItem('bridge_token') || ''; }
+
+function parseTermSnapshot(j) {
+  const snap = j && j.result && j.result.snapshot;
+  if (!snap) throw new Error('bad snapshot');
+  const panes = snap.panes || [];
+  const tabs = snap.tabs || [];
+  const agents = snap.agents || [];
+  return tabs.map((t) => {
+    const p = panes.find((x) => x.tab_id === t.tab_id) || {};
+    const a = agents.find((x) => x.pane_id === p.pane_id);
+    return {
+      tabId: t.tab_id,
+      label: t.label || (p.cwd ? String(p.cwd).split(/[\\/]/).pop() : 'tab'),
+      paneId: p.pane_id || '',
+      cwd: p.cwd || '',
+      status: (a && a.agent_status) || p.agent_status || 'unknown',
+      agent: a ? (a.name || a.agent || '') : '',
+    };
+  });
+}
 
 function loadTermAgents() {
   const tk = termToken();
   if (!tk || termAgents.loading) return;
   termAgents.loading = true;
   fetch('/agents/snapshot', { headers: { Authorization: 'Bearer ' + tk } })
-    .then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
+    .then((r) => {
+      if (r.status === 401) { const e = new Error('HTTP 401'); e.status = 401; throw e; }
+      return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status));
+    })
     .then((j) => {
-      const snap = j && j.result && j.result.snapshot;
-      if (!snap) throw new Error('bad snapshot');
-      const panes = snap.panes || [];
-      const tabs = snap.tabs || [];
-      const agents = snap.agents || [];
-      const items = tabs.map((t) => {
-        const p = panes.find((x) => x.tab_id === t.tab_id) || {};
-        const a = agents.find((x) => x.pane_id === p.pane_id);
-        return {
-          tabId: t.tab_id,
-          label: t.label || (p.cwd ? String(p.cwd).split(/[\\/]/).pop() : 'tab'),
-          paneId: p.pane_id || '',
-          cwd: p.cwd || '',
-          status: (a && a.agent_status) || p.agent_status || 'unknown',
-          agent: a ? (a.name || a.agent || '') : '',
-        };
-      });
-      termAgents.items = items;
+      termAgents.items = parseTermSnapshot(j);
+      termAgents.authErr = false;
       termAgents.loading = false;
       termAgents.at = Date.now();
       if (state.view === 'list') render();
     })
-    .catch(() => { termAgents.loading = false; termAgents.at = Date.now(); });
+    .catch((e) => {
+      if (e && e.status === 401) { termAgents.authErr = true; termAgents.items = []; }
+      termAgents.loading = false;
+      termAgents.at = Date.now();
+      if (e && e.status === 401 && state.view === 'list' && state.tab === 'terminal') render();
+    });
+}
+
+async function createTerminalTab(cwd, startKind = '') {
+  try {
+    const tk = termToken();
+    const labelMap = { dsh: 'DSH', agy: 'Gemini', gemini: 'Gemini', claude: 'Claude' };
+    if (startKind) toast('\u6B63\u5728\u521B\u5EFA\u5E76\u542F\u52A8 ' + (labelMap[startKind] || startKind) + '\u2026');
+    const r = await fetch('/agents/tab/create', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + tk },
+      body: JSON.stringify({ cwd, startKind }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    if (j.startErr) toast('\u7EC8\u7AEF\u5DF2\u521B\u5EFA\uFF0C\u4F46\u542F\u52A8\u5931\u8D25\uFF1A' + j.startErr);
+    else if (startKind && j.started !== true) toast('\u7EC8\u7AEF\u5DF2\u521B\u5EFA\uFF0C\u4F46 bridge \u672A\u81EA\u52A8\u542F\u52A8\uFF08\u8BF7\u91CD\u542F bridge \u6216\u624B\u52A8\u542F\u52A8\uFF09');
+    else toast(startKind ? ('\u5DF2\u542F\u52A8 ' + (labelMap[startKind] || startKind)) : '\u5DF2\u521B\u5EFA\u7EC8\u7AEF');
+    termAgents.at = 0;
+    loadTermAgents();
+    document.querySelectorAll('.termoverlay').forEach((n) => n.remove());
+    if (j.paneId) openTerminal(j.paneId);
+  } catch (e) { toast('\u521B\u5EFA\u5931\u8D25\uFF1A' + (e.message || e)); }
+}
+
+function openTerminalStartSheet(cwd) {
+  const dirName = String(cwd || '').replace(/[\\/]+$/, '').split(/[\\/]/).pop() || cwd || '\u7EC8\u7AEF';
+  openSheet([
+    { label: 'DSH\uFF08\u81EA\u7136\u8BED\u8A00\uFF09', sub: '\u72EC\u7ACB headless \u4F1A\u8BDD \u00B7 \u6D41\u5F0F\u5DE5\u5177\u8FDB\u5EA6', icon: 'D', run: () => createTerminalTab(cwd, 'dsh') },
+    { label: 'Gemini\uFF08agy\uFF09', sub: '\u901A\u8FC7 herdr \u542F\u52A8 --kind agy \u00B7 \u53CC\u89C6\u56FE\u4E92\u901A', icon: 'G', run: () => createTerminalTab(cwd, 'agy') },
+    { label: 'Claude Code', sub: '\u901A\u8FC7 herdr \u542F\u52A8 --kind claude \u00B7 \u53CC\u89C6\u56FE\u4E92\u901A', icon: 'C', run: () => createTerminalTab(cwd, 'claude') },
+    { label: '\u4EC5\u6253\u5F00\u7EAF\u7EC8\u7AEF', sub: '\u53EA\u5EFA shell\uFF0C\u8FDB\u5165\u540E\u518D\u9009\u62E9\u542F\u52A8\u65B9\u5F0F', icon: '>_', run: () => createTerminalTab(cwd, '') },
+  ], '\u5728 ' + dirName + ' \u4E2D\u65B0\u5EFA\u7EC8\u7AEF\u5BF9\u8BDD');
 }
 
 async function newTerminal() {
   let roots = [];
   try { roots = await loadRoots(); } catch (e) {}
   await openFileDrawer(state.sessionCwd || '', { pick: true, roots, onPick: async (p) => {
-    try {
-      const tk = termToken();
-      const r = await fetch('/agents/tab/create', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + tk },
-        body: JSON.stringify({ cwd: p }),
-      });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
-      toast('\u5DF2\u521B\u5EFA\u7EC8\u7AEF');
-      termAgents.at = 0;
-      loadTermAgents();
-      if (j.paneId) openTerminal(j.paneId);
-    } catch (e) { toast('\u521B\u5EFA\u5931\u8D25\uFF1A' + (e.message || e)); }
+    setTimeout(() => openTerminalStartSheet(p), 30);
     return true;
   }});
 }
@@ -96,7 +127,64 @@ function appendTermGroup(main) {
   main.append(box);
 }
 
+function renderTerminalSetupCard(main, isAuthErr) {
+  const card = el('div', { class:'termsetup' });
+  card.append(
+    el('h3', { text: isAuthErr ? '终端连接凭据已失效' : '连接远程终端' }),
+    el('p', { text: isAuthErr
+      ? '当前保存的 Bearer token 未通过校验（401），请粘贴最新的本机 bridge token 重新连接。'
+      : '首次在当前浏览器或预览环境使用终端，需粘贴一次本机 bridge 的 Bearer token（存在本机，后续不再重复输入）。' }),
+  );
+  const inp = el('input', { type:'password', placeholder:'粘贴 Bearer token', autocomplete:'off', 'aria-label':'Bearer token' });
+  const errEl = el('div', { class:'tserr' });
+  errEl.style.display = 'none';
+  const showErr = (m) => { errEl.textContent = m || ''; errEl.style.display = m ? '' : 'none'; };
+  const pasteBtn = el('button', { class:'tspaste', type:'button', text:'粘贴', onclick: async () => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        const txt = (await navigator.clipboard.readText()).trim();
+        if (txt) { inp.value = txt; showErr(''); toast('已粘贴'); return; }
+      }
+      toast('请长按输入框粘贴');
+    } catch { toast('请长按输入框粘贴'); }
+  } });
+  card.append(el('div', { class:'tsrow' }, inp, pasteBtn), errEl);
+  const goBtn = el('button', { class:'tsbtn primary', type:'button', text:'保存并连接' });
+  const doConnect = async () => {
+    const val = inp.value.trim();
+    if (!val) { showErr('请先粘贴 Bearer token'); return; }
+    showErr('');
+    goBtn.disabled = true;
+    goBtn.textContent = '验证中…';
+    try {
+      const r = await fetch('/agents/snapshot', { headers: { Authorization: 'Bearer ' + val } });
+      if (r.status === 401) throw new Error('token 无效，请核对本机 token.txt');
+      if (!r.ok) throw new Error('连接失败（HTTP ' + r.status + '）');
+      const j = await r.json();
+      localStorage.setItem('bridge_token', val);
+      termAgents.items = parseTermSnapshot(j);
+      termAgents.authErr = false;
+      termAgents.at = Date.now();
+      toast('已连接远程终端');
+      render();
+    } catch (e) {
+      showErr(e.message || String(e));
+      goBtn.disabled = false;
+      goBtn.textContent = '保存并连接';
+    }
+  };
+  goBtn.onclick = doConnect;
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doConnect(); } });
+  const openRaw = el('button', { class:'tsbtn', type:'button', text:'打开 /agents/', onclick: () => { location.href = '/agents/'; } });
+  card.append(el('div', { class:'tsacts' }, goBtn, openRaw));
+  main.append(card);
+}
+
 function renderTerminalTab(main) {
+  if (!termToken() || termAgents.authErr) {
+    renderTerminalSetupCard(main, !!termAgents.authErr);
+    return;
+  }
   const items = termAgents.items || [];
   main.append(el('div', { class:'tbar' },
     el('b', { text:'终端' }),
@@ -215,4 +303,4 @@ async function closeTerminal(it) {
 
 // 子 iframe（/agents/）没有 token 时向父页面要；父页面用 postMessage 回传，避免 token 进 URL 和访问日志。
 
-export { loadTermAgents, renderTerminalTab, termAgents, termToken };
+export { loadTermAgents, newTerminal, renderTerminalTab, termAgents, termToken };

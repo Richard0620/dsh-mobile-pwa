@@ -29,6 +29,13 @@ function run(args, timeout = 20000) {
 }
 
 const CLAUDE_ROOT = join(process.env.USERPROFILE || homedir(), ".claude", "projects");
+const GEMINI_HOME = join(process.env.USERPROFILE || homedir(), ".gemini");
+const AGY_BRAIN_ROOTS = [
+  join(GEMINI_HOME, "antigravity-cli", "brain"),
+  join(GEMINI_HOME, "antigravity", "brain"),
+];
+const GEMINI_TMP_ROOT = join(GEMINI_HOME, "tmp");
+const SUPPORTED_AGENT_KINDS = new Set(["claude", "agy", "gemini"]);
 
 // ---- DSH chat: one persisted headless session per pane, driven by this bridge ----
 const DSH_CHAT_FILE = join(process.env.LOCALAPPDATA || "", "agents-bridge", "dsh-chat.json");
@@ -192,6 +199,157 @@ function findSessionFile(cwd, sid) {
   return "";
 }
 
+function findAgyTranscript(sid) {
+  if (!sid) return "";
+  for (const root of AGY_BRAIN_ROOTS) {
+    const p = join(root, sid, ".system_generated", "logs", "transcript.jsonl");
+    try { if (existsSync(p)) return p; } catch {}
+  }
+  return "";
+}
+
+const agyPaneSession = new Map(); // pane -> sid
+const lastPromptByTarget = new Map(); // target -> { text, at }
+
+// shortcut: heuristic match when herdr omits agent_session; upgrade if herdr exposes native agy session_id
+function findAgyTranscriptFallback(pane, agentName, cwd) {
+  if (pane && agyPaneSession.has(pane)) {
+    const cached = findAgyTranscript(agyPaneSession.get(pane));
+    if (cached) return { sid: agyPaneSession.get(pane), file: cached };
+    agyPaneSession.delete(pane);
+  }
+  const root = AGY_BRAIN_ROOTS[0];
+  let dirs = [];
+  try {
+    for (const d of readdirSync(root)) {
+      const p = join(root, d, ".system_generated", "logs", "transcript.jsonl");
+      try {
+        const st = statSync(p);
+        if (st.isFile()) dirs.push({ sid: d, file: p, mtime: st.mtimeMs });
+      } catch {}
+    }
+  } catch { return null; }
+  dirs.sort((a, b) => b.mtime - a.mtime);
+  const used = new Set();
+  for (const [k, v] of agyPaneSession.entries()) if (k !== pane) used.add(v);
+  const prompt = lastPromptByTarget.get(agentName) || lastPromptByTarget.get(pane);
+  const normCwd = String(cwd || "").replace(/[\\/]+$/, "").toLowerCase();
+  for (const item of dirs.slice(0, 12)) {
+    if (used.has(item.sid)) continue;
+    let head = "";
+    try { head = readFileSync(item.file, "utf8").slice(0, 16384); } catch { continue; }
+    if (prompt && prompt.text) {
+      const escaped = JSON.stringify(prompt.text).slice(1, -1);
+      if (head.includes(prompt.text) || head.includes(escaped)) {
+        if (pane) agyPaneSession.set(pane, item.sid);
+        return item;
+      }
+    }
+    if (normCwd && Date.now() - item.mtime < 30 * 60 * 1000) {
+      const normHead = head.replace(/\\\\/g, "\\").toLowerCase();
+      if (normHead.includes("workspace: " + normCwd)) {
+        if (pane) agyPaneSession.set(pane, item.sid);
+        return item;
+      }
+    }
+  }
+  return null;
+}
+
+function findGeminiSessionFile(sid) {
+  if (!sid) return "";
+  const prefix = sid.slice(0, 8);
+  try {
+    for (const d of readdirSync(GEMINI_TMP_ROOT)) {
+      const chatsDir = join(GEMINI_TMP_ROOT, d, "chats");
+      if (!existsSync(chatsDir)) continue;
+      for (const f of readdirSync(chatsDir)) {
+        if (!f.endsWith(".json")) continue;
+        if (f.includes(sid) || (prefix && f.includes(prefix))) return join(chatsDir, f);
+      }
+    }
+  } catch {}
+  return "";
+}
+
+function stripUserRequestTags(raw) {
+  const s = String(raw || "");
+  const m = s.match(/<USER_REQUEST>\s*([\s\S]*?)\s*<\/USER_REQUEST>/);
+  return (m ? m[1] : s).trim();
+}
+
+function normalizeAgyTranscript(lines, limit) {
+  const out = [];
+  for (const line of lines) {
+    if (!line) continue;
+    let o;
+    try { o = JSON.parse(line); } catch { continue; }
+    const time = o.created_at || o.timestamp || "";
+    if (o.type === "USER_INPUT") {
+      const text = stripUserRequestTags(o.content || o.text || "");
+      if (text) out.push({ role: "user", text, time });
+    } else if (o.type === "PLANNER_RESPONSE" || o.type === "ASSISTANT_RESPONSE" || o.type === "MODEL_RESPONSE") {
+      const text = String(o.response || o.content || o.text || "").trim();
+      const tools = Array.isArray(o.tool_calls)
+        ? o.tool_calls.map((tc) => ({ name: tc.name || "tool", input: summarizeInput(tc.args || tc.input) }))
+        : [];
+      if (text || tools.length) out.push({ role: "assistant", text, tools, time });
+    }
+  }
+  return out.slice(-limit);
+}
+
+function normalizeGeminiJson(raw, limit) {
+  let j;
+  try { j = JSON.parse(raw); } catch { return []; }
+  const msgs = Array.isArray(j && j.messages) ? j.messages : [];
+  const out = [];
+  for (const m of msgs) {
+    if (!m || typeof m !== "object") continue;
+    const t = String(m.type || m.role || "").toLowerCase();
+    const time = m.timestamp || m.time || "";
+    let text = "";
+    if (typeof m.content === "string") text = m.content.trim();
+    else if (Array.isArray(m.content)) {
+      text = m.content.map((b) => (typeof b === "string" ? b : (b && b.text) || "")).join("\n").trim();
+    } else if (typeof m.text === "string") text = m.text.trim();
+    if (t === "user") {
+      if (text) out.push({ role: "user", text, time });
+    } else if (t === "gemini" || t === "assistant" || t === "model") {
+      const tools = Array.isArray(m.toolCalls)
+        ? m.toolCalls.map((tc) => ({ name: tc.name || "tool", input: summarizeInput(tc.args || tc.input) }))
+        : [];
+      if (text || tools.length) out.push({ role: "assistant", text, tools, time });
+    }
+  }
+  return out.slice(-limit);
+}
+
+async function readPaneRecent(paneId, lines = "120") {
+  try {
+    return await run(["pane", "read", paneId, "--lines", String(lines), "--source", "recent-unwrapped"]);
+  } catch {
+    return await run(["pane", "read", paneId, "--lines", String(lines), "--source", "recent"]);
+  }
+}
+
+async function startInteractiveAgent(paneId, kind, tabNumber, customName) {
+  const k = String(kind || "claude").trim().toLowerCase();
+  if (!SUPPORTED_AGENT_KINDS.has(k)) {
+    throw new Error("unsupported agent kind: " + k);
+  }
+  const prefix = k === "agy" ? "gemini" : k;
+  let name = customName || (prefix + "-" + (tabNumber || "x"));
+  try {
+    await run(["agent", "start", name, "--kind", k, "--pane", paneId]);
+  } catch (e) {
+    if (!/agent_name_taken/.test(String((e && e.message) || e))) throw e;
+    name = name + "-" + Date.now().toString(36).slice(-4);
+    await run(["agent", "start", name, "--kind", k, "--pane", paneId]);
+  }
+  return { name, kind: k };
+}
+
 function summarizeInput(input) {
   try {
     const s = typeof input === "string" ? input : JSON.stringify(input);
@@ -319,31 +477,33 @@ const server = http.createServer(async (req, res) => {
       const args = ["agent", "prompt", body.target, body.text];
       if (body.wait) args.push("--wait");
       await run(args);
+      lastPromptByTarget.set(String(body.target), { text: body.text.trim(), at: Date.now() });
       return send(res, 200, JSON.stringify({ ok: true }));
     }
     if (req.method === "POST" && url.pathname === "/agent/start") {
       const body = JSON.parse((await readBody(req)) || "{}");
       if (!body.pane) return send(res, 400, JSON.stringify({ error: "pane required" }));
+      const kind = String(body.kind || "claude").trim().toLowerCase();
+      if (!SUPPORTED_AGENT_KINDS.has(kind)) {
+        return send(res, 400, JSON.stringify({ error: "unsupported agent kind: " + kind }));
+      }
       const snap = JSON.parse(await run(["api", "snapshot"])).result.snapshot;
       const p = (snap.panes || []).find((x) => x.pane_id === body.pane) || {};
       const t = (snap.tabs || []).find((x) => x.tab_id === p.tab_id) || {};
-      const kind = body.kind || "claude";
-      let name = body.name || (kind + "-" + (t.number || "x"));
-      try {
-        await run(["agent", "start", name, "--kind", kind, "--pane", body.pane]);
-      } catch (e) {
-        if (!/agent_name_taken/.test(String((e && e.message) || e))) throw e;
-        name = name + "-" + Date.now().toString(36).slice(-4);
-        await run(["agent", "start", name, "--kind", kind, "--pane", body.pane]);
-      }
-      return send(res, 200, JSON.stringify({ ok: true, name, kind }));
+      const resStart = await startInteractiveAgent(body.pane, kind, t.number, body.name);
+      return send(res, 200, JSON.stringify({ ok: true, name: resStart.name, kind: resStart.kind }));
     }
     if (req.method === "POST" && url.pathname === "/tab/create") {
       const body = JSON.parse((await readBody(req)) || "{}");
       const cwd = body.cwd;
       if (!cwd) return send(res, 400, JSON.stringify({ error: "cwd required" }));
       const label = body.label || basename(cwd) || "term";
-      const startAgent = body.startAgent === true;
+      const startKind = typeof body.startKind === "string"
+        ? body.startKind.trim().toLowerCase()
+        : (body.startAgent === true ? "claude" : "");
+      if (startKind && startKind !== "dsh" && !SUPPORTED_AGENT_KINDS.has(startKind)) {
+        return send(res, 400, JSON.stringify({ error: "unsupported startKind: " + startKind }));
+      }
       let before = JSON.parse(await run(["api", "snapshot"])).result.snapshot;
       let beforeTabs = new Set((before.tabs || []).map((t) => t.tab_id));
       try {
@@ -362,48 +522,69 @@ const server = http.createServer(async (req, res) => {
       const pane = (after.panes || []).find((p) => p.tab_id === tab.tab_id);
       let started = false;
       let startErr = "";
-      if (pane && startAgent) {
-        let name = "claude-" + (tab.number || "x");
+      if (pane && startKind === "dsh") {
+        dshStore[pane.pane_id] = { cwd: pane.cwd || cwd, sessionId: "", messages: [], busy: false, error: "", startedAt: Date.now() };
+        saveDshStore();
+        started = true;
+      } else if (pane && startKind) {
         try {
-          await run(["agent", "start", name, "--kind", "claude", "--pane", pane.pane_id]);
+          await startInteractiveAgent(pane.pane_id, startKind, tab.number);
           started = true;
         } catch (e) {
           const msg = String((e && e.message) || e);
-          if (/agent_not_ready/.test(msg)) {
-            started = true;
-          } else if (/agent_name_taken/.test(msg)) {
-            try {
-              name = name + "-" + Date.now().toString(36).slice(-4);
-              await run(["agent", "start", name, "--kind", "claude", "--pane", pane.pane_id]);
-              started = true;
-            } catch (e2) { startErr = String((e2 && e2.message) || e2); }
-          } else {
-            startErr = msg;
-          }
+          if (/agent_not_ready/.test(msg)) started = true;
+          else startErr = msg;
         }
       }
-      return send(res, 200, JSON.stringify({ ok: true, tabId: tab.tab_id, paneId: pane ? pane.pane_id : "", started, startErr }));
+      return send(res, 200, JSON.stringify({ ok: true, tabId: tab.tab_id, paneId: pane ? pane.pane_id : "", started, startKind, startErr }));
     }
     if (req.method === "GET" && url.pathname === "/chat") {
       const pane = url.searchParams.get("pane");
       const limit = Math.min(500, Number(url.searchParams.get("limit") || 200));
       let sid = url.searchParams.get("session") || "";
       let cwd = url.searchParams.get("cwd") || "";
+      let agentKind = "";
+      let agentName = "";
       if (!sid && pane) {
         const snap = JSON.parse(await run(["api", "snapshot"])).result.snapshot;
         const a = (snap.agents || []).find((x) => x.pane_id === pane);
         if (!a) return send(res, 404, JSON.stringify({ error: "no agent in this pane" }));
         sid = (a.agent_session && a.agent_session.value) || "";
         cwd = a.cwd || cwd;
+        agentKind = String(a.agent || a.kind || "").toLowerCase();
+        agentName = a.name || a.agent || "";
       }
-      if (!sid) return send(res, 400, JSON.stringify({ error: "pane or session required" }));
-      const file = findSessionFile(cwd, sid);
-      if (!file) return send(res, 200, JSON.stringify({ sessionId: sid, file: "", messages: [] }));
-      const raw = readFileSync(file, "utf8");
-      const messages = normalizeChat(raw.split(/\r?\n/), limit);
-      let mtime = 0;
-      try { mtime = statSync(file).mtimeMs; } catch {}
-      return send(res, 200, JSON.stringify({ sessionId: sid, file, mtime, messages }));
+      if (!sid && !pane) return send(res, 400, JSON.stringify({ error: "pane or session required" }));
+      let file = "";
+      let messages = [];
+      if (agentKind === "agy" || agentKind === "gemini") {
+        file = agentKind === "agy" ? (findAgyTranscript(sid) || findGeminiSessionFile(sid)) : (findGeminiSessionFile(sid) || findAgyTranscript(sid));
+        if (!file && agentKind === "agy") {
+          const fb = findAgyTranscriptFallback(pane, agentName, cwd);
+          if (fb) { sid = fb.sid; file = fb.file; }
+        }
+        if (file) {
+          const raw = readFileSync(file, "utf8");
+          messages = file.endsWith(".json") ? normalizeGeminiJson(raw, limit) : normalizeAgyTranscript(raw.split(/\r?\n/), limit);
+        }
+      } else {
+        file = findSessionFile(cwd, sid);
+        if (file) {
+          const raw = readFileSync(file, "utf8");
+          messages = normalizeChat(raw.split(/\r?\n/), limit);
+        }
+      }
+      if (file && (messages.length > 0 || agentKind === "claude" || !agentKind)) {
+        let mtime = 0;
+        try { mtime = statSync(file).mtimeMs; } catch {}
+        return send(res, 200, JSON.stringify({ sessionId: sid, agent: agentKind, name: agentName, file, mtime, messages }));
+      }
+      if (pane && (agentKind === "agy" || agentKind === "gemini" || !sid)) {
+        let paneText = "";
+        try { paneText = await readPaneRecent(pane, "120"); } catch {}
+        return send(res, 200, JSON.stringify({ sessionId: sid, agent: agentKind, name: agentName, file: "", fallback: "pane", paneText, messages: [] }));
+      }
+      return send(res, 200, JSON.stringify({ sessionId: sid, agent: agentKind, name: agentName, file: "", messages: [] }));
     }
     if (req.method === "POST" && url.pathname === "/tab/close") {
       const body = JSON.parse((await readBody(req)) || "{}");
